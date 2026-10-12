@@ -26,7 +26,19 @@ export const DEFAULT_SETTINGS: Settings = {
   dayStartHour: 0,
   weekStart: 1,
   taskFont: 'pixel',
+  cornerHero: 'big',
 };
+
+/** Fields added after v1; also used to upgrade older saves. */
+export function heroDefaults(): Pick<
+  Hero,
+  'equipped' | 'buffs' | 'bagSize' | 'bossIndex' | 'bossDamage' | 'bossesSlain' | 'itemsFound' | 'potionsUsed' | 'questsCleared' | 'achievements' | 'owned' | 'streakSaves' | 'savedDays'
+> {
+  return {
+    equipped: {}, buffs: [], bagSize: 24, bossIndex: 1, bossDamage: {}, bossesSlain: {}, itemsFound: {},
+    potionsUsed: {}, questsCleared: {}, achievements: {}, owned: [], streakSaves: 0, savedDays: [],
+  };
+}
 
 export const LIST_TYPE_INFO: Record<ListType, { label: string; repeat: Repeat; hint: string }> = {
   daily: { label: 'Daily', repeat: { kind: 'daily' }, hint: 'Resets every day' },
@@ -115,7 +127,7 @@ export const useStore = create<State>()(
         const hero: Hero = {
           id: 'hero', name: name.trim() || 'Hero', appearance, classId,
           xp: {}, gold: {}, goldSpent: {}, kills: {}, tasksDone: {}, skillXp: {}, activeDays: [],
-          createdAt: t, updatedAt: t,
+          createdAt: t, updatedAt: t, ...heroDefaults(),
         };
         const seeded = Object.keys(get().lists).length ? { lists: get().lists, tasks: get().tasks } : seedLists();
         const first = Object.values(seeded.lists).sort((a, b) => a.order - b.order)[0];
@@ -286,7 +298,18 @@ export const useStore = create<State>()(
         set({ hero: null, lists: {}, tasks: {}, log: [], activeListId: null, tab: 'quests' });
       },
     }),
-    { name: 'questlog-v1', version: 1 },
+    {
+      name: 'questlog-v1',
+      version: 2,
+      migrate: (persisted, version) => {
+        const st = persisted as State;
+        if (version < 2) {
+          if (st.hero) st.hero = { ...heroDefaults(), ...st.hero };
+          st.settings = { ...DEFAULT_SETTINGS, ...st.settings };
+        }
+        return st;
+      },
+    },
   ),
 );
 
