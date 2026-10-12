@@ -6,7 +6,7 @@ import Effects from './ui/components/Effects';
 import HeroStage from './ui/stage/HeroStage';
 import CreateHero from './ui/screens/CreateHero';
 import QuestsScreen from './ui/screens/QuestsScreen';
-import { ComingSoon, HeroScreen, NewListSheet, SettingsScreen } from './ui/screens/OtherScreens';
+import { ComingSoon, HeroScreen, ListSheet, SettingsScreen } from './ui/screens/OtherScreens';
 
 export default function App() {
   const hero = useStore((s) => s.hero);
@@ -14,6 +14,7 @@ export default function App() {
   const setTab = useStore((s) => s.setTab);
   const log = useStore((s) => s.log);
   const font = useStore((s) => s.settings.taskFont);
+  const corner = useStore((s) => s.settings.cornerHero ?? 'big');
   const list = useStore((s) => (s.activeListId ? s.lists[s.activeListId] : undefined));
   const wide = useMedia('(min-width: 900px)');
   const [newList, setNewList] = useState(false);
@@ -56,14 +57,18 @@ export default function App() {
             </div>
           </div>
         </aside>
-      ) : (
+      ) : corner === 'hidden' ? null : (
         <div className="corner-hero" style={themeStyle(theme)}>
-          <HeroStage w={72} h={56} scale={2} heroX={-7} monsterX={48} theme={theme} onTap={() => setTab('hero')} />
+          {corner === 'small' ? (
+            <HeroStage w={56} h={46} scale={2} heroX={-10} monsterX={35} theme={theme} onTap={() => setTab('hero')} />
+          ) : (
+            <HeroStage w={72} h={56} scale={2} heroX={-7} monsterX={48} theme={theme} onTap={() => setTab('hero')} />
+          )}
         </div>
       )}
       {!wide && <TabBar />}
       <Effects />
-      {newList && <NewListSheet onClose={() => setNewList(false)} />}
+      {newList && <ListSheet onClose={() => setNewList(false)} />}
     </div>
   );
 }

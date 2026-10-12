@@ -1,8 +1,8 @@
 // App chrome: HUD, mobile tab bar, list chips, desktop sidebar.
-import { useStore, visibleLists, listTasks, type Tab } from '../../state/store';
+import { useStore, visibleLists, listTasks, TODAY_ID, type Tab } from '../../state/store';
 import { heroGold, heroLevel, levelTitle } from '../../game/progression';
-import { streak, isDone, isActiveToday } from '../../core/time';
-import { heroLook } from '../../game/look';
+import { streak, isDone, isActiveToday, todayKey } from '../../core/time';
+import { useHeroLook } from '../../game/look';
 import { iconFor } from '../../pixel/iconGen';
 import { Bar, PxImg, Ui, portraitUrl, useNow } from './common';
 import type { TaskList } from '../../core/types';
@@ -13,6 +13,7 @@ export function Hud() {
   const hero = useStore((s) => s.hero)!;
   const cfg = useStore((s) => s.settings);
   const setTab = useStore((s) => s.setTab);
+  const look = useHeroLook();
   const now = useNow();
   const { level, into, need } = heroLevel(hero);
   const gold = heroGold(hero);
@@ -20,7 +21,7 @@ export function Hud() {
   return (
     <header className="hud">
       <button className="icon-btn hud-portrait" onClick={() => setTab('hero')} aria-label="Hero">
-        <PxImg src={portraitUrl(hero.appearance, heroLook(hero))} size={40} />
+        <PxImg src={portraitUrl(hero.appearance, look)} size={40} />
       </button>
       <div className="hud-mid">
         <div className="hud-name">
@@ -98,11 +99,38 @@ function ChipItem({ l, active, onPick, className }: { l: TaskList; active: boole
   );
 }
 
+/** Remaining today-relevant tasks across all non-supply lists. */
+function useTodayCount(): number {
+  const s = useStore();
+  const now = useNow();
+  const today = todayKey(now, s.settings);
+  const ok = new Set(visibleLists(s).filter((l) => l.type !== 'supply').map((l) => l.id));
+  return Object.values(s.tasks).filter(
+    (t) =>
+      !t.deleted &&
+      ok.has(t.listId) &&
+      !isDone(t, now, s.settings) &&
+      ((t.due && t.due <= today) || (!t.due && ['daily', 'days', 'interval'].includes(t.repeat.kind) && isActiveToday(t, now, s.settings))),
+  ).length;
+}
+
+function TodayItem({ className, active, onPick }: { className: string; active: boolean; onPick: () => void }) {
+  const n = useTodayCount();
+  return (
+    <button className={`${className} ${active ? 'active' : ''}`} style={{ ['--chip' as string]: '#a02a3a' }} onClick={onPick}>
+      <PxImg src={iconFor('', '⭐')} size={className === 'chip' ? 24 : 26} />
+      <span>Today</span>
+      <span className="count">{n === 0 ? '✓' : n}</span>
+    </button>
+  );
+}
+
 export function ListChips({ onNew }: { onNew: () => void }) {
   const s = useStore();
   const lists = visibleLists(s);
   return (
     <div className="chips">
+      <TodayItem className="chip" active={s.activeListId === TODAY_ID} onPick={() => (sfx.tick(), s.setActiveList(TODAY_ID))} />
       {lists.map((l) => (
         <ChipItem key={l.id} l={l} className="chip" active={l.id === s.activeListId} onPick={() => (sfx.tick(), s.setActiveList(l.id))} />
       ))}
@@ -126,6 +154,7 @@ export function Sidebar({ onNew }: { onNew: () => void }) {
       </div>
       <div className="side-head">Quest Lists</div>
       <div className="side-nav">
+        <TodayItem className="side-item" active={s.tab === 'quests' && s.activeListId === TODAY_ID} onPick={() => (sfx.tick(), s.setActiveList(TODAY_ID))} />
         {lists.map((l) => (
           <ChipItem
             key={l.id}

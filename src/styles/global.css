@@ -998,3 +998,26 @@ canvas.px {
     border-radius: 8px;
   }
 }
+
+/* ---------- task interactions ---------- */
+.task {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.task.dragging {
+  z-index: 5;
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.tmeta .tlist {
+  color: var(--accent);
+}
+.tmeta .overdue {
+  color: var(--bad);
+}
+.banner-edit {
+  appearance: none;
+  cursor: pointer;
+  color: var(--text);
+  line-height: 1;
+}

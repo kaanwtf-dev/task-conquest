@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Stage } from './stage';
 import { useStore } from '../../state/store';
 import { fx } from '../../state/fx';
-import { heroLook } from '../../game/look';
+import { useHeroLook } from '../../game/look';
 import type { ThemeId } from '../../pixel/themes';
 
 interface Props {
@@ -23,10 +23,11 @@ export default function HeroStage({ w, h, scale, heroX, monsterX, theme, classNa
   const hero = useStore((s) => s.hero);
   const anim = useStore((s) => s.settings.anim);
   const sfxVol = useStore((s) => s.settings.sfx);
+  const look = useHeroLook();
 
   useEffect(() => {
     if (!ref.current || !hero) return;
-    const st = new Stage(ref.current, w, h, theme, hero.appearance, heroLook(hero), heroX, monsterX);
+    const st = new Stage(ref.current, w, h, theme, hero.appearance, look, heroX, monsterX);
     stage.current = st;
     const off = fx.on((e) => {
       if (e.type === 'kill') st.kill({ monster: e.monster, xp: e.xp, gold: e.gold, crit: e.crit, theme: e.theme as ThemeId });
@@ -42,8 +43,8 @@ export default function HeroStage({ w, h, scale, heroX, monsterX, theme, classNa
   }, [w, h, heroX, monsterX, !!hero]);
 
   useEffect(() => {
-    if (stage.current && hero) stage.current.setHero(hero.appearance, heroLook(hero));
-  }, [hero?.appearance, hero?.classId]);
+    if (stage.current && hero) stage.current.setHero(hero.appearance, look);
+  }, [hero?.appearance, look]);
 
   useEffect(() => {
     stage.current?.setTheme(theme);

@@ -3,7 +3,7 @@ import { useStore, heroStats, LIST_TYPE_INFO } from '../../state/store';
 import { heroGold, heroSkill, levelTitle } from '../../game/progression';
 import { SKILLS, CLASS_BY_ID } from '../../game/catalog';
 import { RACE_BY_ID } from '../../pixel/sprites/hero';
-import { heroLook } from '../../game/look';
+import { useHeroLook } from '../../game/look';
 import { streak } from '../../core/time';
 import { iconFor } from '../../pixel/iconGen';
 import { THEMES, type ThemeId } from '../../pixel/themes';
@@ -18,7 +18,7 @@ export function HeroScreen() {
   const cfg = useStore((s) => s.settings);
   const wide = useMedia('(min-width: 900px)');
   const st = heroStats(hero);
-  const look = heroLook(hero);
+  const look = useHeroLook();
   return (
     <div className="scroll">
       <div className="win" style={{ overflow: 'hidden' }}>
@@ -117,6 +117,13 @@ export function SettingsScreen() {
             </button>
           ))}
         </Opt>
+        <Opt label="Corner hero (phone)">
+          {(['big', 'small', 'hidden'] as const).map((v) => (
+            <button key={v} className={`pill ${(cfg.cornerHero ?? 'big') === v ? 'sel' : ''}`} onClick={() => (sfx.tick(), set({ cornerHero: v }))}>
+              {v}
+            </button>
+          ))}
+        </Opt>
         <Opt label="Haptics">
           {[true, false].map((v) => (
             <button key={String(v)} className={`pill ${cfg.haptics === v ? 'sel' : ''}`} onClick={() => set({ haptics: v })}>
@@ -186,24 +193,38 @@ export function ComingSoon({ title, text }: { title: string; text: string }) {
 const LIST_ICONS = ['☀️', '📅', '⚔️', '🛒', '🏠', '💼', '📚', '🏋️', '🎮', '🎁', '💊', '🐶', '✈️', '💰', '🎨', '🧹'];
 const LIST_COLORS = ['#6abe30', '#5b6ee1', '#df7126', '#d9a066', '#d95763', '#76428a', '#37946e', '#306082', '#ac3232', '#8a6f30'];
 
-export function NewListSheet({ onClose }: { onClose: () => void }) {
+export function ListSheet({ onClose, editId }: { onClose: () => void; editId?: string }) {
   const s = useStore();
+  const existing = editId ? s.lists[editId] : undefined;
   const level = s.hero ? heroStats(s.hero).level : 1;
-  const [name, setName] = useState('');
-  const [type, setType] = useState<ListType>('quests');
-  const [theme, setTheme] = useState<ThemeId>('forest');
-  const [skill, setSkill] = useState<SkillId>('smithing');
-  const [icon, setIcon] = useState(LIST_ICONS[2]);
-  const [color, setColor] = useState(LIST_COLORS[0]);
+  const owned = s.hero?.owned ?? [];
+  const [name, setName] = useState(existing?.name ?? '');
+  const [type, setType] = useState<ListType>(existing?.type ?? 'quests');
+  const [theme, setTheme] = useState<ThemeId>(existing?.theme ?? 'forest');
+  const [skill, setSkill] = useState<SkillId>(existing?.skill ?? 'smithing');
+  const [icon, setIcon] = useState(existing?.icon ?? LIST_ICONS[2]);
+  const [color, setColor] = useState(existing?.color ?? LIST_COLORS[0]);
   return (
     <div className="sheet-back" onClick={onClose}>
       <div className="win sheet" style={themeStyle(theme)} onClick={(e) => e.stopPropagation()}>
-        <div className="win-title">New quest list</div>
+        <div className="win-title">{existing ? 'Edit list' : 'New quest list'}</div>
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            s.addList({ name, type, theme, skill, icon, color });
-            sfx.loot();
+            if (existing) {
+              s.updateList(existing.id, { name: name.trim() || existing.name, type, theme, skill, icon, color });
+              // switching list type moves tasks that still use the old default cadence to the new one
+              if (type !== existing.type) {
+                const oldR = JSON.stringify(LIST_TYPE_INFO[existing.type].repeat);
+                for (const t of Object.values(s.tasks))
+                  if (t.listId === existing.id && !t.deleted && JSON.stringify(t.repeat) === oldR)
+                    s.updateTask(t.id, { repeat: LIST_TYPE_INFO[type].repeat, doneFor: null });
+              }
+              sfx.pop();
+            } else {
+              s.addList({ name, type, theme, skill, icon, color });
+              sfx.loot();
+            }
             onClose();
           }}
         >
@@ -232,7 +253,7 @@ export function NewListSheet({ onClose }: { onClose: () => void }) {
           </Opt>
           <Opt label="Zone theme">
             {THEMES.map((t) => {
-              const locked = level < t.unlockLevel;
+              const locked = level < t.unlockLevel && !owned.includes(`theme:${t.id}`);
               return (
                 <button type="button" key={t.id} disabled={locked} className={`pill ${theme === t.id ? 'sel' : ''}`} onClick={() => setTheme(t.id)}>
                   {t.name}
@@ -248,13 +269,31 @@ export function NewListSheet({ onClose }: { onClose: () => void }) {
               </button>
             ))}
           </Opt>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
-            <button type="button" className="btn ghost" onClick={onClose}>
-              Cancel
-            </button>
-            <button className="btn" type="submit">
-              Create
-            </button>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 14 }}>
+            <div>
+              {existing && (
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => {
+                    if (confirm(`Delete "${existing.name}" and all its tasks?`)) {
+                      s.deleteList(existing.id);
+                      onClose();
+                    }
+                  }}
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" className="btn ghost" onClick={onClose}>
+                Cancel
+              </button>
+              <button className="btn" type="submit">
+                {existing ? 'Save' : 'Create'}
+              </button>
+            </div>
           </div>
         </form>
       </div>

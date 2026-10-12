@@ -164,6 +164,7 @@ export interface Hero extends Meta {
   owned: string[]; // purchased cosmetics + unlocks (e.g. 'theme:castle', 'dye:outfit:#ff00aa')
   streakSaves: number; // phoenix feathers applied (keeps the streak alive)
   savedDays: string[]; // days covered by a streak save / undead perk
+  capeDye?: string; // purchased dye overriding the equipped cape color
 }
 
 /** Combined effective stats (after soft caps) derived from equipped gear + race/class. */

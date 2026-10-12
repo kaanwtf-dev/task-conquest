@@ -1,6 +1,18 @@
-import { useMemo, useState } from 'react';
-import { useStore, listTasks, LIST_TYPE_INFO } from '../../state/store';
-import { isActiveToday, isDone, msUntilReset, fmtDuration, repeatLabel } from '../../core/time';
+import { useMemo, useRef, useState } from 'react';
+import {
+  DndContext,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useStore, listTasks, visibleLists, LIST_TYPE_INFO, TODAY_ID } from '../../state/store';
+import { isActiveToday, isDone, msUntilReset, fmtDuration, repeatLabel, todayKey } from '../../core/time';
 import { DIFFICULTY } from '../../game/progression';
 import { iconFor } from '../../pixel/iconGen';
 import { AISLES } from '../../pixel/keywords';
@@ -8,17 +20,23 @@ import { SceneBanner, Stars, PxImg, Ui, useNow, useMedia, themeStyle } from '../
 import { markTap, haptic } from '../components/Effects';
 import { sfx, unlockAudio } from '../../audio/sfx';
 import type { Task, TaskList } from '../../core/types';
+import TaskEditSheet from './TaskEditSheet';
+import { ListSheet } from './OtherScreens';
 
 export default function QuestsScreen() {
   const s = useStore();
-  const list = s.activeListId ? s.lists[s.activeListId] : undefined;
   const wide = useMedia('(min-width: 900px)');
   const now = useNow(20000);
-  if (!list || list.deleted) return <div className="empty">No lists yet. Create one!</div>;
+  const [editTask, setEditTask] = useState<string | null>(null);
+  const [editList, setEditList] = useState(false);
+
+  if (s.activeListId === TODAY_ID) return <TodayView now={now} wide={wide} onEdit={setEditTask} editTask={editTask} closeEdit={() => setEditTask(null)} />;
+
+  const list = s.activeListId ? s.lists[s.activeListId] : undefined;
+  if (!list || list.deleted) return <div className="scroll"><div className="empty">No lists yet. Create one!</div></div>;
   const tasks = listTasks(s, list.id);
   const cfg = s.settings;
   const info = LIST_TYPE_INFO[list.type];
-
   const active = tasks.filter((t) => isActiveToday(t, now, cfg));
   const doneCount = active.filter((t) => isDone(t, now, cfg)).length;
   const reset = msUntilReset(info.repeat, now, cfg);
@@ -37,39 +55,118 @@ export default function QuestsScreen() {
                   : info.hint}
             </div>
           </div>
-          {list.type !== 'supply' && active.length > 0 && (
-            <div className="win banner-progress">
-              {doneCount}/{active.length}
-            </div>
-          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            {list.type !== 'supply' && active.length > 0 && (
+              <div className="win banner-progress">
+                {doneCount}/{active.length}
+              </div>
+            )}
+            <button className="win banner-progress banner-edit" onClick={() => setEditList(true)} aria-label="Edit list">
+              ⋯
+            </button>
+          </div>
         </div>
       </SceneBanner>
 
       <QuickAdd list={list} />
 
-      {list.type === 'supply' ? <SupplyView list={list} tasks={tasks} /> : <TaskView tasks={tasks} now={now} />}
+      {list.type === 'supply' ? (
+        <SupplyView list={list} tasks={tasks} onEdit={setEditTask} />
+      ) : (
+        <TaskView tasks={tasks} now={now} onEdit={setEditTask} />
+      )}
+      {editTask && <TaskEditSheet taskId={editTask} onClose={() => setEditTask(null)} />}
+      {editList && <ListSheet editId={list.id} onClose={() => setEditList(false)} />}
     </div>
   );
 }
 
-function QuickAdd({ list }: { list: TaskList }) {
+// ---------------------------------------------------------------- Today
+
+function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wide: boolean; onEdit: (id: string) => void; editTask: string | null; closeEdit: () => void }) {
+  const s = useStore();
+  const cfg = s.settings;
+  const today = todayKey(now, cfg);
+  const lists = visibleLists(s).filter((l) => l.type !== 'supply');
+  const listIds = new Set(lists.map((l) => l.id));
+  const all = Object.values(s.tasks).filter((t) => !t.deleted && listIds.has(t.listId));
+  const order = (a: Task, b: Task) => (s.lists[a.listId]?.order ?? 0) - (s.lists[b.listId]?.order ?? 0) || a.order - b.order;
+
+  const overdue = all.filter((t) => t.due && t.due < today && !isDone(t, now, cfg)).sort(order);
+  const dueToday = all.filter((t) => t.due === today && !isDone(t, now, cfg)).sort(order);
+  const routine = all
+    .filter((t) => !t.due && ['daily', 'days', 'interval'].includes(t.repeat.kind) && isActiveToday(t, now, cfg) && !isDone(t, now, cfg))
+    .sort(order);
+  const week = all.filter((t) => !t.due && t.repeat.kind === 'weekly' && !isDone(t, now, cfg)).sort(order);
+  const doneToday = all.filter((t) => t.doneAt && todayKey(t.doneAt, cfg) === today && isDone(t, now, cfg)).sort(order);
+  const total = overdue.length + dueToday.length + routine.length + doneToday.length;
+  const date = new Date(now).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+
+  const section = (label: string, items: Task[], done = false) =>
+    items.length > 0 && (
+      <>
+        <div className="section-label">{label}</div>
+        <div className="win tasks">
+          {items.map((t) => (
+            <TaskRow key={t.id} task={t} done={done} onEdit={onEdit} showList />
+          ))}
+        </div>
+      </>
+    );
+
+  return (
+    <div className="scroll" style={themeStyle('castle')}>
+      <SceneBanner theme="castle" height={wide ? 56 : 52} scale={wide ? 3 : 2}>
+        <div className="banner-info">
+          <div className="win banner-title">
+            Today
+            <div className="banner-sub">{date}</div>
+          </div>
+          {total > 0 && (
+            <div className="win banner-progress">
+              {doneToday.length}/{total}
+            </div>
+          )}
+        </div>
+      </SceneBanner>
+      <QuickAdd list={lists.find((l) => l.type === 'quests') ?? lists[0]} dueToday />
+      {overdue.length + dueToday.length + routine.length + week.length === 0 && (
+        <div className="win tasks">
+          <div className="empty">Nothing due today. Go touch some grass, adventurer.</div>
+        </div>
+      )}
+      {section('Overdue', overdue)}
+      {section('Due today', dueToday)}
+      {section('Daily routine', routine)}
+      {section('This week', week)}
+      {section(`Slain today (${doneToday.length})`, doneToday, true)}
+      {editTask && <TaskEditSheet taskId={editTask} onClose={closeEdit} />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- shared pieces
+
+function QuickAdd({ list, dueToday }: { list?: TaskList; dueToday?: boolean }) {
   const addTask = useStore((s) => s.addTask);
   const tasks = useStore((s) => s.tasks);
+  const cfg = useStore((s) => s.settings);
   const [text, setText] = useState('');
-  const supply = list.type === 'supply';
+  const supply = list?.type === 'supply';
   const suggestions = useMemo(() => {
-    if (!supply || text.trim().length < 1) return [];
+    if (!list || !supply || text.trim().length < 1) return [];
     const q = text.trim().toLowerCase();
     return Object.values(tasks)
       .filter((t) => t.listId === list.id && !t.deleted && t.doneFor && t.title.toLowerCase().includes(q))
       .sort((a, b) => b.timesDone - a.timesDone)
       .slice(0, 5);
-  }, [supply, text, tasks, list.id]);
+  }, [supply, text, tasks, list]);
+  if (!list) return null;
 
   const submit = () => {
     if (!text.trim()) return;
     unlockAudio();
-    addTask(list.id, text);
+    addTask(list.id, text, dueToday ? { due: todayKey(Date.now(), cfg) } : undefined);
     sfx.pop();
     setText('');
   };
@@ -85,7 +182,7 @@ function QuickAdd({ list }: { list: TaskList }) {
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={supply ? 'Add item… (remembers everything)' : 'Add a quest…'}
+          placeholder={supply ? 'Add item… (remembers everything)' : dueToday ? `Add a quest for today → ${list.name}` : 'Add a quest…'}
           enterKeyHint="done"
           aria-label="New item"
         />
@@ -109,18 +206,43 @@ function QuickAdd({ list }: { list: TaskList }) {
   );
 }
 
-function TaskRow({ task, done, inactive }: { task: Task; done: boolean; inactive?: boolean }) {
+interface RowProps {
+  task: Task;
+  done: boolean;
+  inactive?: boolean;
+  showList?: boolean;
+  onEdit: (id: string) => void;
+  sortable?: ReturnType<typeof useSortable>;
+}
+
+function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps) {
   const toggle = useStore((s) => s.toggleTask);
   const haptics = useStore((s) => s.settings.haptics);
   const sfxOn = useStore((s) => s.settings.sfx > 0);
+  const listName = useStore((s) => (showList ? s.lists[task.listId]?.name : undefined));
   const d = DIFFICULTY[task.difficulty];
   const rl = repeatLabel(task.repeat);
+  const style = sortable
+    ? { transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition, opacity: inactive ? 0.45 : 1 }
+    : inactive
+      ? { opacity: 0.45 }
+      : undefined;
   return (
-    <div className={`task ${done ? 'done' : ''}`} style={inactive ? { opacity: 0.45 } : undefined}>
+    <div
+      ref={sortable?.setNodeRef}
+      className={`task ${done ? 'done' : ''} ${sortable?.isDragging ? 'dragging' : ''}`}
+      style={style}
+      {...(sortable ? { ...sortable.attributes, ...sortable.listeners } : {})}
+      onClick={() => onEdit(task.id)}
+    >
       <button
         className={`check ${done ? 'on' : ''}`}
         aria-label={done ? 'Mark not done' : 'Complete'}
+        onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
         onClick={(e) => {
+          e.stopPropagation();
           unlockAudio();
           const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
           markTap(r.left + r.width / 2 + 40, r.top);
@@ -134,15 +256,17 @@ function TaskRow({ task, done, inactive }: { task: Task; done: boolean; inactive
       <PxImg className="ticon" src={iconFor(task.title, task.icon)} size={32} />
       <div className="tmain">
         <div className="ttitle">{task.title}</div>
-        {(rl || task.due || inactive || task.qty) && (
+        {(rl || task.due || inactive || task.qty || listName || task.notes || task.doneBy) && (
           <div className="tmeta">
+            {listName && <span className="tlist">{listName}</span>}
             {rl && (
               <>
                 <Ui name="repeat" size={12} /> {rl}
               </>
             )}
             {task.qty && <span>×{task.qty}</span>}
-            {task.due && <span>Due {task.due}</span>}
+            {task.due && <span className={task.due < todayKey(Date.now(), useStore.getState().settings) && !done ? 'overdue' : ''}>Due {task.due}</span>}
+            {task.notes && <span>✎</span>}
             {inactive && <span>Not today</span>}
           </div>
         )}
@@ -152,7 +276,45 @@ function TaskRow({ task, done, inactive }: { task: Task; done: boolean; inactive
   );
 }
 
-function TaskView({ tasks, now }: { tasks: Task[]; now: number }) {
+function SortableRow(props: Omit<RowProps, 'sortable'>) {
+  const sortable = useSortable({ id: props.task.id });
+  return <TaskRow {...props} sortable={sortable} />;
+}
+
+/** Long-press (touch) or drag (mouse) to reorder; a tap still opens the editor. */
+function SortableTasks({ tasks, onEdit }: { tasks: Task[]; onEdit: (id: string) => void }) {
+  const reorder = useStore((s) => s.reorderTasks);
+  const listTaskIds = useStore((s) => (tasks[0] ? listTasks(s, tasks[0].listId).map((t) => t.id) : []));
+  const justDragged = useRef(0);
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 260, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const ids = tasks.map((t) => t.id);
+  const onDragEnd = (e: DragEndEvent) => {
+    justDragged.current = Date.now();
+    if (!e.over || e.active.id === e.over.id) return;
+    const moved = arrayMove(ids, ids.indexOf(String(e.active.id)), ids.indexOf(String(e.over.id)));
+    const rest = listTaskIds.filter((id) => !moved.includes(id));
+    reorder([...moved, ...rest]);
+    sfx.tick();
+  };
+  const guardedEdit = (id: string) => {
+    if (Date.now() - justDragged.current > 250) onEdit(id);
+  };
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={() => haptic()} onDragEnd={onDragEnd}>
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {tasks.map((t) => (
+          <SortableRow key={t.id} task={t} done={false} onEdit={guardedEdit} />
+        ))}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function TaskView({ tasks, now, onEdit }: { tasks: Task[]; now: number; onEdit: (id: string) => void }) {
   const cfg = useStore((s) => s.settings);
   const open = tasks.filter((t) => isActiveToday(t, now, cfg) && !isDone(t, now, cfg));
   const done = tasks.filter((t) => isActiveToday(t, now, cfg) && isDone(t, now, cfg));
@@ -161,16 +323,14 @@ function TaskView({ tasks, now }: { tasks: Task[]; now: number }) {
     <>
       <div className="win tasks">
         {open.length === 0 && <div className="empty">All clear! The realm is safe… for now.</div>}
-        {open.map((t) => (
-          <TaskRow key={t.id} task={t} done={false} />
-        ))}
+        {open.length > 0 && <SortableTasks tasks={open} onEdit={onEdit} />}
       </div>
       {done.length > 0 && (
         <>
           <div className="section-label">Slain ({done.length})</div>
           <div className="win tasks">
             {done.map((t) => (
-              <TaskRow key={t.id} task={t} done />
+              <TaskRow key={t.id} task={t} done onEdit={onEdit} />
             ))}
           </div>
         </>
@@ -180,7 +340,7 @@ function TaskView({ tasks, now }: { tasks: Task[]; now: number }) {
           <div className="section-label">Not scheduled today</div>
           <div className="win tasks">
             {later.map((t) => (
-              <TaskRow key={t.id} task={t} done={false} inactive />
+              <TaskRow key={t.id} task={t} done={false} inactive onEdit={onEdit} />
             ))}
           </div>
         </>
@@ -189,7 +349,7 @@ function TaskView({ tasks, now }: { tasks: Task[]; now: number }) {
   );
 }
 
-function SupplyView({ list, tasks }: { list: TaskList; tasks: Task[] }) {
+function SupplyView({ list, tasks, onEdit }: { list: TaskList; tasks: Task[]; onEdit: (id: string) => void }) {
   const s = useStore();
   const need = tasks.filter((t) => !t.doneFor);
   const pantry = tasks.filter((t) => t.doneFor).sort((a, b) => Number(!!b.staple) - Number(!!a.staple) || b.timesDone - a.timesDone);
@@ -211,7 +371,7 @@ function SupplyView({ list, tasks }: { list: TaskList; tasks: Task[] }) {
               {AISLES[aisle]?.name ?? 'Other'}
             </div>
             {items.map((t) => (
-              <TaskRow key={t.id} task={t} done={false} />
+              <TaskRow key={t.id} task={t} done={false} onEdit={onEdit} />
             ))}
           </div>
         ))}
@@ -231,25 +391,49 @@ function SupplyView({ list, tasks }: { list: TaskList; tasks: Task[] }) {
       )}
       {pantry.length > 0 && (
         <>
-          <div className="section-label">Pantry · tap to add back</div>
+          <div className="section-label">Pantry · tap to add back · hold to edit</div>
           <div className="win pantry">
             {pantry.map((t) => (
-              <button
-                key={t.id}
-                className={`pchip ${t.staple ? 'staple' : ''}`}
-                onClick={() => {
-                  sfx.pop();
-                  s.updateTask(t.id, { doneFor: null, rewardedFor: null });
-                }}
-              >
-                <PxImg src={iconFor(t.title, t.icon)} size={24} />
-                {t.title}
-                <span className="plus">+</span>
-              </button>
+              <PantryChip key={t.id} task={t} onEdit={onEdit} />
             ))}
           </div>
         </>
       )}
     </>
+  );
+}
+
+function PantryChip({ task, onEdit }: { task: Task; onEdit: (id: string) => void }) {
+  const updateTask = useStore((s) => s.updateTask);
+  const timer = useRef<number | undefined>(undefined);
+  const held = useRef(false);
+  return (
+    <button
+      className={`pchip ${task.staple ? 'staple' : ''}`}
+      onPointerDown={() => {
+        held.current = false;
+        timer.current = window.setTimeout(() => {
+          held.current = true;
+          haptic();
+          onEdit(task.id);
+        }, 450);
+      }}
+      onPointerUp={() => clearTimeout(timer.current)}
+      onPointerLeave={() => clearTimeout(timer.current)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onEdit(task.id);
+      }}
+      onClick={() => {
+        if (held.current) return;
+        sfx.pop();
+        updateTask(task.id, { doneFor: null, rewardedFor: null });
+      }}
+    >
+      <PxImg src={iconFor(task.title, task.icon)} size={24} />
+      {task.title}
+      {task.staple && <span style={{ color: 'var(--accent)' }}>★</span>}
+      <span className="plus">+</span>
+    </button>
   );
 }

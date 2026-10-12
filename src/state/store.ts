@@ -1,15 +1,21 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ClassId, Difficulty, Hero, ListType, LogEntry, Repeat, Settings, SkillId, Task, TaskList } from '../core/types';
+import type {
+  ClassId, Difficulty, Hero, Item, ListType, LogEntry, PotionId, PotionStack, Repeat, Settings, SkillId, Slot, Task, TaskList,
+} from '../core/types';
 import type { Appearance } from '../pixel/sprites/hero';
 import type { ThemeId } from '../pixel/themes';
-import { THEME_BY_ID } from '../pixel/themes';
-import { isActiveToday, isDone, periodKey, todayKey } from '../core/time';
-import { heroLevel, heroSkill, sum, taskGold, taskXp } from '../game/progression';
-import { spawnMonster, SKILL_BY_ID } from '../game/catalog';
+import { dateKey, isActiveToday, isDone, parseDateKey, periodKey, todayKey } from '../core/time';
+import { heroLevel, sum } from '../game/progression';
 import { guessAisle } from '../pixel/keywords';
 import { hashStr } from '../core/rng';
+import { itemDisplayName, sellPrice, starterItems, upgradeCost } from '../game/loot';
+import { makeBuff, potionName, potionStackId } from '../game/potions';
+import { applyBuffs, computeStats } from '../game/stats';
+import { claimRewards } from '../game/achievements';
+import type { ShopOffer } from '../game/shop';
 import { fx } from './fx';
+import { bagCount, bestStreak, inc, questChestRewards, streakDays, taskRewards, type RewardOutcome } from './rewards';
 
 export const uid = (): string =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -17,6 +23,9 @@ export const uid = (): string =>
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 export type Tab = 'quests' | 'hero' | 'shop' | 'party' | 'settings';
+
+/** Pseudo-list id for the cross-list "Today" view. */
+export const TODAY_ID = '__today';
 
 export const DEFAULT_SETTINGS: Settings = {
   anim: 'full',
@@ -48,15 +57,18 @@ export const LIST_TYPE_INFO: Record<ListType, { label: string; repeat: Repeat; h
   custom: { label: 'Custom', repeat: { kind: 'none' }, hint: 'Set repeat per task' },
 };
 
-interface State {
+export interface State {
   deviceId: string;
   hero: Hero | null;
   lists: Record<string, TaskList>;
   tasks: Record<string, Task>;
+  items: Record<string, Item>;
+  potions: Record<string, PotionStack>;
   settings: Settings;
   log: LogEntry[];
   tab: Tab;
   activeListId: string | null;
+  shopDay: { date: string; bought: string[] };
 
   createHero(name: string, appearance: Appearance, classId: ClassId): void;
   setTab(t: Tab): void;
@@ -69,7 +81,23 @@ interface State {
   deleteTask(id: string): void;
   toggleTask(id: string): void;
   restockStaples(listId: string): number;
+  reorderTasks(orderedIds: string[]): void;
+  reorderLists(orderedIds: string[]): void;
+  moveTask(id: string, listId: string): void;
   updateSettings(patch: Partial<Settings>): void;
+  // hero & loot
+  equip(itemId: string): void;
+  unequip(slot: Slot): void;
+  sellItem(itemId: string): number;
+  toggleLock(itemId: string): void;
+  upgradeItem(itemId: string): boolean;
+  usePotion(stackId: string): boolean;
+  buyOffer(offer: ShopOffer): boolean;
+  claimAchievements(): { gold: number; newTitles: string[] };
+  setTitle(title: string | undefined): void;
+  updateHero(patch: Partial<Pick<Hero, 'name' | 'appearance' | 'capeDye'>>): void;
+  exportData(): string;
+  importData(json: string): boolean;
   resetAll(): void;
 }
 
@@ -110,202 +138,426 @@ function seedLists(): { lists: Record<string, TaskList>; tasks: Record<string, T
   return { lists, tasks };
 }
 
+/** Starter kit for a class, equipped. */
+function starterKit(classId: ClassId, t: number): { items: Record<string, Item>; equipped: Hero['equipped'] } {
+  const kit = starterItems(classId, t);
+  return {
+    items: Object.fromEntries(kit.map((i) => [i.id, i])),
+    equipped: Object.fromEntries(kit.map((i) => [i.slot, i.id])) as Hero['equipped'],
+  };
+}
+
 export const useStore = create<State>()(
   persist(
-    (set, get) => ({
-      deviceId: uid(),
-      hero: null,
-      lists: {},
-      tasks: {},
-      settings: DEFAULT_SETTINGS,
-      log: [],
-      tab: 'quests',
-      activeListId: null,
+    (set, get) => {
+      const log = (kind: LogEntry['kind'], text: string) =>
+        set((s) => ({ log: [{ id: uid(), at: now(), text, kind }, ...s.log].slice(0, 200) }));
 
-      createHero(name, appearance, classId) {
+      /** Apply a pure reward outcome: hero, new loot, potions, log lines, then fire effects. */
+      const apply = (o: RewardOutcome) => {
         const t = now();
-        const hero: Hero = {
-          id: 'hero', name: name.trim() || 'Hero', appearance, classId,
-          xp: {}, gold: {}, goldSpent: {}, kills: {}, tasksDone: {}, skillXp: {}, activeDays: [],
-          createdAt: t, updatedAt: t, ...heroDefaults(),
-        };
-        const seeded = Object.keys(get().lists).length ? { lists: get().lists, tasks: get().tasks } : seedLists();
-        const first = Object.values(seeded.lists).sort((a, b) => a.order - b.order)[0];
-        set({ hero, ...seeded, activeListId: first?.id ?? null, tab: 'quests' });
-        pushLog(set, get, 'info', `${hero.name} sets out on an adventure!`);
-      },
-
-      setTab: (tab) => set({ tab }),
-      setActiveList: (id) => set({ activeListId: id, tab: 'quests' }),
-
-      addList(p) {
-        const t = now();
-        const order = Math.max(-1, ...Object.values(get().lists).map((l) => l.order)) + 1;
-        const list: TaskList = {
-          id: uid(), name: p.name.trim() || 'New List', type: p.type, theme: p.theme, skill: p.skill,
-          icon: p.icon, color: p.color ?? '#5b6ee1', order, createdAt: t, updatedAt: t,
-        };
-        set((s) => ({ lists: { ...s.lists, [list.id]: list }, activeListId: list.id }));
-        return list.id;
-      },
-
-      updateList(id, patch) {
-        set((s) => ({ lists: { ...s.lists, [id]: { ...s.lists[id], ...patch, updatedAt: now() } } }));
-      },
-
-      deleteList(id) {
         set((s) => {
-          const lists = { ...s.lists, [id]: { ...s.lists[id], deleted: true, updatedAt: now() } };
-          const tasks = { ...s.tasks };
-          for (const tk of Object.values(tasks)) if (tk.listId === id) tasks[tk.id] = { ...tk, deleted: true, updatedAt: now() };
-          const next = Object.values(lists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
-          return { lists, tasks, activeListId: next?.id ?? null };
+          const items = { ...s.items };
+          for (const it of o.items) items[it.id] = { ...it, updatedAt: t };
+          const potions = { ...s.potions };
+          for (const p of o.potions) {
+            const id = potionStackId(p.potion, p.tier);
+            const cur = potions[id];
+            potions[id] = { id, potion: p.potion, tier: p.tier, count: (cur && !cur.deleted ? cur.count : 0) + 1, updatedAt: t };
+          }
+          const entries = o.log.map((l, i) => ({ id: uid(), at: t + i, ...l })).reverse();
+          return { hero: o.hero, items, potions, log: [...entries, ...s.log].slice(0, 200) };
         });
-      },
+        o.events.forEach((e) => fx.emit(e));
+      };
 
-      addTask(listId, title, extra = {}) {
-        const list = get().lists[listId];
-        const clean = title.trim();
-        if (!list || !clean) return null;
-        // supply lists remember items: re-adding a known item just puts it back on the list
-        if (list.type === 'supply') {
-          const known = Object.values(get().tasks).find(
-            (t) => t.listId === listId && !t.deleted && t.title.toLowerCase() === clean.toLowerCase(),
-          );
-          if (known) {
-            get().updateTask(known.id, { doneFor: null, rewardedFor: null, ...extra });
-            return known.id;
+      const spend = (amount: number): boolean => {
+        const hero = get().hero;
+        if (!hero || amount < 0) return false;
+        if (sum(hero.gold) - sum(hero.goldSpent) < amount) {
+          fx.emit({ type: 'toast', text: 'Not enough gold!' });
+          return false;
+        }
+        set({ hero: { ...hero, goldSpent: inc(hero.goldSpent, get().deviceId, amount), updatedAt: now() } });
+        return true;
+      };
+
+      const patchItem = (id: string, patch: Partial<Item>) =>
+        set((s) => ({ items: { ...s.items, [id]: { ...s.items[id], ...patch, updatedAt: now() } } }));
+
+      return {
+        deviceId: uid(),
+        hero: null,
+        lists: {},
+        tasks: {},
+        items: {},
+        potions: {},
+        settings: DEFAULT_SETTINGS,
+        log: [],
+        tab: 'quests',
+        activeListId: null,
+        shopDay: { date: '', bought: [] },
+
+        createHero(name, appearance, classId) {
+          const t = now();
+          const kit = starterKit(classId, t);
+          const hero: Hero = {
+            id: 'hero', name: name.trim() || 'Hero', appearance, classId,
+            xp: {}, gold: {}, goldSpent: {}, kills: {}, tasksDone: {}, skillXp: {}, activeDays: [],
+            createdAt: t, updatedAt: t, ...heroDefaults(), equipped: kit.equipped,
+          };
+          const seeded = Object.keys(get().lists).length ? { lists: get().lists, tasks: get().tasks } : seedLists();
+          const first = Object.values(seeded.lists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
+          set((s) => ({ hero, ...seeded, items: { ...s.items, ...kit.items }, activeListId: first?.id ?? null, tab: 'quests' }));
+          log('info', `${hero.name} sets out on an adventure!`);
+        },
+
+        setTab: (tab) => set({ tab }),
+        setActiveList: (id) => set({ activeListId: id, tab: 'quests' }),
+
+        addList(p) {
+          const t = now();
+          const order = Math.max(-1, ...Object.values(get().lists).filter((l) => !l.deleted).map((l) => l.order)) + 1;
+          const list: TaskList = {
+            id: uid(), name: p.name.trim() || 'New List', type: p.type, theme: p.theme, skill: p.skill,
+            icon: p.icon, color: p.color ?? '#5b6ee1', order, createdAt: t, updatedAt: t,
+          };
+          set((s) => ({ lists: { ...s.lists, [list.id]: list }, activeListId: list.id }));
+          return list.id;
+        },
+
+        updateList(id, patch) {
+          if (!get().lists[id]) return;
+          set((s) => ({ lists: { ...s.lists, [id]: { ...s.lists[id], ...patch, updatedAt: now() } } }));
+        },
+
+        deleteList(id) {
+          const t = now();
+          set((s) => {
+            const lists = { ...s.lists, [id]: { ...s.lists[id], deleted: true, updatedAt: t } };
+            const tasks = { ...s.tasks };
+            for (const tk of Object.values(tasks)) if (tk.listId === id && !tk.deleted) tasks[tk.id] = { ...tk, deleted: true, updatedAt: t };
+            const next = Object.values(lists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
+            return { lists, tasks, activeListId: s.activeListId === id ? next?.id ?? null : s.activeListId };
+          });
+        },
+
+        addTask(listId, title, extra = {}) {
+          const list = get().lists[listId];
+          const clean = title.trim();
+          if (!list || list.deleted || !clean) return null;
+          // supply lists remember items: re-adding a known item just puts it back on the list
+          if (list.type === 'supply') {
+            const known = Object.values(get().tasks).find(
+              (t) => t.listId === listId && !t.deleted && t.title.toLowerCase() === clean.toLowerCase(),
+            );
+            if (known) {
+              get().updateTask(known.id, { doneFor: null, rewardedFor: null, ...extra });
+              return known.id;
+            }
           }
-        }
-        const t = now();
-        const order = Math.min(0, ...Object.values(get().tasks).filter((x) => x.listId === listId).map((x) => x.order)) - 1;
-        const task: Task = {
-          id: uid(), listId, title: clean, difficulty: list.type === 'supply' ? 0 : 2,
-          repeat: LIST_TYPE_INFO[list.type].repeat, order, createdAt: t, updatedAt: t, timesDone: 0,
-          ...(list.type === 'supply' ? { aisle: guessAisle(clean) } : {}),
-          ...extra,
-        };
-        set((s) => ({ tasks: { ...s.tasks, [task.id]: task } }));
-        return task.id;
-      },
+          const t = now();
+          const order = Math.min(0, ...Object.values(get().tasks).filter((x) => x.listId === listId && !x.deleted).map((x) => x.order)) - 1;
+          const task: Task = {
+            id: uid(), listId, title: clean, difficulty: list.type === 'supply' ? 0 : 2,
+            repeat: LIST_TYPE_INFO[list.type].repeat, order, createdAt: t, updatedAt: t, timesDone: 0,
+            createdBy: get().hero?.name,
+            ...(list.type === 'supply' ? { aisle: guessAisle(clean) } : {}),
+            ...extra,
+          };
+          set((s) => ({ tasks: { ...s.tasks, [task.id]: task } }));
+          return task.id;
+        },
 
-      updateTask(id, patch) {
-        set((s) => ({ tasks: { ...s.tasks, [id]: { ...s.tasks[id], ...patch, updatedAt: now() } } }));
-      },
+        updateTask(id, patch) {
+          if (!get().tasks[id]) return;
+          set((s) => ({ tasks: { ...s.tasks, [id]: { ...s.tasks[id], ...patch, updatedAt: now() } } }));
+        },
 
-      deleteTask(id) {
-        get().updateTask(id, { deleted: true });
-      },
+        deleteTask(id) {
+          get().updateTask(id, { deleted: true });
+        },
 
-      toggleTask(id) {
-        const s = get();
-        const task = s.tasks[id];
-        const hero = s.hero;
-        if (!task || !hero) return;
-        const cfg = s.settings;
-        const t = now();
-        const pk = periodKey(task.repeat, t, cfg);
-        if (isDone(task, t, cfg)) {
-          s.updateTask(id, { doneFor: null });
-          return;
-        }
-        const list = s.lists[task.listId];
-        const patch: Partial<Task> = { doneFor: pk, doneAt: t, timesDone: task.timesDone + 1, doneBy: hero.name };
-        const alreadyRewarded = task.rewardedFor === pk;
-        patch.rewardedFor = pk;
-        s.updateTask(id, patch);
-        if (alreadyRewarded || !list) return;
-
-        // ---- rewards ----
-        const dev = s.deviceId;
-        const { level } = heroLevel(hero);
-        const race = hero.appearance.race;
-        const seed = hashStr(`${id}:${pk}:${t}`);
-        const roll = (seed % 1000) / 1000;
-        let xp = taskXp(level, task.difficulty);
-        let gold = taskGold(level, task.difficulty, roll);
-        if (race === 'human') xp *= 1.1;
-        if (race === 'dwarf') gold *= 1.15;
-        if (race === 'lizardfolk' && task.repeat.kind === 'daily') xp *= 1.2;
-        const critChance = 0.05 + (race === 'orc' ? 0.08 : 0) + (hero.classId === 'rogue' ? 0.05 : 0);
-        const crit = ((seed >>> 10) % 1000) / 1000 < critChance;
-        if (crit) {
-          xp *= 2;
-          gold *= 2;
-        }
-        xp = Math.round(xp);
-        gold = Math.round(gold);
-
-        const inc = (c: Record<string, number>, n: number) => ({ ...c, [dev]: (c[dev] ?? 0) + n });
-        const skillBefore = heroSkill(hero, list.skill).level;
-        const day = todayKey(t, cfg);
-        const nextHero: Hero = {
-          ...hero,
-          xp: inc(hero.xp, xp),
-          gold: inc(hero.gold, gold),
-          kills: inc(hero.kills, 1),
-          tasksDone: inc(hero.tasksDone, 1),
-          skillXp: { ...hero.skillXp, [list.skill]: inc(hero.skillXp[list.skill] ?? {}, xp) },
-          activeDays: hero.activeDays.includes(day) ? hero.activeDays : [...hero.activeDays.slice(-400), day],
-          updatedAt: t,
-        };
-        set({ hero: nextHero });
-
-        const theme = THEME_BY_ID[list.theme] ?? THEME_BY_ID.forest;
-        const monster = spawnMonster(theme.monsters, theme.id, level, seed);
-        fx.emit({ type: 'kill', monster, xp, gold, crit, theme: theme.id, listId: list.id });
-        pushLog(set, get, 'kill', `Slew a Lv${level} ${monster.name} — "${task.title}" (+${xp} XP, +${gold}g${crit ? ', CRIT!' : ''})`);
-
-        const after = heroLevel(nextHero).level;
-        if (after > level) {
-          fx.emit({ type: 'levelUp', level: after });
-          pushLog(set, get, 'level', `LEVEL UP! ${hero.name} reached level ${after}.`);
-        }
-        const skillAfter = heroSkill(nextHero, list.skill).level;
-        if (skillAfter > skillBefore) {
-          const sk = SKILL_BY_ID[list.skill];
-          fx.emit({ type: 'skillUp', skill: sk.name, level: skillAfter });
-          pushLog(set, get, 'skill', `${sk.name} increased to ${skillAfter}.`);
-        }
-
-        // whole list cleared for this period -> quest complete bonus
-        if (list.type !== 'supply') {
-          const all = Object.values(get().tasks).filter((x) => x.listId === list.id && !x.deleted && isActiveToday(x, t, cfg));
-          if (all.length >= 2 && all.every((x) => isDone(x, t, cfg))) {
-            const bonus = Math.round(5 + level * 2);
-            set((st) => ({ hero: st.hero && { ...st.hero, gold: inc(st.hero.gold, bonus) } }));
-            fx.emit({ type: 'questComplete', listName: list.name });
-            pushLog(set, get, 'quest', `QUEST COMPLETE: ${list.name}! Found a chest with ${bonus} gold.`);
+        toggleTask(id) {
+          const s = get();
+          const task = s.tasks[id];
+          const hero = s.hero;
+          if (!task || task.deleted || !hero) return;
+          const cfg = s.settings;
+          const t = now();
+          const pk = periodKey(task.repeat, t, cfg);
+          if (isDone(task, t, cfg)) {
+            s.updateTask(id, { doneFor: null });
+            return;
           }
-        }
-      },
+          const list = s.lists[task.listId];
+          const alreadyRewarded = task.rewardedFor === pk;
+          s.updateTask(id, { doneFor: pk, rewardedFor: pk, doneAt: t, timesDone: task.timesDone + 1, doneBy: hero.name });
+          // re-checking within the same period never pays out twice (no farming by toggling)
+          if (alreadyRewarded || !list) return;
 
-      restockStaples(listId) {
-        let n = 0;
-        for (const tk of Object.values(get().tasks))
-          if (tk.listId === listId && !tk.deleted && tk.staple && tk.doneFor) {
-            get().updateTask(tk.id, { doneFor: null, rewardedFor: null });
-            n++;
+          const seed = hashStr(`${id}:${pk}:${t}:${s.deviceId}`);
+          apply(taskRewards({ hero, items: s.items, task, list, dev: s.deviceId, now: t, seed, cfg }));
+
+          // whole list cleared for this period -> quest chest
+          if (list.type !== 'supply') {
+            const all = Object.values(get().tasks).filter((x) => x.listId === list.id && !x.deleted && isActiveToday(x, t, cfg));
+            if (all.length >= 2 && all.every((x) => isDone(x, t, cfg))) {
+              const st = get();
+              apply(questChestRewards({ hero: st.hero!, items: st.items, list, dev: st.deviceId, now: t, seed: hashStr(`chest:${list.id}:${pk}`) }));
+            }
           }
-        return n;
-      },
+        },
 
-      updateSettings(patch) {
-        set((s) => ({ settings: { ...s.settings, ...patch } }));
-      },
+        restockStaples(listId) {
+          let n = 0;
+          for (const tk of Object.values(get().tasks))
+            if (tk.listId === listId && !tk.deleted && tk.staple && tk.doneFor) {
+              get().updateTask(tk.id, { doneFor: null, rewardedFor: null });
+              n++;
+            }
+          return n;
+        },
 
-      resetAll() {
-        set({ hero: null, lists: {}, tasks: {}, log: [], activeListId: null, tab: 'quests' });
-      },
-    }),
+        reorderTasks(orderedIds) {
+          const t = now();
+          set((s) => {
+            const tasks = { ...s.tasks };
+            orderedIds.forEach((id, i) => {
+              if (tasks[id] && tasks[id].order !== i) tasks[id] = { ...tasks[id], order: i, updatedAt: t };
+            });
+            return { tasks };
+          });
+        },
+
+        reorderLists(orderedIds) {
+          const t = now();
+          set((s) => {
+            const lists = { ...s.lists };
+            orderedIds.forEach((id, i) => {
+              if (lists[id] && lists[id].order !== i) lists[id] = { ...lists[id], order: i, updatedAt: t };
+            });
+            return { lists };
+          });
+        },
+
+        moveTask(id, listId) {
+          const task = get().tasks[id];
+          const list = get().lists[listId];
+          if (!task || !list || task.listId === listId) return;
+          const order = Math.min(0, ...Object.values(get().tasks).filter((x) => x.listId === listId && !x.deleted).map((x) => x.order)) - 1;
+          const patch: Partial<Task> = { listId, order };
+          if (list.type === 'supply') patch.aisle = task.aisle ?? guessAisle(task.title);
+          get().updateTask(id, patch);
+        },
+
+        updateSettings(patch) {
+          set((s) => ({ settings: { ...s.settings, ...patch } }));
+        },
+
+        // ------------------------------------------------------------ hero & loot
+
+        equip(itemId) {
+          const { hero, items } = get();
+          const item = items[itemId];
+          if (!hero || !item || item.deleted) return;
+          set({ hero: { ...hero, equipped: { ...hero.equipped, [item.slot]: item.id }, updatedAt: now() } });
+        },
+
+        unequip(slot) {
+          const hero = get().hero;
+          if (!hero || !hero.equipped[slot]) return;
+          const equipped = { ...hero.equipped };
+          delete equipped[slot];
+          set({ hero: { ...hero, equipped, updatedAt: now() } });
+        },
+
+        sellItem(itemId) {
+          const { hero, items, deviceId } = get();
+          const item = items[itemId];
+          if (!hero || !item || item.deleted || item.locked || Object.values(hero.equipped).includes(itemId)) return 0;
+          const g = sellPrice(item);
+          set({ hero: { ...hero, gold: inc(hero.gold, deviceId, g), updatedAt: now() } });
+          patchItem(itemId, { deleted: true });
+          log('loot', `Sold ${itemDisplayName(item)} for ${g}g.`);
+          return g;
+        },
+
+        toggleLock(itemId) {
+          const item = get().items[itemId];
+          if (item) patchItem(itemId, { locked: !item.locked });
+        },
+
+        upgradeItem(itemId) {
+          const item = get().items[itemId];
+          if (!item || item.deleted) return false;
+          if (!spend(upgradeCost(item))) return false;
+          patchItem(itemId, { upgrade: item.upgrade + 1 });
+          log('loot', `The blacksmith upgraded ${itemDisplayName({ ...item, upgrade: item.upgrade + 1 })}.`);
+          return true;
+        },
+
+        usePotion(stackId) {
+          const { hero, potions, items, settings, deviceId } = get();
+          const stack = potions[stackId];
+          if (!hero || !stack || stack.deleted || stack.count <= 0) return false;
+          const t = now();
+          let next: Hero = { ...hero, potionsUsed: inc(hero.potionsUsed, deviceId, 1), updatedAt: t };
+          if (stack.potion === 'phoenix') {
+            // fill the gap since the last active day (up to a week) so the streak survives
+            const days = new Set(streakDays(hero));
+            const today = parseDateKey(todayKey(t, settings));
+            const missing: string[] = [];
+            for (let back = 1; back <= 7; back++) {
+              const d = new Date(today);
+              d.setDate(d.getDate() - back);
+              const k = dateKey(d);
+              if (days.has(k)) break;
+              missing.push(k);
+            }
+            const hadStreakBefore = missing.length < 7 && missing.length > 0;
+            if (!hadStreakBefore) {
+              fx.emit({ type: 'toast', text: missing.length === 0 ? 'Your streak is not broken!' : 'No streak to save.' });
+              return false;
+            }
+            next = { ...next, savedDays: [...(hero.savedDays ?? []), ...missing].slice(-400), streakSaves: (hero.streakSaves ?? 0) + 1 };
+            fx.emit({ type: 'toast', text: 'STREAK RESTORED!', small: 'The phoenix feather bursts into flame.' });
+          } else {
+            const stats = applyBuffs(computeStats(hero, items), hero.buffs ?? []);
+            const buff = makeBuff(stack.potion, stack.tier, stats.potion, uid());
+            const same = (hero.buffs ?? []).find((b) => b.potion === stack.potion);
+            const buffs = same
+              ? hero.buffs.map((b) => (b === same ? { ...b, value: Math.max(b.value, buff.value), remaining: b.remaining + buff.remaining } : b))
+              : [...(hero.buffs ?? []), buff];
+            next = { ...next, buffs };
+            fx.emit({ type: 'toast', text: potionName(stack.potion, stack.tier).toUpperCase(), small: `Active for ${buff.remaining} quests` });
+          }
+          set((s) => ({
+            hero: next,
+            potions: { ...s.potions, [stackId]: { ...stack, count: stack.count - 1, deleted: stack.count - 1 <= 0, updatedAt: t } },
+          }));
+          log('loot', `Drank ${potionName(stack.potion, stack.tier)}.`);
+          return true;
+        },
+
+        buyOffer(offer) {
+          const st = get();
+          const hero = st.hero;
+          if (!hero) return false;
+          const t = now();
+          const day = todayKey(t, st.settings);
+          const bought = st.shopDay.date === day ? st.shopDay.bought : [];
+          if (offer.kind === 'item' && bought.includes(offer.id)) return false;
+          if (offer.kind === 'item' && bagCount(st.items, hero) >= hero.bagSize) {
+            fx.emit({ type: 'toast', text: 'Your bag is full!' });
+            return false;
+          }
+          if (!spend(offer.price)) return false;
+          const h = get().hero!;
+          switch (offer.kind) {
+            case 'item': {
+              const item: Item = { ...offer.item!, id: uid(), source: 'shop', createdAt: t, updatedAt: t };
+              set((s) => ({ items: { ...s.items, [item.id]: item }, shopDay: { date: day, bought: [...bought, offer.id] } }));
+              break;
+            }
+            case 'potion': {
+              const p = offer.potion!;
+              const id = potionStackId(p.potion, p.tier);
+              set((s) => {
+                const cur = s.potions[id];
+                return { potions: { ...s.potions, [id]: { id, potion: p.potion, tier: p.tier, count: (cur && !cur.deleted ? cur.count : 0) + 1, updatedAt: t } } };
+              });
+              break;
+            }
+            case 'bag':
+              set({ hero: { ...h, bagSize: h.bagSize + 6, updatedAt: t } });
+              break;
+            case 'theme':
+              set({ hero: { ...h, owned: [...h.owned, `theme:${offer.theme}`], updatedAt: t } });
+              break;
+            case 'dye': {
+              const d = offer.dye!;
+              const owned = [...h.owned, `dye:${d.target}:${d.color}`];
+              const appearance = d.target === 'cape' ? h.appearance : { ...h.appearance, [d.target === 'hair' ? 'hairColor' : d.target]: d.color };
+              set({ hero: { ...h, owned, appearance, capeDye: d.target === 'cape' ? d.color : h.capeDye, updatedAt: t } });
+              break;
+            }
+          }
+          log('loot', `Bought ${offer.label} for ${offer.price}g.`);
+          return true;
+        },
+
+        claimAchievements() {
+          const hero = get().hero;
+          if (!hero) return { gold: 0, newTitles: [] };
+          const ctx = { bestStreak: bestStreak(streakDays(hero)), level: heroLevel(hero).level };
+          const r = claimRewards(hero, ctx);
+          if (r.gold <= 0 && !r.newTitles.length) return { gold: 0, newTitles: [] };
+          set({
+            hero: { ...hero, achievements: { ...hero.achievements, ...r.tiers }, gold: inc(hero.gold, get().deviceId, r.gold), updatedAt: now() },
+          });
+          log('achievement', `Claimed achievement rewards: +${r.gold}g${r.newTitles.length ? `, new titles: ${r.newTitles.join(', ')}` : ''}.`);
+          return { gold: r.gold, newTitles: r.newTitles };
+        },
+
+        setTitle(title) {
+          const hero = get().hero;
+          if (hero) set({ hero: { ...hero, title, updatedAt: now() } });
+        },
+
+        updateHero(patch) {
+          const hero = get().hero;
+          if (hero) set({ hero: { ...hero, ...patch, updatedAt: now() } });
+        },
+
+        exportData() {
+          const { hero, lists, tasks, items, potions, settings, log: entries } = get();
+          return JSON.stringify({ app: 'questlog', version: 3, exportedAt: now(), hero, lists, tasks, items, potions, settings, log: entries });
+        },
+
+        importData(json) {
+          try {
+            const d = JSON.parse(json);
+            if (d?.app !== 'questlog' || typeof d.lists !== 'object' || typeof d.tasks !== 'object') return false;
+            const hero = d.hero ? { ...heroDefaults(), ...d.hero } : null;
+            const first = Object.values(d.lists as Record<string, TaskList>).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
+            set({
+              hero, lists: d.lists, tasks: d.tasks, items: d.items ?? {}, potions: d.potions ?? {},
+              settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) }, log: d.log ?? [], activeListId: first?.id ?? null,
+            });
+            return true;
+          } catch {
+            return false;
+          }
+        },
+
+        resetAll() {
+          set({ hero: null, lists: {}, tasks: {}, items: {}, potions: {}, log: [], activeListId: null, tab: 'quests', shopDay: { date: '', bought: [] } });
+        },
+      };
+    },
     {
       name: 'questlog-v1',
-      version: 2,
+      version: 3,
+      partialize: (s) => ({
+        deviceId: s.deviceId, hero: s.hero, lists: s.lists, tasks: s.tasks, items: s.items, potions: s.potions,
+        settings: s.settings, log: s.log, tab: s.tab, activeListId: s.activeListId, shopDay: s.shopDay,
+      }),
       migrate: (persisted, version) => {
         const st = persisted as State;
-        if (version < 2) {
-          if (st.hero) st.hero = { ...heroDefaults(), ...st.hero };
-          st.settings = { ...DEFAULT_SETTINGS, ...st.settings };
+        if (version < 2) st.settings = { ...DEFAULT_SETTINGS, ...st.settings };
+        if (version < 3) {
+          st.items = st.items ?? {};
+          st.potions = st.potions ?? {};
+          st.shopDay = st.shopDay ?? { date: '', bought: [] };
+          if (st.hero) {
+            st.hero = { ...heroDefaults(), ...st.hero };
+            if (!Object.keys(st.hero.equipped).length) {
+              const kit = starterKit(st.hero.classId, Date.now());
+              st.items = { ...st.items, ...kit.items };
+              st.hero.equipped = kit.equipped;
+            }
+          }
         }
         return st;
       },
@@ -313,12 +565,24 @@ export const useStore = create<State>()(
   ),
 );
 
-function pushLog(set: (p: Partial<State>) => void, get: () => State, kind: LogEntry['kind'], text: string) {
-  set({ log: [{ id: uid(), at: now(), text, kind }, ...get().log].slice(0, 200) });
-}
-
 // ----- selectors -----
-export const visibleLists = (s: State) => Object.values(s.lists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order);
-export const listTasks = (s: State, listId: string) =>
+export const visibleLists = (s: Pick<State, 'lists'>) => Object.values(s.lists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order);
+export const listTasks = (s: Pick<State, 'tasks'>, listId: string) =>
   Object.values(s.tasks).filter((t) => t.listId === listId && !t.deleted).sort((a, b) => a.order - b.order);
 export const heroStats = (h: Hero) => ({ ...heroLevel(h), kills: sum(h.kills), tasks: sum(h.tasksDone) });
+export const equippedItems = (s: Pick<State, 'hero' | 'items'>): Partial<Record<Slot, Item>> => {
+  const out: Partial<Record<Slot, Item>> = {};
+  if (!s.hero) return out;
+  for (const [slot, id] of Object.entries(s.hero.equipped)) {
+    const it = id ? s.items[id] : undefined;
+    if (it && !it.deleted) out[slot as Slot] = it;
+  }
+  return out;
+};
+export const bagItems = (s: Pick<State, 'hero' | 'items'>): Item[] => {
+  const eq = new Set(Object.values(s.hero?.equipped ?? {}));
+  return Object.values(s.items).filter((i) => !i.deleted && !eq.has(i.id));
+};
+export const potionStacks = (s: Pick<State, 'potions'>): PotionStack[] =>
+  Object.values(s.potions).filter((p) => !p.deleted && p.count > 0);
+export type { PotionId };
