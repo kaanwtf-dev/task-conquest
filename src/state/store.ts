@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type {
   ClassId, Difficulty, Hero, Item, ListType, LogEntry, PotionId, PotionStack, Repeat, Settings, SkillId, Slot, Task, TaskList,
 } from '../core/types';
+import type { TimeCfg } from '../core/time';
 import type { Appearance } from '../pixel/sprites/hero';
 import type { ThemeId } from '../pixel/themes';
 import { dateKey, isActiveToday, isDone, parseDateKey, periodKey, todayKey } from '../core/time';
@@ -56,6 +57,30 @@ export const LIST_TYPE_INFO: Record<ListType, { label: string; repeat: Repeat; h
   supply: { label: 'Supply', repeat: { kind: 'none' }, hint: 'Remembers items, restock anytime' },
   custom: { label: 'Custom', repeat: { kind: 'none' }, hint: 'Set repeat per task' },
 };
+
+/**
+ * When a task's period definition changes (its repeat, or the day/week start settings), carry its
+ * completion into the new period instead of silently reopening it — reopening would let a task pay
+ * out again (and would make honest users redo work).
+ */
+export function remapPeriod(task: Task, oldRepeat: Repeat, oldCfg: TimeCfg, newRepeat: Repeat, newCfg: TimeCfg, now: number): Partial<Task> {
+  const oldPk = periodKey(oldRepeat, now, oldCfg);
+  const newPk = periodKey(newRepeat, now, newCfg);
+  const patch: Partial<Task> = {};
+  if (oldPk === newPk) return patch;
+  if (task.doneFor === oldPk) patch.doneFor = newPk;
+  if (task.rewardedFor === oldPk) patch.rewardedFor = newPk;
+  // supply items are rewarded once per logical day
+  const oldDay = `s${todayKey(now, oldCfg)}`;
+  if (task.rewardedFor === oldDay) patch.rewardedFor = `s${todayKey(now, newCfg)}`;
+  return patch;
+}
+
+/** One quest chest per list per period; lists without a cadence get one per day. */
+function chestPeriod(list: TaskList, now: number, cfg: TimeCfg): string {
+  const r = LIST_TYPE_INFO[list.type].repeat;
+  return r.kind === 'none' ? `d${todayKey(now, cfg)}` : periodKey(r, now, cfg);
+}
 
 export interface State {
   deviceId: string;
@@ -259,7 +284,7 @@ export const useStore = create<State>()(
               (t) => t.listId === listId && !t.deleted && t.title.toLowerCase() === clean.toLowerCase(),
             );
             if (known) {
-              get().updateTask(known.id, { doneFor: null, rewardedFor: null, ...extra });
+              get().updateTask(known.id, { doneFor: null, ...extra });
               return known.id;
             }
           }
@@ -277,8 +302,14 @@ export const useStore = create<State>()(
         },
 
         updateTask(id, patch) {
-          if (!get().tasks[id]) return;
-          set((s) => ({ tasks: { ...s.tasks, [id]: { ...s.tasks[id], ...patch, updatedAt: now() } } }));
+          const cur = get().tasks[id];
+          if (!cur) return;
+          let full = patch;
+          if (patch.repeat && JSON.stringify(patch.repeat) !== JSON.stringify(cur.repeat) && !('doneFor' in patch)) {
+            const cfg = get().settings;
+            full = { ...remapPeriod(cur, cur.repeat, cfg, patch.repeat, cfg, now()), ...patch };
+          }
+          set((s) => ({ tasks: { ...s.tasks, [id]: { ...s.tasks[id], ...full, updatedAt: now() } } }));
         },
 
         deleteTask(id) {
@@ -298,9 +329,11 @@ export const useStore = create<State>()(
             return;
           }
           const list = s.lists[task.listId];
-          const alreadyRewarded = task.rewardedFor === pk;
-          s.updateTask(id, { doneFor: pk, rewardedFor: pk, doneAt: t, timesDone: task.timesDone + 1, doneBy: hero.name });
-          // re-checking within the same period never pays out twice (no farming by toggling)
+          // re-checking within the same period never pays out twice (no farming by toggling);
+          // supply items can be bought again any time but pay out at most once per logical day
+          const rewardKey = list?.type === 'supply' ? `s${todayKey(t, cfg)}` : pk;
+          const alreadyRewarded = task.rewardedFor === rewardKey;
+          s.updateTask(id, { doneFor: pk, rewardedFor: rewardKey, doneAt: t, timesDone: task.timesDone + 1, doneBy: hero.name });
           if (alreadyRewarded || !list) return;
 
           const seed = hashStr(`${id}:${pk}:${t}:${s.deviceId}`);
@@ -309,7 +342,9 @@ export const useStore = create<State>()(
           // whole list cleared for this period -> quest chest
           if (list.type !== 'supply') {
             const all = Object.values(get().tasks).filter((x) => x.listId === list.id && !x.deleted && isActiveToday(x, t, cfg));
-            if (all.length >= 2 && all.every((x) => isDone(x, t, cfg))) {
+            const chestKey = chestPeriod(list, t, cfg);
+            if (all.length >= 2 && all.every((x) => isDone(x, t, cfg)) && list.chestFor !== chestKey) {
+              get().updateList(list.id, { chestFor: chestKey });
               const st = get();
               apply(questChestRewards({ hero: st.hero!, items: st.items, list, dev: st.deviceId, now: t, seed: hashStr(`chest:${list.id}:${pk}:${t}:${st.deviceId}`) }));
             }
@@ -320,7 +355,7 @@ export const useStore = create<State>()(
           let n = 0;
           for (const tk of Object.values(get().tasks))
             if (tk.listId === listId && !tk.deleted && tk.staple && tk.doneFor) {
-              get().updateTask(tk.id, { doneFor: null, rewardedFor: null });
+              get().updateTask(tk.id, { doneFor: null });
               n++;
             }
           return n;
@@ -367,7 +402,20 @@ export const useStore = create<State>()(
         },
 
         updateSettings(patch) {
-          set((s) => ({ settings: { ...s.settings, ...patch } }));
+          const prev = get().settings;
+          const next = { ...prev, ...patch };
+          if (next.dayStartHour !== prev.dayStartHour || next.weekStart !== prev.weekStart) {
+            const t = now();
+            const tasks = { ...get().tasks };
+            for (const tk of Object.values(tasks)) {
+              if (tk.deleted) continue;
+              const p = remapPeriod(tk, tk.repeat, prev, tk.repeat, next, t);
+              if (Object.keys(p).length) tasks[tk.id] = { ...tk, ...p, updatedAt: t };
+            }
+            set({ settings: next, tasks });
+            return;
+          }
+          set({ settings: next });
         },
 
         // ------------------------------------------------------------ hero & loot
@@ -440,9 +488,10 @@ export const useStore = create<State>()(
           } else {
             const stats = applyBuffs(computeStats(hero, items), hero.buffs ?? []);
             const buff = makeBuff(stack.potion, stack.tier, stats.potion, uid());
-            const same = (hero.buffs ?? []).find((b) => b.potion === stack.potion);
+            // same potion AND tier extends the buff; a different tier runs as its own buff
+            const same = (hero.buffs ?? []).find((b) => b.potion === stack.potion && b.tier === buff.tier);
             const buffs = same
-              ? hero.buffs.map((b) => (b === same ? { ...b, value: Math.max(b.value, buff.value), remaining: b.remaining + buff.remaining } : b))
+              ? hero.buffs.map((b) => (b === same ? { ...b, remaining: b.remaining + buff.remaining } : b))
               : [...(hero.buffs ?? []), buff];
             next = { ...next, buffs };
             fx.emit({ type: 'toast', text: potionName(stack.potion, stack.tier).toUpperCase(), small: `Active for ${buff.remaining} quests` });
@@ -536,8 +585,20 @@ export const useStore = create<State>()(
             if (d?.app !== 'questlog' || typeof d.lists !== 'object' || typeof d.tasks !== 'object') return false;
             const hero = d.hero ? { ...heroDefaults(), ...d.hero } : null;
             const first = Object.values(d.lists as Record<string, TaskList>).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
+            // local docs that aren't in the backup become tombstones so the removal syncs too
+            const t = now();
+            const keep = <T extends { deleted?: boolean; updatedAt: number }>(cur: Record<string, T>, incoming: Record<string, T> = {}) => {
+              const out: Record<string, T> = { ...incoming };
+              for (const [k, v] of Object.entries(cur)) if (!(k in out)) out[k] = v.deleted ? v : { ...v, deleted: true, updatedAt: t };
+              return out;
+            };
+            const cur = get();
             set({
-              hero, lists: d.lists, tasks: d.tasks, items: d.items ?? {}, potions: d.potions ?? {},
+              hero,
+              lists: keep(cur.lists, d.lists),
+              tasks: keep(cur.tasks, d.tasks),
+              items: keep(cur.items, d.items),
+              potions: keep(cur.potions, d.potions),
               settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) }, log: d.log ?? [], activeListId: first?.id ?? null,
             });
             return true;

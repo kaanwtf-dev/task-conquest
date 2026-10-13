@@ -3,6 +3,7 @@ import { useStore, visibleLists, listTasks, TODAY_ID, type Tab } from '../../sta
 import { heroGold, heroLevel, levelTitle } from '../../game/progression';
 import { streak, isDone, isActiveToday, todayKey } from '../../core/time';
 import { useHeroLook } from '../../game/look';
+import { streakDays } from '../../state/rewards';
 import { iconFor } from '../../pixel/iconGen';
 import { Bar, PxImg, Ui, portraitUrl, useNow } from './common';
 import type { TaskList } from '../../core/types';
@@ -17,7 +18,7 @@ export function Hud() {
   const now = useNow();
   const { level, into, need } = heroLevel(hero);
   const gold = heroGold(hero);
-  const st = streak(hero.activeDays, now, cfg);
+  const st = streak(streakDays(hero), now, cfg);
   return (
     <header className="hud">
       <button className="icon-btn hud-portrait" onClick={() => setTab('hero')} aria-label="Hero">

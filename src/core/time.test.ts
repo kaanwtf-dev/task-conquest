@@ -51,8 +51,8 @@ describe('period keys', () => {
   it('interval tasks recur every N days from their anchor', () => {
     const t = task({ kind: 'interval', every: 3, anchor: '2026-10-12' });
     expect(isActiveToday(t, at(2026, 10, 12), cfg)).toBe(true);
-    expect(isActiveToday(t, at(2026, 10, 13), cfg)).toBe(false);
-    expect(isActiveToday(t, at(2026, 10, 15), cfg)).toBe(true);
+    expect(isActiveToday(t, at(2026, 10, 13), cfg)).toBe(true); // still on the board until done
+    expect(isActiveToday(t, at(2026, 10, 11), cfg)).toBe(false); // not before its first day
     expect(periodKey(t.repeat, at(2026, 10, 12), cfg)).toBe(periodKey(t.repeat, at(2026, 10, 14), cfg));
     expect(periodKey(t.repeat, at(2026, 10, 14), cfg)).not.toBe(periodKey(t.repeat, at(2026, 10, 15), cfg));
   });

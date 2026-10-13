@@ -41,9 +41,15 @@ function statLines(item: Item): { stat: StatId; value: number }[] {
 }
 
 /** Detail sheet. `mode` = 'owned' (bag/equipped) or 'shop' (shows a Buy button with `price`). */
-export function ItemSheet({ item, onClose, mode = 'owned', price, onBuy }: { item: Item; onClose: () => void; mode?: 'owned' | 'shop'; price?: number; onBuy?: () => void }) {
+export function ItemSheet({ item: given, onClose, mode = 'owned', price, onBuy }: { item: Item; onClose: () => void; mode?: 'owned' | 'shop'; price?: number; onBuy?: () => void }) {
   const s = useStore();
   const hero = s.hero!;
+  // owned items are read live so upgrade/sell prices and the lock state never go stale
+  const item = mode === 'owned' ? s.items[given.id] ?? given : given;
+  if (mode === 'owned' && item.deleted) {
+    queueMicrotask(onClose);
+    return null;
+  }
   const eq = equippedItems(s);
   const isEquipped = hero.equipped[item.slot] === item.id;
   const current = eq[item.slot];

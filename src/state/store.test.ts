@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useStore, bagItems, potionStacks, listTasks, visibleLists } from './store';
 import { fx, type FxEvent } from './fx';
 import { sum, heroGold } from '../game/progression';
@@ -33,6 +33,7 @@ describe('store: hero creation', () => {
 
 describe('store: completing tasks', () => {
   beforeEach(() => fresh());
+  afterEach(() => vi.useRealTimers());
 
   it('grants XP, gold and a kill', () => {
     const events: FxEvent[] = [];
@@ -66,7 +67,9 @@ describe('store: completing tasks', () => {
     expect(sum(st().hero!.itemsFound)).toBeGreaterThan(0);
   });
 
-  it('supply items can be bought again after re-adding and pay out again', () => {
+  it('supply items can be bought again; each pays out at most once per day', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 12, 12));
     const g = listOf('supply');
     const milk = listTasks(st(), g.id).find((t) => t.title === 'Milk')!;
     st().toggleTask(milk.id);
@@ -74,9 +77,13 @@ describe('store: completing tasks', () => {
     st().addTask(g.id, 'milk'); // known item: back on the list, not duplicated
     expect(listTasks(st(), g.id).filter((t) => t.title.toLowerCase() === 'milk')).toHaveLength(1);
     expect(st().tasks[milk.id].doneFor).toBeNull();
-    st().toggleTask(milk.id);
-    expect(sum(st().hero!.kills)).toBe(k1 + 1);
+    st().toggleTask(milk.id); // same day: bought again, no second payout (no pantry-tap farming)
+    expect(sum(st().hero!.kills)).toBe(k1);
     expect(st().tasks[milk.id].timesDone).toBe(2);
+    vi.setSystemTime(new Date(2026, 9, 13, 12));
+    st().addTask(g.id, 'Milk');
+    st().toggleTask(milk.id); // next day pays again
+    expect(sum(st().hero!.kills)).toBe(k1 + 1);
   });
 
   it('chips at the boss and eventually defeats it', () => {
@@ -174,5 +181,77 @@ describe('store: start over + moves', () => {
     st().moveTask(t.id, daily.id);
     expect(st().tasks[t.id].deleted).toBe(true);
     expect(listTasks(st(), daily.id).some((x) => x.title === t.title && x.id !== t.id)).toBe(true);
+  });
+});
+
+describe('store: anti-farming + data safety (review regressions)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 14, 2, 30)); // Wednesday 02:30, inside the day-start window
+    fresh();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const kills = () => sum(st().hero!.kills);
+
+  it('flipping week start keeps weekly completions and pays nothing extra', () => {
+    const weekly = listOf('weekly');
+    for (const t of listTasks(st(), weekly.id)) st().toggleTask(t.id);
+    const k = kills();
+    for (let i = 0; i < 4; i++) {
+      st().updateSettings({ weekStart: i % 2 ? 1 : 0 });
+      for (const t of listTasks(st(), weekly.id)) if (!st().tasks[t.id].doneFor) st().toggleTask(t.id);
+    }
+    expect(kills()).toBe(k);
+    expect(listTasks(st(), weekly.id).every((t) => !!t.doneFor)).toBe(true);
+  });
+
+  it('flipping the day start hour does not re-pay dailies', () => {
+    const daily = listOf('daily');
+    for (const t of listTasks(st(), daily.id)) st().toggleTask(t.id);
+    const k = kills();
+    st().updateSettings({ dayStartHour: 6 });
+    for (const t of listTasks(st(), daily.id)) st().toggleTask(t.id); // these are done: toggles them off
+    for (const t of listTasks(st(), daily.id)) st().toggleTask(t.id); // and on again: no payout
+    st().updateSettings({ dayStartHour: 0 });
+    expect(kills()).toBe(k);
+  });
+
+  it('changing a task repeat carries its completion over', () => {
+    const t = listTasks(st(), listOf('daily').id)[0];
+    st().toggleTask(t.id);
+    const k = kills();
+    st().updateTask(t.id, { repeat: { kind: 'weekly' } });
+    expect(st().tasks[t.id].doneFor).toBeTruthy();
+    st().updateTask(t.id, { repeat: { kind: 'daily' } });
+    st().toggleTask(t.id);
+    st().toggleTask(t.id);
+    expect(kills()).toBe(k);
+  });
+
+  it('pays one quest chest per list per period', () => {
+    const daily = listOf('daily');
+    for (const t of listTasks(st(), daily.id)) st().toggleTask(t.id);
+    expect(sum(st().hero!.questsCleared)).toBe(1);
+    for (let i = 0; i < 5; i++) st().toggleTask(st().addTask(daily.id, `extra ${i}`)!);
+    expect(sum(st().hero!.questsCleared)).toBe(1);
+  });
+
+  it('potions of different tiers do not merge into the stronger one', () => {
+    useStore.setState({ hero: { ...st().hero!, gold: { [st().deviceId]: 1e6 } } });
+    st().buyOffer({ id: 'p5', kind: 'potion', label: 'V', price: 1, potion: { potion: 'insight', tier: 5 } });
+    st().buyOffer({ id: 'p1', kind: 'potion', label: 'I', price: 1, potion: { potion: 'insight', tier: 1 } });
+    st().usePotion('insight:5');
+    st().usePotion('insight:1');
+    const buffs = st().hero!.buffs.filter((b) => b.potion === 'insight');
+    expect(buffs).toHaveLength(2);
+    expect(new Set(buffs.map((b) => b.tier))).toEqual(new Set([1, 5]));
+  });
+
+  it('import tombstones local docs missing from the backup so the removal syncs', () => {
+    const json = st().exportData();
+    const id = st().addList({ name: 'After backup', type: 'quests', theme: 'forest', skill: 'lore' });
+    expect(st().importData(json)).toBe(true);
+    expect(st().lists[id]?.deleted).toBe(true);
   });
 });

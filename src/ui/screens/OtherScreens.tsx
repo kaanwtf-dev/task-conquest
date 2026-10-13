@@ -182,11 +182,12 @@ export function ListSheet({ onClose, editId }: { onClose: () => void; editId?: s
             if (existing) {
               s.updateList(existing.id, { name: name.trim() || existing.name, type, theme, skill, icon, color });
               // switching list type moves tasks that still use the old default cadence to the new one
-              if (type !== existing.type) {
-                const oldR = JSON.stringify(LIST_TYPE_INFO[existing.type].repeat);
+              const oldR = JSON.stringify(LIST_TYPE_INFO[existing.type].repeat);
+              const newR = LIST_TYPE_INFO[type].repeat;
+              if (type !== existing.type && oldR !== JSON.stringify(newR)) {
+                // updateTask carries each task's completion into the new period (no free re-rewards)
                 for (const t of Object.values(s.tasks))
-                  if (t.listId === existing.id && !t.deleted && JSON.stringify(t.repeat) === oldR)
-                    s.updateTask(t.id, { repeat: LIST_TYPE_INFO[type].repeat, doneFor: null });
+                  if (t.listId === existing.id && !t.deleted && JSON.stringify(t.repeat) === oldR) s.updateTask(t.id, { repeat: newR });
               }
               sfx.pop();
             } else {

@@ -17,9 +17,10 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
   const s = useStore();
   const task = s.tasks[taskId];
   const list = task ? s.lists[task.listId] : undefined;
+  const [orig] = useState<Task | undefined>(task);
   const [draft, setDraft] = useState<Task | undefined>(task);
   const [emojiText, setEmojiText] = useState(task?.icon ?? '');
-  if (!task || !draft || !list) return null;
+  if (!task || !draft || !list || !orig) return null;
 
   const level = s.hero ? heroLevel(s.hero).level : 1;
   const supply = list.type === 'supply';
@@ -37,10 +38,24 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
   };
 
   const save = () => {
-    const { id, listId, ...rest } = draft;
-    const title = rest.title.trim() || task.title;
-    s.updateTask(id, { ...rest, title, icon: emojiText.trim() ? firstEmoji(emojiText) ?? undefined : undefined });
-    if (listId !== task.listId) s.moveTask(id, listId);
+    // only write fields this sheet edits and that actually changed, so a completion that synced in
+    // from a party member while the sheet was open isn't reverted
+    const edited: Partial<Task> = {
+      title: draft.title.trim() || orig.title,
+      notes: draft.notes,
+      difficulty: draft.difficulty,
+      repeat: draft.repeat,
+      due: draft.due,
+      qty: draft.qty,
+      aisle: draft.aisle,
+      staple: draft.staple,
+      icon: emojiText.trim() ? firstEmoji(emojiText) ?? undefined : undefined,
+    };
+    const patch: Partial<Task> = {};
+    for (const [k, v] of Object.entries(edited) as [keyof Task, unknown][])
+      if (JSON.stringify(v) !== JSON.stringify(orig[k])) (patch as Record<string, unknown>)[k] = v;
+    if (Object.keys(patch).length) s.updateTask(orig.id, patch);
+    if (draft.listId !== orig.listId) s.moveTask(orig.id, draft.listId);
     sfx.pop();
     onClose();
   };

@@ -33,8 +33,10 @@ export default function QuestsScreen() {
 
   if (s.activeListId === TODAY_ID) return <TodayView now={now} wide={wide} onEdit={setEditTask} editTask={editTask} closeEdit={() => setEditTask(null)} />;
 
-  const list = s.activeListId ? s.lists[s.activeListId] : undefined;
-  if (!list || list.deleted) return <div className="scroll"><div className="empty">No lists yet. Create one!</div></div>;
+  const chosen = s.activeListId ? s.lists[s.activeListId] : undefined;
+  // the active list can vanish underneath us (left a party list, deleted on another device)
+  const list = chosen && !chosen.deleted ? chosen : visibleLists(s)[0];
+  if (!list) return <div className="scroll"><div className="empty">No lists yet. Create one!</div></div>;
   const tasks = listTasks(s, list.id);
   const cfg = s.settings;
   const info = LIST_TYPE_INFO[list.type];
@@ -94,10 +96,19 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
   const all = Object.values(s.tasks).filter((t) => !t.deleted && listIds.has(t.listId));
   const order = (a: Task, b: Task) => (s.lists[a.listId]?.order ?? 0) - (s.lists[b.listId]?.order ?? 0) || a.order - b.order;
 
-  const overdue = all.filter((t) => t.due && t.due < today && !isDone(t, now, cfg)).sort(order);
+  // a due date on a repeating task marks its first occurrence; afterwards it's just routine
+  const oneOff = (t: Task) => t.repeat.kind === 'none';
+  const overdue = all.filter((t) => oneOff(t) && t.due && t.due < today && !isDone(t, now, cfg)).sort(order);
   const dueToday = all.filter((t) => t.due === today && !isDone(t, now, cfg)).sort(order);
   const routine = all
-    .filter((t) => !t.due && ['daily', 'days', 'interval'].includes(t.repeat.kind) && isActiveToday(t, now, cfg) && !isDone(t, now, cfg))
+    .filter(
+      (t) =>
+        t.due !== today &&
+        !(oneOff(t) && t.due) &&
+        ['daily', 'days', 'interval'].includes(t.repeat.kind) &&
+        isActiveToday(t, now, cfg) &&
+        !isDone(t, now, cfg),
+    )
     .sort(order);
   const week = all.filter((t) => !t.due && t.repeat.kind === 'weekly' && !isDone(t, now, cfg)).sort(order);
   const doneToday = all.filter((t) => t.doneAt && todayKey(t.doneAt, cfg) === today && isDone(t, now, cfg)).sort(order);
@@ -132,7 +143,7 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
           )}
         </div>
       </SceneBanner>
-      <QuickAdd list={lists.find((l) => l.type === 'quests') ?? lists[0]} dueToday />
+      <QuickAdd list={lists.find((l) => l.type === 'quests') ?? lists.find((l) => l.type === 'custom') ?? lists[0]} dueToday />
       {overdue.length + dueToday.length + routine.length + week.length === 0 && (
         <div className="win tasks">
           <div className="empty">Nothing due today. Go touch some grass, adventurer.</div>
@@ -169,7 +180,7 @@ function QuickAdd({ list, dueToday }: { list?: TaskList; dueToday?: boolean }) {
   const submit = () => {
     if (!text.trim()) return;
     unlockAudio();
-    addTask(list.id, text, dueToday ? { due: todayKey(Date.now(), cfg) } : undefined);
+    addTask(list.id, text, dueToday ? { due: todayKey(Date.now(), cfg), repeat: { kind: 'none' } } : undefined);
     sfx.pop();
     setText('');
   };
@@ -304,8 +315,12 @@ function SortableTasks({ tasks, onEdit }: { tasks: Task[]; onEdit: (id: string) 
     justDragged.current = Date.now();
     if (!e.over || e.active.id === e.over.id) return;
     const moved = arrayMove(ids, ids.indexOf(String(e.active.id)), ids.indexOf(String(e.over.id)));
-    const rest = listTaskIds.filter((id) => !moved.includes(id));
-    reorder([...moved, ...rest]);
+    // put the reordered open tasks back into the slots open tasks held; done / not-today tasks stay put
+    const open = new Set(ids);
+    const slots = listTaskIds.map((id, i) => (open.has(id) ? i : -1)).filter((i) => i >= 0);
+    const full = [...listTaskIds];
+    slots.forEach((slot, i) => (full[slot] = moved[i]));
+    reorder(full);
     sfx.tick();
   };
   const guardedEdit = (id: string) => {
@@ -348,7 +363,7 @@ function TaskView({ tasks, now, onEdit }: { tasks: Task[]; now: number; onEdit: 
           <div className="section-label">Not scheduled today</div>
           <div className="win tasks">
             {later.map((t) => (
-              <TaskRow key={t.id} task={t} done={false} inactive onEdit={onEdit} />
+              <TaskRow key={t.id} task={t} done={isDone(t, now, cfg)} inactive onEdit={onEdit} />
             ))}
           </div>
         </>
@@ -435,7 +450,7 @@ function PantryChip({ task, onEdit }: { task: Task; onEdit: (id: string) => void
       onClick={() => {
         if (held.current) return;
         sfx.pop();
-        updateTask(task.id, { doneFor: null, rewardedFor: null });
+        updateTask(task.id, { doneFor: null });
       }}
     >
       <PxImg src={iconFor(task.title, task.icon)} size={24} />

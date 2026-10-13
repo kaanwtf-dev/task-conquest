@@ -69,11 +69,8 @@ export function isDone(task: Task, now: number, cfg: TimeCfg): boolean {
 export function isActiveToday(task: Task, now: number, cfg: TimeCfg): boolean {
   const r = task.repeat;
   if (r.kind === 'days') return r.days.includes(logicalDate(now, cfg).getDay());
-  if (r.kind === 'interval') {
-    const d = logicalDate(now, cfg);
-    const diff = daysBetween(parseDateKey(r.anchor), d);
-    return diff >= 0 && diff % Math.max(1, r.every) === 0;
-  }
+  // 'every N days' stays on the board for its whole N-day period (done or not), like daily/weekly
+  if (r.kind === 'interval') return daysBetween(parseDateKey(r.anchor), logicalDate(now, cfg)) >= 0;
   return true;
 }
 

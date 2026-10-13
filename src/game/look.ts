@@ -10,7 +10,8 @@ export function heroLook(hero: Hero | null | undefined, items: Record<string, It
   if (!hero) return {};
   const eq = equippedItems({ hero, items });
   const look = Object.keys(eq).length ? gearLook(eq) : { ...(CLASS_BY_ID[hero.classId]?.look ?? {}) };
-  if (hero.capeDye && look.cape) look.cape = hero.capeDye;
+  // a bought cape dye shows as a plain cape even without a cape item
+  if (hero.capeDye) look.cape = hero.capeDye;
   return look;
 }
 

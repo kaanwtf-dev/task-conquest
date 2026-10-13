@@ -46,6 +46,7 @@ export interface TaskList extends Meta {
   order: number;
   createdAt: number;
   shared?: boolean;
+  chestFor?: string; // period key of the last quest-complete chest (one chest per list per period)
 }
 
 export interface Task extends Meta {
