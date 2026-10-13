@@ -93,7 +93,8 @@ describe('newer (last write wins)', () => {
     const b = task('t', 100, { title: 'banana' });
     expect(newer(a, b)).toBe(newer(b, a));
     // tie-break is by canonical content, so key order does not matter
-    const shuffled = JSON.parse(JSON.stringify({ updatedAt: 100, title: 'banana', ...b }));
+    const { updatedAt, title, ...rest } = b;
+    const shuffled = JSON.parse(JSON.stringify({ updatedAt, title, ...rest })) as Task;
     expect(canon(newer(a, shuffled))).toBe(canon(b));
   });
 
