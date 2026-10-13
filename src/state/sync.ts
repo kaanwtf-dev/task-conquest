@@ -17,7 +17,11 @@ interface SyncUi {
   email: string | null;
   userId: string | null;
   /** Set on a device's first sign-in when the cloud already has a different hero. */
-  conflict: { cloudName: string; cloudLevel: number } | null;
+  /**
+   * 'hero': first sign-in on this device while the cloud holds a different hero.
+   * 'account': this device last synced with ANOTHER account — never push its data into this one silently.
+   */
+  conflict: { kind: 'hero'; cloudName: string; cloudLevel: number } | { kind: 'account' } | null;
   pendingJoin: string | null;
   lastSync: number | null;
 }
@@ -99,13 +103,30 @@ async function startEngine(userId: string) {
   engine = new SyncEngine(local, new SupabaseRemote(client, userId), kv, userId);
   engine.onStatus((st) => useSync.setState({ status: st, lastSync: st === 'idle' ? Date.now() : useSync.getState().lastSync }));
 
+  // this device's data belongs to whichever account it last synced with
+  const lastUser = kv.get(LAST_USER_KEY);
+  const st = useStore.getState();
+  const hasLocal = !!st.hero || Object.values(st.lists).some((l) => !l.deleted);
+  if (lastUser && lastUser !== userId && hasLocal) {
+    useSync.setState({ conflict: { kind: 'account' } });
+    return; // resolveAccountSwitch() continues
+  }
+
   // first sign-in on this device while the cloud already holds a different hero -> let the player choose
   const firstKey = `questlog-sync-adopted:${userId}`;
   if (!kv.get(firstKey)) {
-    const cloud = await engine.inspectRemoteHero().catch(() => null);
+    let cloud: Hero | null = null;
+    try {
+      cloud = await engine.inspectRemoteHero();
+    } catch {
+      // couldn't look (offline / server error): sync anyway — the engine merges lineages safely —
+      // but don't mark this device as decided, so the choice is offered once the cloud is reachable
+      await beginSyncing(userId);
+      return;
+    }
     const mine = useStore.getState().hero;
     if (cloud && mine && cloud.createdAt !== mine.createdAt) {
-      useSync.setState({ conflict: { cloudName: cloud.name, cloudLevel: heroLevel(cloud).level } });
+      useSync.setState({ conflict: { kind: 'hero', cloudName: cloud.name, cloudLevel: heroLevel(cloud).level } });
       return; // resolveConflict() continues
     }
     if (cloud && !mine) {
@@ -114,11 +135,27 @@ async function startEngine(userId: string) {
     }
     kv.set(firstKey, '1');
   }
-  await beginSyncing();
+  await beginSyncing(userId);
 }
 
-async function beginSyncing() {
+const LAST_USER_KEY = 'questlog-sync-last-user';
+
+/** Another account signed in on a device holding someone else's data. */
+export async function resolveAccountSwitch(choice: 'fresh' | 'bring') {
+  const userId = useSync.getState().userId;
+  if (!userId) return;
+  if (choice === 'fresh') {
+    // wipe this device (no tombstones: that data belongs to the other account, not this one)
+    useStore.setState({ hero: null, lists: {}, tasks: {}, items: {}, potions: {}, activeListId: null, tab: 'quests' });
+  }
+  kv.set(LAST_USER_KEY, userId);
+  useSync.setState({ conflict: null });
+  await startEngine(userId);
+}
+
+async function beginSyncing(userId: string) {
   if (!engine) return;
+  kv.set(LAST_USER_KEY, userId);
   await engine.start();
   unsubStore = useStore.subscribe((s, prev) => {
     if (s.hero !== prev.hero || s.lists !== prev.lists || s.tasks !== prev.tasks || s.items !== prev.items || s.potions !== prev.potions)
@@ -144,7 +181,7 @@ export async function resolveConflict(strategy: 'merge' | 'cloud' | 'local') {
   pickLiveList();
   kv.set(`questlog-sync-adopted:${userId}`, '1');
   useSync.setState({ conflict: null });
-  await beginSyncing();
+  await beginSyncing(userId);
 }
 
 /** After adopting cloud data the selected list may be gone. */

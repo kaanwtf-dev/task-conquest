@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore, visibleLists } from '../../state/store';
-import { useSync, joinByCode, resolveConflict, restartSync, syncNow, afterLeave } from '../../state/sync';
+import { useSync, joinByCode, resolveConflict, resolveAccountSwitch, restartSync, syncNow, afterLeave } from '../../state/sync';
 import { getSyncConfig, setSyncConfig, signIn, signOut, signUp } from '../../sync/supabase';
 import { createInvite, leaveList, listParty } from '../../sync/party';
 import { iconFor } from '../../pixel/iconGen';
@@ -324,6 +324,25 @@ function ListParty({ list }: { list: TaskList }) {
 function ConflictSheet() {
   const c = useSync((s) => s.conflict)!;
   const hero = useStore((s) => s.hero);
+  if (c.kind === 'account')
+    return (
+      <div className="sheet-back">
+        <div className="win sheet">
+          <div className="win-title">Different account</div>
+          <p style={{ fontSize: 16, lineHeight: 1.4 }}>
+            This device was last synced with another account. Its hero and lists ({hero?.name ?? 'no hero'}) belong to that account.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button className="btn" onClick={() => resolveAccountSwitch('fresh')}>
+              Start fresh with this account
+            </button>
+            <button className="btn ghost" onClick={() => resolveAccountSwitch('bring')}>
+              Bring this device's data into this account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   return (
     <div className="sheet-back">
       <div className="win sheet">

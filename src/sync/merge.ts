@@ -79,7 +79,7 @@ export function unionSorted(a: unknown, b: unknown, keep = Infinity): string[] {
 // Fields merged as a CRDT; everything else on the hero is last-write-wins as a block.
 const HERO_CRDT_KEYS = [
   'xp', 'gold', 'goldSpent', 'kills', 'tasksDone', 'skillXp', 'bossesSlain', 'itemsFound', 'potionsUsed', 'questsCleared',
-  'activeDays', 'savedDays', 'owned', 'achievements', 'bossIndex', 'bossDamage', 'bagSize', 'streakSaves', 'createdAt', 'updatedAt',
+  'activeDays', 'savedDays', 'owned', 'achievements', 'bossIndex', 'bossDamage', 'bagSize', 'streakSaves', 'bestStreak', 'createdAt', 'updatedAt',
 ] as const;
 
 function lwwPart(h: Hero): string {
@@ -106,7 +106,7 @@ export const lineage = (h: Pick<Hero, 'createdAt'>): number => finiteOr(h.create
  * - progress counters: per-device max, so offline progress on every device adds up
  * - day lists / owned unlocks: set union (days sorted, last 400 kept); achievements: per-key max
  * - boss ladder: highest bossIndex wins and brings its damage (per-device max on a tie)
- * - bagSize, streakSaves: max; createdAt: min; updatedAt: max
+ * - bagSize, streakSaves, bestStreak: max; createdAt: min; updatedAt: max
  * - name, appearance, class, equipped, buffs, title, dyes: from the newer side
  */
 export function mergeHero(a: Hero, b: Hero): Hero {
@@ -136,6 +136,8 @@ export function mergeHero(a: Hero, b: Hero): Hero {
     bossDamage,
     bagSize: Math.max(finiteOr(a.bagSize, 0), finiteOr(b.bagSize, 0)),
     streakSaves: Math.max(finiteOr(a.streakSaves, 0), finiteOr(b.streakSaves, 0)),
+    // only present once some device recorded one, so merging old saves stays a no-op
+    ...(a.bestStreak != null || b.bestStreak != null ? { bestStreak: Math.max(finiteOr(a.bestStreak, 0), finiteOr(b.bestStreak, 0)) } : {}),
   };
 }
 

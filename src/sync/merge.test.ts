@@ -294,3 +294,18 @@ describe('resolveHero (lineage)', () => {
     expect(resolveHero(reborn, old)).toBe(reborn);
   });
 });
+
+describe('mergeHero bestStreak', () => {
+  it('keeps the longest streak either device has seen, and stays absent when neither has one', () => {
+    const rng = new Rng(42);
+    const a = { ...randomHero(rng, 1000), bestStreak: 400 };
+    const b = { ...randomHero(rng, 1000), bestStreak: 30 };
+    expect(mergeHero(a, b).bestStreak).toBe(400);
+    expect(mergeHero(b, a).bestStreak).toBe(400);
+    const c = randomHero(rng, 1000);
+    const d = randomHero(rng, 1000);
+    delete (c as Partial<Hero>).bestStreak;
+    delete (d as Partial<Hero>).bestStreak;
+    expect('bestStreak' in mergeHero(c, d)).toBe(false);
+  });
+});

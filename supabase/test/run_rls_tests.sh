@@ -10,7 +10,13 @@ trap 'psql -q -d postgres -c "drop database if exists $db" >/dev/null 2>&1 || tr
 psql -q -v ON_ERROR_STOP=1 -d "$db" -f "$here/supabase_stub.sql"
 psql -q -v ON_ERROR_STOP=1 -d "$db" -f "$here/../schema.sql"
 psql -q -v ON_ERROR_STOP=1 -d "$db" -f "$here/../schema.sql"   # must be re-runnable
-if [ -f "$here/rls_test.sql" ]; then
-  psql -q -v ON_ERROR_STOP=1 -d "$db" -f "$here/rls_test.sql"
-fi
+for t in "$here"/rls_test.sql "$here"/rls_probe_test.sql; do
+  [ -f "$t" ] || continue
+  # each suite gets a fresh database so their fixtures don't collide
+  psql -q -d postgres -c "drop database if exists $db" >/dev/null
+  psql -q -v ON_ERROR_STOP=1 -d postgres -c "create database $db"
+  psql -q -v ON_ERROR_STOP=1 -d "$db" -f "$here/supabase_stub.sql"
+  psql -q -v ON_ERROR_STOP=1 -d "$db" -f "$here/../schema.sql"
+  psql -q -v ON_ERROR_STOP=1 -d "$db" -f "$t"
+done
 echo "RLS OK"
