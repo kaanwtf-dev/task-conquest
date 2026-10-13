@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BASES, SLOTS, type BaseId, type PotionId } from '../../core/types';
+import { BASES, SLOTS, type BaseId, type PotionId, type Slot } from '../../core/types';
 import type { Pix } from '../pix';
 import { MATERIALS, WEAPON_KINDS } from './gear';
 import { MONSTERS, monsterPix } from './monsters';
@@ -8,6 +8,7 @@ import { CHEST_TINTS, bossPix, bossUrl, chestPix, chestUrl, itemIconPix, itemIco
 const OUTLINE = '#140c1c';
 const POTIONS: PotionId[] = ['insight', 'fortune', 'luck', 'fury', 'giant', 'phoenix'];
 const ALL_BASES = SLOTS.flatMap((slot) => BASES[slot].map((base) => ({ slot, base: base as BaseId })));
+const PROTO_KEYS = ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf'];
 
 function pixels(p: Pix): (string | null)[] {
   const out: (string | null)[] = [];
@@ -31,11 +32,11 @@ function edgeFill(p: Pix, outline: string): number {
 }
 
 describe('itemIconPix', () => {
-  it('draws a non-empty 16x16 icon for every base in every material', () => {
+  it('draws a non-empty square icon for every base in every material (weapons get an 18px canvas so outlines are never clipped)', () => {
     for (const palette of Object.values(MATERIALS))
       for (const { slot, base } of ALL_BASES) {
         const p = itemIconPix({ slot, base, palette });
-        expect([p.w, p.h]).toEqual([16, 16]);
+        expect([p.w, p.h]).toEqual(slot === 'weapon' ? [18, 18] : [16, 16]);
         expect(filled(p)).toBeGreaterThan(30);
       }
   });
@@ -70,6 +71,20 @@ describe('itemIconPix', () => {
     expect(dump(itemIconPix({ slot: 'head', base: 'nope' as BaseId, palette }))).toBe(dump(itemIconPix({ slot: 'head', base: 'helm', palette })));
     expect(dump(itemIconPix({ slot: 'weapon', base: 'nope' as BaseId, palette }))).toBe(dump(itemIconPix({ slot: 'weapon', base: 'sword', palette })));
   });
+
+  it('treats Object.prototype names in synced data as unknown instead of crashing', () => {
+    const palette = MATERIALS.iron;
+    const helm = dump(itemIconPix({ slot: 'head', base: 'helm', palette }));
+    const sword = dump(itemIconPix({ slot: 'weapon', base: 'sword', palette }));
+    for (const k of PROTO_KEYS) {
+      expect(dump(itemIconPix({ slot: 'head', base: k as BaseId, palette })), k).toBe(helm);
+      expect(dump(itemIconPix({ slot: k as Slot, base: k as BaseId, palette })), k).toBe(sword);
+    }
+  });
+
+  it('is deterministic', () => {
+    for (const { slot, base } of ALL_BASES) expect(dump(itemIconPix({ slot, base, palette: MATERIALS.glass }))).toBe(dump(itemIconPix({ slot, base, palette: MATERIALS.glass })));
+  });
 });
 
 describe('potionIconPix', () => {
@@ -98,6 +113,17 @@ describe('potionIconPix', () => {
       for (const t of [0, -3, NaN, -Infinity]) expect(dump(potionIconPix(id, t))).toBe(dump(potionIconPix(id, 1)));
     }
     expect(filled(potionIconPix('bogus' as PotionId, 3))).toBeGreaterThan(30);
+    expect(dump(potionIconPix('bogus' as PotionId, 7))).toBe(dump(potionIconPix('insight', 7)));
+    for (const k of PROTO_KEYS) expect(dump(potionIconPix(k as PotionId, 7)), k).toBe(dump(potionIconPix('insight', 7)));
+  });
+
+  it('switches look exactly at tiers 5 and 10', () => {
+    for (const id of POTIONS) {
+      expect(dump(potionIconPix(id, 4.99))).toBe(dump(potionIconPix(id, 1)));
+      expect(dump(potionIconPix(id, 9.99))).toBe(dump(potionIconPix(id, 5)));
+      expect(dump(potionIconPix(id, 10))).toBe(dump(potionIconPix(id, 12)));
+      expect(dump(potionIconPix(id, 10))).not.toBe(dump(potionIconPix(id, 9)));
+    }
   });
 
   it('draws the phoenix as a feather, not a corked bottle', () => {
@@ -124,6 +150,31 @@ describe('chestPix', () => {
     expect(dump(chestPix(2.7, false))).toBe(dump(chestPix(2, false)));
     expect(dump(chestPix(NaN, false))).toBe(dump(chestPix(0, false)));
     expect(dump(chestPix(Infinity, false))).toBe(dump(chestPix(6, false)));
+    expect(dump(chestPix(-Infinity, true))).toBe(dump(chestPix(0, true)));
+  });
+
+  it('keeps the vertical bands straight past the lock', () => {
+    for (const open of [false, true])
+      for (let r = 0; r < CHEST_TINTS.length; r++) {
+        const p = chestPix(r, open);
+        const tint = CHEST_TINTS[r];
+        for (let y = 0; y < 16; y++) {
+          const cols: number[] = [];
+          for (let x = 0; x < 16; x++) if (p.get(x, y) === tint) cols.push(x);
+          // rows that are not a horizontal band show the two straps only (x=1 is the open rim's corner)
+          const straps = cols.filter((x) => x !== 1);
+          if (straps.length > 0 && cols.length <= 3) expect(straps, `r${r} open=${open} y${y}`).toEqual([5, 10]);
+        }
+      }
+  });
+
+  it('draws the open chest body without a notch on the right edge', () => {
+    const p = chestPix(2, true);
+    for (let y = 5; y <= 14; y++) {
+      expect(p.get(14, y), `y${y}`).not.toBeNull();
+      expect(p.get(14, y), `y${y}`).not.toBe(OUTLINE);
+      expect(p.get(15, y), `y${y}`).toBe(OUTLINE);
+    }
   });
 });
 
@@ -161,6 +212,23 @@ describe('bossPix', () => {
 
   it('falls back to the first archetype for unknown ids', () => {
     expect(dump(bossPix('no-such-monster', 30))).toBe(dump(bossPix(MONSTERS[0].id, 30)));
+    for (const k of PROTO_KEYS) expect(dump(bossPix(k, 30)), k).toBe(dump(bossPix(MONSTERS[0].id, 30)));
+  });
+
+  it('outlines the bottom edge too when the archetype has headroom', () => {
+    for (const m of MONSTERS) {
+      if (m.art.length >= 20) continue;
+      const p = bossPix(m.id, 0);
+      const bottom: (string | null)[] = [];
+      for (let x = 0; x < 40; x++) bottom.push(p.get(x, 39));
+      expect(bottom.filter((c) => c && c !== '#07040b'), m.id).toEqual([]);
+      expect(bottom.includes('#07040b'), m.id).toBe(true);
+    }
+  });
+
+  it('only uses valid colors for any hue', () => {
+    for (const m of MONSTERS)
+      for (const hue of [0, 1, 359.6, -1e9, 1e300]) for (const c of colors(bossPix(m.id, hue))) expect(c, `${m.id} ${hue}`).toMatch(/^#[0-9a-f]{6}$/);
   });
 });
 
@@ -198,6 +266,8 @@ describe('cached url helpers', () => {
     expect(chestUrl(6, true)).not.toBe(chestUrl(6, false));
     expect(bossUrl('goblin', 365)).toBe(bossUrl('goblin', 5));
     expect(bossUrl('who', 0)).toBe(bossUrl(MONSTERS[0].id, 0));
+    expect(bossUrl('constructor', 0)).toBe(bossUrl(MONSTERS[0].id, 0));
+    expect(potionIconUrl('__proto__' as PotionId, 3)).toBe(potionIconUrl('insight', 3));
     expect(merchantUrl()).toBe(merchantUrl());
     const a = itemIconUrl({ slot: 'head', base: 'helm', palette: MATERIALS.iron });
     expect(itemIconUrl({ slot: 'head', base: 'helm', palette: { ...MATERIALS.iron } })).toBe(a);

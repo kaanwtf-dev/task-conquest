@@ -460,11 +460,13 @@ export const MONSTERS: MonsterArt[] = [
   },
 ];
 
-export const MONSTER_BY_ID: Record<string, MonsterArt> = Object.fromEntries(MONSTERS.map((m) => [m.id, m]));
+// null prototype: ids like 'constructor' / '__proto__' must miss instead of resolving to Object.prototype members
+export const MONSTER_BY_ID: Record<string, MonsterArt> = Object.assign(Object.create(null), Object.fromEntries(MONSTERS.map((m) => [m.id, m])));
 
 /** Build a monster sprite, optionally palette-swapped by `hue` degrees (variants / tiers). */
 export function monsterPix(id: string, hue = 0, flash = false): Pix {
   const m = MONSTER_BY_ID[id] ?? MONSTERS[0];
+  if (!Number.isFinite(hue)) hue = 0;
   const map: Record<string, Color> = {};
   for (const [k, v] of Object.entries(m.pal)) {
     const keep = v === E || v === '#ffffff' || k === 'e' || k === 'w';

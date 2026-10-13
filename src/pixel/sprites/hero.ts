@@ -277,13 +277,14 @@ export function heroPix(app: Appearance, gear: GearLook = {}, pose: Pose = 'idle
     out.rect(OX + hand[0] - 1, OY + bob + hand[1], 2, 1, handCol);
   } else if (gear.weapon) {
     let wp = weaponPix(gear.weapon.kind, gear.weapon.mat);
-    let [gx, gy] = WEAPON_GRIP[gear.weapon.kind] ?? [3, 12];
+    let [gx, gy] = WEAPON_GRIP[gear.weapon.kind] ?? WEAPON_GRIP.sword;
+    const last = wp.w - 1;
     if (pose === 'swing') {
       wp = wp.rot90(1);
-      [gx, gy] = [15 - gy, gx];
+      [gx, gy] = [last - gy, gx];
     } else if (pose === 'windup') {
       wp = wp.rot90(3);
-      [gx, gy] = [gy, 15 - gx];
+      [gx, gy] = [gy, last - gx];
     }
     out.blit(wp, OX + hand[0] - gx, OY + bob + hand[1] - gy);
     // hand over grip

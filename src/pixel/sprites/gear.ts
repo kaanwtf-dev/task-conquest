@@ -220,48 +220,49 @@ export const SHIELD_ART: Record<string, string[]> = {
   ],
 };
 
-/** Where the hero's hand grips each weapon (icon coordinates). */
+/** Where the hero's hand grips each weapon (coordinates in the 18x18 weapon canvas). */
 export const WEAPON_GRIP: Record<string, [number, number]> = {
-  sword: [3, 12],
-  axe: [4, 11],
-  dagger: [4, 11],
-  staff: [4, 10],
-  bow: [4, 10],
-  mace: [4, 10],
-  spear: [4, 11],
-  hammer: [4, 10],
-  wand: [5, 9],
+  sword: [4, 13],
+  axe: [5, 12],
+  dagger: [5, 12],
+  staff: [5, 11],
+  bow: [5, 11],
+  mace: [5, 11],
+  spear: [5, 12],
+  hammer: [5, 11],
+  wand: [6, 10],
 };
 
 export const WEAPON_KINDS = ['sword', 'axe', 'dagger', 'staff', 'bow', 'mace', 'spear', 'hammer', 'wand'] as const;
 
 export function weaponPix(kind: string, mat: MaterialPalette, handle = '#7a4a2a'): Pix {
-  const p = new Pix(16, 16);
+  // art is drawn on a 16x16 grid, then placed with a 1px margin so the outline never gets clipped
+  const art16 = new Pix(16, 16);
+  const flip = kind === 'bow'; // bows are mirrored so the hand holds the limb and the bow sits beside the body
+  const art = WEAPON_ART[kind] ?? WEAPON_ART.sword;
   if (kind === 'axe') {
-    for (let t = 0; t <= 11; t++) p.set(1 + t, 14 - t, handle);
+    for (let t = 0; t <= 11; t++) art16.set(1 + t, 14 - t, handle);
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++) {
         const d = Math.abs(x - 8) + Math.abs(y - 4);
-        if (d <= 3 && x + y < 15) p.set(x, y, x + y <= 9 ? mat.light : x + y >= 13 ? mat.dark : mat.main);
+        if (d <= 3 && x + y < 15) art16.set(x, y, x + y <= 9 ? mat.light : x + y >= 13 ? mat.dark : mat.main);
       }
-    p.set(12, 3, mat.trim).set(13, 2, mat.trim);
-    return p.outline();
+    art16.set(12, 3, mat.trim).set(13, 2, mat.trim);
+  } else {
+    const map: Record<string, Color> = {
+      w: mat.main,
+      B: mat.dark,
+      g: mat.trim,
+      j: mat.gem,
+      J: shade(mat.gem, 0.45),
+      h: handle,
+      p: mat.trim,
+    };
+    art16.art(art, map, 0, 0, flip);
   }
-  const art = WEAPON_ART[kind] ?? WEAPON_ART.sword;
-  const map: Record<string, Color> = {
-    w: mat.main,
-    B: mat.dark,
-    g: mat.trim,
-    j: mat.gem,
-    J: shade(mat.gem, 0.45),
-    h: handle,
-    p: mat.trim,
-  };
-  // bows are mirrored so the hand holds the limb and the bow sits beside the body
-  const flip = kind === 'bow';
-  p.art(art, map, 0, 0, flip).outline();
+  const p = new Pix(18, 18).blit(art16, 1, 1).outline();
   // strings are drawn after outlining so they stay 1px thin
-  p.art(art, { s: '#f4f4f4' }, 0, 0, flip);
+  if (kind !== 'axe') p.art(art, { s: '#f4f4f4' }, 1, 1, flip);
   return p;
 }
 

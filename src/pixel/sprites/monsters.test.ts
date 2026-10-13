@@ -38,6 +38,24 @@ describe('monster archetypes', () => {
         for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) if (flash.get(x, y)) expect(flash.get(x, y)).toBe('#ffffff');
       }
   });
+
+  it('treats non-finite hues as the base palette instead of emitting broken colors', () => {
+    const dump = (id: string, hue: number) => {
+      const p = monsterPix(id, hue);
+      return Array.from({ length: 400 }, (_, i) => p.get(i % 20, (i / 20) | 0)).join(',');
+    };
+    for (const m of MONSTERS)
+      for (const hue of [NaN, Infinity, -Infinity]) {
+        expect(dump(m.id, hue), `${m.id} ${hue}`).toBe(dump(m.id, 0));
+      }
+  });
+
+  it('never resolves Object.prototype names as archetypes', () => {
+    for (const k of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      expect(MONSTER_BY_ID[k], k).toBeUndefined();
+      expect(monsterPix(k).bounds(), k).toEqual(monsterPix(MONSTERS[0].id).bounds());
+    }
+  });
 });
 
 describe('theme monster pools', () => {
@@ -48,6 +66,21 @@ describe('theme monster pools', () => {
       expect(new Set(t.monsters).size, t.id).toBe(t.monsters.length);
       for (const id of t.monsters) expect(MONSTER_BY_ID[id], `${t.id}: ${id}`).toBeDefined();
     }
+  });
+
+  it('matches the designed zone pools', () => {
+    const want: Record<string, string[]> = {
+      tavern: ['rat', 'goblin', 'slime', 'bat', 'mimic'],
+      forest: ['wolf', 'mushroom', 'goblin', 'slime', 'spider', 'frog', 'wisp'],
+      beach: ['crab', 'slime', 'snake', 'bat', 'frog'],
+      dungeon: ['skeleton', 'bat', 'rat', 'ghost', 'slime', 'eye', 'mimic', 'spider'],
+      snow: ['wolf', 'ghost', 'slime', 'yeti', 'wisp', 'golem'],
+      desert: ['scorpion', 'snake', 'skeleton', 'beetle', 'golem'],
+      castle: ['skeleton', 'ghost', 'bat', 'goblin', 'eye', 'imp'],
+      volcano: ['imp', 'golem', 'beetle', 'dragon', 'slime', 'wisp'],
+    };
+    expect(THEMES.map((t) => t.id).sort()).toEqual(Object.keys(want).sort());
+    for (const t of THEMES) expect([...t.monsters].sort(), t.id).toEqual([...want[t.id]].sort());
   });
 
   it('puts every expansion archetype in at least one zone', () => {

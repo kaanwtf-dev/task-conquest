@@ -7,6 +7,11 @@ import { heroPix, type Appearance } from './hero';
 import { MONSTERS, MONSTER_BY_ID } from './monsters';
 
 const OUTLINE = '#140c1c';
+
+/** Own-key lookup: ids can come from synced data, so 'constructor' / '__proto__' must not hit Object.prototype. */
+function own<T>(table: Record<string, T>, key: string): T | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
+}
 const BONE = '#f0e6c8';
 const BONE_DARK = '#c8b890';
 const PAPER = '#f4ecd4';
@@ -339,15 +344,16 @@ const ICON_ART: Record<string, string[]> = {
 /** 16x16 icon for any item base; weapons reuse the hero's weapon art so icons match what is held. */
 export function itemIconPix(opts: { slot: Slot; base: BaseId; palette: MaterialPalette }): Pix {
   const { palette } = opts;
-  let base: string = opts.base;
+  const base: string = opts.base;
   if ((WEAPON_KINDS as readonly string[]).includes(base)) return weaponPix(base, palette);
-  if (!ICON_ART[base]) {
+  let art = own(ICON_ART, base);
+  if (!art) {
     // unknown/legacy base: fall back to the slot's first base
-    const fallback = (BASES[opts.slot] as readonly string[] | undefined)?.[0] ?? 'sword';
-    if ((WEAPON_KINDS as readonly string[]).includes(fallback)) return weaponPix(fallback, palette);
-    base = fallback;
+    const fallback = own<readonly string[]>(BASES, opts.slot)?.[0] ?? 'sword';
+    art = own(ICON_ART, fallback);
+    if (!art) return weaponPix(fallback, palette);
   }
-  return new Pix(16, 16).art(ICON_ART[base], gearMap(palette)).outline(OUTLINE);
+  return new Pix(16, 16).art(art, gearMap(palette)).outline(OUTLINE);
 }
 
 function paletteKey(p: MaterialPalette): string {
@@ -501,7 +507,8 @@ function potionBand(tier: number): 0 | 1 | 2 {
 }
 
 export function potionIconPix(potion: PotionId, tier: number): Pix {
-  const look = POTIONS[potion] ?? POTIONS.insight;
+  if (!own(POTIONS, potion)) potion = 'insight';
+  const look = POTIONS[potion];
   const q = look.liquid;
   const map: Record<string, Color> = {
     q,
@@ -511,14 +518,14 @@ export function potionIconPix(potion: PotionId, tier: number): Pix {
     C: '#8a5a34',
     g: '#bcd8e8',
     w: '#ffffff',
-    ...(POTION_EXTRA[potion] ?? {}),
+    ...POTION_EXTRA[potion],
   };
   const p = new Pix(16, 16).art(look.art, map);
   const band = potionBand(tier);
   if (band >= 1) {
     // ribbon tied around the neck (or quill); ultra tiers get a royal ribbon and a second sparkle
     const rib = band === 2 ? '#c050e0' : potion === 'fortune' || potion === 'giant' ? '#d8405a' : '#e0b040';
-    const [x0, x1, y] = RIBBON_AT[potion] ?? RIBBON_AT.insight;
+    const [x0, x1, y] = RIBBON_AT[potion];
     p.rect(x0, y, x1 - x0 + 1, 1, rib).set(x1, y, shade(rib, -0.3)).set(x0, y, shade(rib, 0.3));
   }
   p.outline(OUTLINE);
@@ -562,7 +569,8 @@ function sparkleFree(p: Pix) {
 }
 
 export function potionIconUrl(potion: PotionId, tier: number): string {
-  return spriteUrl(`potion:${potion}:${potionBand(tier)}`, () => potionIconPix(potion, tier));
+  const id = own(POTIONS, potion) ? potion : 'insight';
+  return spriteUrl(`potion:${id}:${potionBand(tier)}`, () => potionIconPix(id, tier));
 }
 
 // ------------------------------------------------------------------ chests
@@ -584,8 +592,8 @@ const CHEST_CLOSED = [
   '.bBbbtbbbbtbbbn.',
   '.bBbbtbbbbtbbbn.',
   '.ttttttyyttttTT.',
-  '.bBbbtbyYtbbbbn.',
-  '.bBbbtbYYtbbbbn.',
+  '.bBbbtbyYbtbbbn.',
+  '.bBbbtbYYbtbbbn.',
   '.bbbbtbbbbtbbbn.',
   '.bbbbtbbbbtbbbn.',
   '.ttttttttttttTT.',
@@ -598,12 +606,12 @@ const CHEST_OPEN = [
   '..nbbtbbbbtbbn..',
   '..nbbtbbbbtbbn..',
   '..ttttttttttTT..',
-  '.ooooooooooooo..',
-  '.oossosssossoo..',
+  '.oooooooooooooo.',
+  '.oossosssossooo.',
   '.tssSssWsSsssTT.',
   '.ttttttyyttttTT.',
-  '.bBbbtbyYtbbbbn.',
-  '.bBbbtbYYtbbbbn.',
+  '.bBbbtbyYbtbbbn.',
+  '.bBbbtbYYbtbbbn.',
   '.bbbbtbbbbtbbbn.',
   '.bbbbtbbbbtbbbn.',
   '.ttttttttttttTT.',
@@ -676,7 +684,7 @@ function normHue(hue: number): number {
 
 /** Boss variant: archetype art doubled to 40x40, re-lit at full res, crowned, with a heavier outline. */
 export function bossPix(monsterId: string, hue: number): Pix {
-  const m = MONSTER_BY_ID[monsterId] ?? MONSTERS[0];
+  const m = own(MONSTER_BY_ID, monsterId) ?? MONSTERS[0];
   const h = normHue(hue);
   const map: Record<string, Color> = {};
   for (const [k, v] of Object.entries(m.pal)) {
@@ -684,17 +692,19 @@ export function bossPix(monsterId: string, hue: number): Pix {
     map[k] = keep || h === 0 ? v : hueRotate(v, h);
   }
   const small = new Pix(20, 20).art(m.art, map, 0, 20 - m.art.length);
+  // lift 1px off the floor when there is headroom so the bottom edge gets its outline too
+  const lift = small.bounds().y > 0 ? 1 : 0;
   const p = new Pix(40, 40);
   for (let y = 0; y < 20; y++)
     for (let x = 0; x < 20; x++) {
       const c = small.get(x, y);
-      if (c) p.rect(x * 2, y * 2, 2, 2, c);
+      if (c) p.rect(x * 2, y * 2 - lift, 2, 2, c);
     }
   p.autoShade(-0.22);
   rimLight(p, 0.18);
 
   // crown sits on the highest pixel under its seat
-  const cx = Math.round((CROWN_X[m.id] ?? 9.5) * 2);
+  const cx = Math.round((own(CROWN_X, m.id) ?? 9.5) * 2);
   let top = 40;
   for (let x = cx - 2; x <= cx + 2; x++)
     for (let y = 0; y < 40; y++)
@@ -720,7 +730,7 @@ function rimLight(p: Pix, amt: number) {
 }
 
 export function bossUrl(monsterId: string, hue: number): string {
-  const id = MONSTER_BY_ID[monsterId] ? monsterId : MONSTERS[0].id;
+  const id = own(MONSTER_BY_ID, monsterId) ? monsterId : MONSTERS[0].id;
   return spriteUrl(`boss:${id}:${normHue(hue)}`, () => bossPix(id, hue));
 }
 
