@@ -396,6 +396,24 @@ function audio(): AudioContext | null {
 }
 
 function tick() {
+  try {
+    schedule();
+  } catch {
+    // the context died under us (closed, device lost): go quiet rather than throw every tick
+    for (const p of players) {
+      try {
+        p.out.disconnect();
+      } catch {
+        // already detached
+      }
+    }
+    players = [];
+    active = null;
+    stopTimer();
+  }
+}
+
+function schedule() {
   const c = ctx;
   if (!c) return;
   const now = c.currentTime;

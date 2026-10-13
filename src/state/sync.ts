@@ -1,7 +1,7 @@
 // App-side wiring for cloud sync: store <-> SyncEngine adapter, auth lifecycle, party join links.
 import { create } from 'zustand';
 import type { Hero } from '../core/types';
-import { useStore } from './store';
+import { useStore, visibleLists } from './store';
 import { fx } from './fx';
 import { heroLevel } from '../game/progression';
 import { getClient, getSyncConfig, getUser, onAuthChange } from '../sync/supabase';
@@ -108,7 +108,10 @@ async function startEngine(userId: string) {
       useSync.setState({ conflict: { cloudName: cloud.name, cloudLevel: heroLevel(cloud).level } });
       return; // resolveConflict() continues
     }
-    if (cloud && !mine) await engine.adoptStrategy('cloud');
+    if (cloud && !mine) {
+      await engine.adoptStrategy('cloud');
+      pickLiveList();
+    }
     kv.set(firstKey, '1');
   }
   await beginSyncing();
@@ -138,9 +141,19 @@ export async function resolveConflict(strategy: 'merge' | 'cloud' | 'local') {
   const userId = useSync.getState().userId;
   if (!engine || !userId) return;
   await engine.adoptStrategy(strategy);
+  pickLiveList();
   kv.set(`questlog-sync-adopted:${userId}`, '1');
   useSync.setState({ conflict: null });
   await beginSyncing();
+}
+
+/** After adopting cloud data the selected list may be gone. */
+function pickLiveList() {
+  const st = useStore.getState();
+  const cur = st.activeListId ? st.lists[st.activeListId] : undefined;
+  if (cur && !cur.deleted) return;
+  const first = visibleLists(st)[0];
+  useStore.setState({ activeListId: first?.id ?? null });
 }
 
 export async function syncNow() {

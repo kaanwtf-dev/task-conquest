@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useStore, bagItems, potionStacks, listTasks } from './store';
+import { useStore, bagItems, potionStacks, listTasks, visibleLists } from './store';
 import { fx, type FxEvent } from './fx';
 import { sum, heroGold } from '../game/progression';
 import { bossFor } from '../game/bosses';
@@ -12,7 +12,7 @@ function fresh(classId: 'knight' | 'mage' = 'knight') {
   useStore.getState().createHero('Tester', app, classId);
 }
 const st = () => useStore.getState();
-const listOf = (type: string) => Object.values(st().lists).find((l) => l.type === type)!;
+const listOf = (type: string) => visibleLists(st()).find((l) => l.type === type)!;
 
 describe('store: hero creation', () => {
   beforeEach(() => fresh());
@@ -26,7 +26,7 @@ describe('store: hero creation', () => {
   });
 
   it('seeds default lists of every kind', () => {
-    const types = Object.values(st().lists).map((l) => l.type).sort();
+    const types = visibleLists(st()).map((l) => l.type).sort();
     expect(types).toEqual(['daily', 'quests', 'supply', 'weekly']);
   });
 });
@@ -146,8 +146,33 @@ describe('store: economy actions', () => {
     const xp = sum(st().hero!.xp);
     st().resetAll();
     expect(st().hero).toBeNull();
+    expect(visibleLists(st())).toHaveLength(0); // tombstoned, so the deletion can sync
     expect(st().importData(json)).toBe(true);
     expect(sum(st().hero!.xp)).toBe(xp);
     expect(st().importData('{"nope":1}')).toBe(false);
+  });
+});
+
+describe('store: start over + moves', () => {
+  beforeEach(() => fresh());
+
+  it('start over tombstones everything and a new hero gets fresh lists', () => {
+    const before = Object.keys(st().lists).length;
+    st().resetAll();
+    expect(Object.values(st().lists).every((l) => l.deleted)).toBe(true);
+    expect(Object.values(st().items).every((i) => i.deleted)).toBe(true);
+    st().createHero('Again', app, 'mage');
+    expect(visibleLists(st())).toHaveLength(4);
+    expect(Object.keys(st().lists).length).toBe(before + 4);
+  });
+
+  it('moving a task across a shared list boundary re-creates it', () => {
+    const side = listOf('quests');
+    const daily = listOf('daily');
+    st().updateList(side.id, { shared: true });
+    const t = listTasks(st(), side.id)[0];
+    st().moveTask(t.id, daily.id);
+    expect(st().tasks[t.id].deleted).toBe(true);
+    expect(listTasks(st(), daily.id).some((x) => x.title === t.title && x.id !== t.id)).toBe(true);
   });
 });

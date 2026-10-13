@@ -55,8 +55,11 @@ export interface RemoteAdapter {
   memberships(): Promise<string[]>;
   /** Upsert rows (never sending owner/server_ts); older rows lose to newer server copies silently. */
   push(rows: RemoteRow[]): Promise<PushResult>;
-  /** Live changes; `onMembership` fires when list memberships change. Returns an unsubscribe. */
-  subscribe(onRow: (row: RemoteRow) => void, onMembership?: () => void): () => void;
+  /**
+   * Live changes. `onResync` fires when something calls for a full sync: list memberships changed, or the
+   * live connection (re)opened and may have missed events. Returns an unsubscribe.
+   */
+  subscribe(onRow: (row: RemoteRow) => void, onResync?: () => void): () => void;
 }
 
 export type EngineStatus = 'idle' | 'syncing' | 'offline' | 'error';

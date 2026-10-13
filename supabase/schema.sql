@@ -164,6 +164,7 @@ revoke all on public.invites from authenticated;
 grant select, insert, update on public.docs to authenticated;
 grant select, delete on public.list_members to authenticated;
 grant select, insert, update on public.profiles to authenticated;
+grant all on public.docs, public.list_members, public.invites, public.profiles to service_role;
 
 -- ---------------------------------------------------------------- party functions
 

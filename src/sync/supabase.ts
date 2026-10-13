@@ -282,16 +282,22 @@ export class SupabaseRemote implements RemoteAdapter {
     await this.upsert(rows.slice(mid), rejected);
   }
 
-  subscribe(onRow: (row: RemoteRow) => void, onMembership?: () => void): () => void {
+  subscribe(onRow: (row: RemoteRow) => void, onResync?: () => void): () => void {
+    let opened = false;
     const ch = this.client
       .channel(`questlog-${this.userId}-${++channelSeq}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'docs' }, (p) => {
-        if (p.eventType === 'DELETE') return;
+        if (p.eventType === 'DELETE') return; // docs are never hard-deleted (tombstones)
         const row = p.new as RemoteRow | undefined;
-        if (row && typeof row.id === 'string') onRow(normRow(row));
+        if (row && typeof row.id === 'string' && row.data && typeof row.data === 'object') onRow(normRow(row));
+        else onResync?.(); // payload too large / truncated: fetch it instead
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'list_members' }, () => onMembership?.())
-      .subscribe();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'list_members' }, () => onResync?.())
+      .subscribe((status) => {
+        // after a reconnect, catch up on whatever was missed while the socket was down
+        if (status === 'SUBSCRIBED' && opened) onResync?.();
+        if (status === 'SUBSCRIBED') opened = true;
+      });
     return () => {
       void this.client.removeChannel(ch);
     };

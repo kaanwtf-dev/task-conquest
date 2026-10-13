@@ -206,7 +206,14 @@ export const useStore = create<State>()(
             xp: {}, gold: {}, goldSpent: {}, kills: {}, tasksDone: {}, skillXp: {}, activeDays: [],
             createdAt: t, updatedAt: t, ...heroDefaults(), equipped: kit.equipped,
           };
-          const seeded = Object.keys(get().lists).length ? { lists: get().lists, tasks: get().tasks } : seedLists();
+          // keep tombstones (they still need to sync); only seed when no live list exists
+          const hasLive = Object.values(get().lists).some((l) => !l.deleted);
+          const seeded = hasLive
+            ? { lists: get().lists, tasks: get().tasks }
+            : (() => {
+                const fresh = seedLists();
+                return { lists: { ...get().lists, ...fresh.lists }, tasks: { ...get().tasks, ...fresh.tasks } };
+              })();
           const first = Object.values(seeded.lists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
           set((s) => ({ hero, ...seeded, items: { ...s.items, ...kit.items }, activeListId: first?.id ?? null, tab: 'quests' }));
           log('info', `${hero.name} sets out on an adventure!`);
@@ -344,10 +351,18 @@ export const useStore = create<State>()(
         moveTask(id, listId) {
           const task = get().tasks[id];
           const list = get().lists[listId];
+          const from = task ? get().lists[task.listId] : undefined;
           if (!task || !list || task.listId === listId) return;
           const order = Math.min(0, ...Object.values(get().tasks).filter((x) => x.listId === listId && !x.deleted).map((x) => x.order)) - 1;
           const patch: Partial<Task> = { listId, order };
           if (list.type === 'supply') patch.aisle = task.aisle ?? guessAisle(task.title);
+          if (from?.shared || list.shared) {
+            // crossing a sharing boundary: party members must see it disappear, so move = copy + tombstone
+            const t = now();
+            const copy: Task = { ...task, ...patch, id: uid(), createdAt: t, updatedAt: t };
+            set((s) => ({ tasks: { ...s.tasks, [copy.id]: copy, [id]: { ...task, deleted: true, updatedAt: t } } }));
+            return;
+          }
           get().updateTask(id, patch);
         },
 
@@ -532,7 +547,14 @@ export const useStore = create<State>()(
         },
 
         resetAll() {
-          set({ hero: null, lists: {}, tasks: {}, items: {}, potions: {}, log: [], activeListId: null, tab: 'quests', shopDay: { date: '', bought: [] } });
+          // tombstone instead of wiping so a signed-in device deletes the old data in the cloud too
+          const t = now();
+          const kill = <T extends { deleted?: boolean; updatedAt: number }>(r: Record<string, T>) =>
+            Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v.deleted ? v : { ...v, deleted: true, updatedAt: t }]));
+          set((s) => ({
+            hero: null, lists: kill(s.lists), tasks: kill(s.tasks), items: kill(s.items), potions: kill(s.potions),
+            log: [], activeListId: null, tab: 'quests', shopDay: { date: '', bought: [] },
+          }));
         },
       };
     },

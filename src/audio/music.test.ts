@@ -275,6 +275,20 @@ describe('music with WebAudio', () => {
     expect(started() - before).toBeGreaterThan(200);
   });
 
+  it('goes quiet instead of throwing when the context breaks', () => {
+    const c = ctx();
+    const orig = c.createOscillator;
+    c.createOscillator = () => {
+      throw new Error('InvalidStateError');
+    };
+    playMusic('forest');
+    expect(currentTrack()).toBeNull();
+    expect(() => vi.advanceTimersByTime(500)).not.toThrow();
+    c.createOscillator = orig;
+    playMusic('forest');
+    expect(currentTrack()).toBe('forest');
+  });
+
   it('stopMusic forgets the tune', () => {
     stopMusic();
     expect(currentTrack()).toBeNull();

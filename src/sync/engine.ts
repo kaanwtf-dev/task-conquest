@@ -566,6 +566,7 @@ export class SyncEngine {
     const marks: [string, number][] = [];
     let bumped: Partial<LocalSnapshot> | null = null;
     const visit = (kind: DocKind, doc: Meta, coll: Coll | null) => {
+      if (!Number.isFinite(doc.updatedAt)) return; // corrupt stamp: would be dirty forever
       const key = docKey(kind, kind === 'hero' ? HERO_ID : doc.id);
       const at = synced[key];
       if (at === doc.updatedAt) return;
