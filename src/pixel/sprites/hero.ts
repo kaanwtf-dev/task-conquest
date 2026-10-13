@@ -394,13 +394,14 @@ function headgearPix(kind: HeadKind, m: MaterialPalette, hy: number): Pix {
       p.set(15, hy + 1, m.gem).set(16, hy + 1, m.gem);
       break;
     case 'crown':
-      p.rect(11, hy, 10, 2, m.trim);
-      for (const x of [11, 15, 16, 20]) p.rect(x, hy - 2, 1, 2, m.trim);
-      p.set(13, hy - 1, m.trim).set(18, hy - 1, m.trim);
+      p.rect(11, hy, 10, 2, m.main);
+      p.rect(11, hy, 10, 1, m.light);
+      for (const x of [11, 15, 16, 20]) p.rect(x, hy - 2, 1, 2, m.main);
+      p.set(13, hy - 1, m.main).set(18, hy - 1, m.main);
       p.set(13, hy + 1, m.gem).set(18, hy + 1, m.gem).set(15, hy, '#ffffff');
       break;
     case 'circlet':
-      p.rect(10, hy + 3, 12, 1, m.trim);
+      p.rect(10, hy + 3, 12, 1, m.main);
       p.set(15, hy + 3, m.gem).set(16, hy + 3, m.gem);
       break;
     default:

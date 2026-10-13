@@ -5,6 +5,8 @@ import { THEMES, sceneCanvas } from '../pixel/themes';
 import { iconFor } from '../pixel/iconGen';
 import { uiPix } from '../pixel/sprites/ui';
 import { WEAPON_KINDS, weaponPix, MATERIALS } from '../pixel/sprites/gear';
+import { itemIconPix, potionIconPix, chestPix, bossPix, merchantPix } from '../pixel/sprites/items';
+import { BASES, SLOTS, type PotionId } from '../core/types';
 import type { Pix } from '../pixel/pix';
 
 function Sprite({ pix, scale = 4 }: { pix: Pix; scale?: number }) {
@@ -16,6 +18,11 @@ function Sprite({ pix, scale = 4 }: { pix: Pix; scale?: number }) {
   }, [pix, scale]);
   return <div ref={ref} style={{ display: 'inline-block', margin: 4, background: '#2a2a3a' }} />;
 }
+
+const LAB_MATERIALS = ['wood', 'iron', 'gold', 'infernal'] as const;
+const LAB_POTIONS: PotionId[] = ['insight', 'fortune', 'luck', 'fury', 'giant', 'phoenix'];
+const LAB_BOSSES = [['goblin', 0], ['skeleton', 200], ['dragon', 0], ['golem', 90]] as const;
+const label = { fontSize: 11, color: '#aaa', margin: '6px 4px 0' } as const;
 
 const base: Appearance = { race: 'human', skin: 1, hair: 'short', hairColor: '#5a3a22', eyes: '#3a5a9a', beard: 'none', outfit: '#3a6ad0', pants: '#4a3a2a' };
 
@@ -40,12 +47,38 @@ export default function SpriteLab() {
       {HAIR_STYLES.map((h) => <Sprite key={h} scale={3} pix={heroPix({ ...base, hair: h })} />)}
       <h3>Weapons</h3>
       {WEAPON_KINDS.map((k, i) => <Sprite key={k} pix={weaponPix(k, Object.values(MATERIALS)[i % 8])} />)}
+      <h3>Gear icons</h3>
+      {LAB_MATERIALS.map((mat) => (
+        <div key={mat}>
+          <div style={label}>{mat}</div>
+          {SLOTS.flatMap((slot) => BASES[slot].map((b) => <Sprite key={b} scale={3} pix={itemIconPix({ slot, base: b, palette: MATERIALS[mat] })} />))}
+        </div>
+      ))}
+      <h3>Potions</h3>
+      {[1, 5, 12].map((tier) => (
+        <div key={tier}>
+          <div style={label}>tier {tier}</div>
+          {LAB_POTIONS.map((id) => <Sprite key={id} scale={3} pix={potionIconPix(id, tier)} />)}
+        </div>
+      ))}
+      <h3>Chests</h3>
+      {[false, true].map((open) => (
+        <div key={String(open)}>
+          <div style={label}>{open ? 'open' : 'closed'}</div>
+          {[0, 1, 2, 3, 4, 5, 6].map((r) => <Sprite key={r} scale={3} pix={chestPix(r, open)} />)}
+        </div>
+      ))}
+      <h3>Bosses &amp; merchant</h3>
+      {LAB_BOSSES.map(([id, hue]) => <Sprite key={id} scale={3} pix={bossPix(id, hue)} />)}
+      <Sprite scale={3} pix={merchantPix()} />
       <h3>Monsters</h3>
       {MONSTERS.map((m) => <Sprite key={m.id} pix={monsterPix(m.id)} />)}
-      {MONSTERS.slice(0, 4).map((m) => <Sprite key={m.id + 'v'} pix={monsterPix(m.id, 140)} />)}
+      <div>
+        {MONSTERS.map((m, i) => <Sprite key={m.id + 'v'} scale={2} pix={monsterPix(m.id, 60 + ((i * 137) % 300))} />)}
+      </div>
       <h3>UI</h3>
       {(['coin', 'xp', 'flame', 'heart', 'sword', 'helm', 'bag', 'party', 'gear', 'scroll', 'plus', 'check', 'skull', 'chest', 'repeat', 'star', 'potion'] as const).map((n) => <Sprite key={n} pix={uiPix(n)} />)}
-      <h3>Item icons</h3>
+      <h3>Task icons</h3>
       <div>{items.map((t) => <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, margin: 6 }}><img src={iconFor(t)} style={{ width: 48, imageRendering: 'pixelated' }} />{t}</span>)}</div>
       <h3>Scenes</h3>
       {THEMES.map((t) => <SceneView key={t.id} id={t.id} />)}

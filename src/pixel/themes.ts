@@ -80,7 +80,7 @@ export const THEMES: ThemeDef[] = [
     name: 'Tavern',
     unlockLevel: 1,
     ui: { winTop: '#6b4426', winBot: '#3a2212', border: '#f0c878', accent: '#ffb84a', text: '#fff2d8', muted: '#d8b88a', page: '#24150c', page2: '#2e1c10' },
-    monsters: ['rat', 'goblin', 'slime', 'bat'],
+    monsters: ['rat', 'goblin', 'slime', 'bat', 'mimic'],
     paint(g, w, h, rng) {
       const floorY = Math.round(h * 0.72);
       // plank wall
@@ -139,7 +139,7 @@ export const THEMES: ThemeDef[] = [
     name: 'Forest',
     unlockLevel: 1,
     ui: { winTop: '#2f6b3c', winBot: '#163a20', border: '#e8f0c8', accent: '#a8e05a', text: '#f4ffe8', muted: '#b8d8a8', page: '#0f2414', page2: '#142e1a' },
-    monsters: ['wolf', 'mushroom', 'goblin', 'slime'],
+    monsters: ['wolf', 'mushroom', 'goblin', 'slime', 'spider', 'frog', 'wisp'],
     paint(g, w, h, rng) {
       const groundY = Math.round(h * 0.7);
       sky(g, w, groundY, ['#6ec0f0', '#86ccf4', '#a0d8f8', '#bce4f8']);
@@ -159,7 +159,7 @@ export const THEMES: ThemeDef[] = [
     name: 'Beach',
     unlockLevel: 1,
     ui: { winTop: '#1a8aa0', winBot: '#0c4a5e', border: '#fff0c8', accent: '#ffd860', text: '#f4feff', muted: '#a8e0e8', page: '#082a36', page2: '#0c3442' },
-    monsters: ['crab', 'slime', 'bat'],
+    monsters: ['crab', 'slime', 'snake', 'bat', 'frog'],
     paint(g, w, h, rng) {
       const seaY = Math.round(h * 0.45);
       const sandY = Math.round(h * 0.68);
@@ -199,7 +199,7 @@ export const THEMES: ThemeDef[] = [
     name: 'Dungeon',
     unlockLevel: 1,
     ui: { winTop: '#4a4a62', winBot: '#20202e', border: '#c8c8d8', accent: '#ff9a3a', text: '#f0f0ff', muted: '#a8a8c0', page: '#121218', page2: '#1a1a24' },
-    monsters: ['skeleton', 'bat', 'rat', 'ghost', 'slime'],
+    monsters: ['skeleton', 'bat', 'rat', 'ghost', 'slime', 'eye', 'mimic', 'spider'],
     paint(g, w, h, rng) {
       const floorY = Math.round(h * 0.72);
       g.r(0, 0, w, floorY, '#3a3a4a');
@@ -235,7 +235,7 @@ export const THEMES: ThemeDef[] = [
     name: 'Snowpeak',
     unlockLevel: 5,
     ui: { winTop: '#4a7ab8', winBot: '#22406e', border: '#ffffff', accent: '#9ae0ff', text: '#ffffff', muted: '#c8dcf0', page: '#0e1c30', page2: '#13243c' },
-    monsters: ['wolf', 'ghost', 'slime'],
+    monsters: ['wolf', 'ghost', 'slime', 'yeti', 'wisp', 'golem'],
     paint(g, w, h, rng) {
       const groundY = Math.round(h * 0.7);
       sky(g, w, groundY, ['#8ab0e0', '#a0c0e8', '#b8d0f0', '#d0e0f8']);
@@ -261,7 +261,7 @@ export const THEMES: ThemeDef[] = [
     name: 'Desert',
     unlockLevel: 10,
     ui: { winTop: '#c07a3a', winBot: '#6e3e18', border: '#fff0c0', accent: '#ffe060', text: '#fff8e8', muted: '#f0d0a0', page: '#2a1608', page2: '#341c0c' },
-    monsters: ['crab', 'skeleton', 'rat'],
+    monsters: ['scorpion', 'snake', 'skeleton', 'beetle', 'golem'],
     paint(g, w, h, rng) {
       const groundY = Math.round(h * 0.68);
       sky(g, w, groundY, ['#f0a050', '#f4b868', '#f8cc88', '#fae0a8']);
@@ -283,7 +283,7 @@ export const THEMES: ThemeDef[] = [
     name: 'Castle',
     unlockLevel: 20,
     ui: { winTop: '#6a2a5a', winBot: '#30102a', border: '#f0d070', accent: '#ff7ab0', text: '#fff0fa', muted: '#e0b0d0', page: '#1a0814', page2: '#220c1c' },
-    monsters: ['skeleton', 'ghost', 'bat', 'goblin'],
+    monsters: ['skeleton', 'ghost', 'bat', 'goblin', 'eye', 'imp'],
     paint(g, w, h, rng) {
       const floorY = Math.round(h * 0.72);
       g.r(0, 0, w, floorY, '#5a5068');
@@ -304,7 +304,7 @@ export const THEMES: ThemeDef[] = [
     name: 'Volcano',
     unlockLevel: 30,
     ui: { winTop: '#8a2a1a', winBot: '#3a0e08', border: '#ffd060', accent: '#ff8a2a', text: '#fff0e0', muted: '#f0b090', page: '#1a0604', page2: '#240a06' },
-    monsters: ['slime', 'bat', 'skeleton'],
+    monsters: ['imp', 'golem', 'beetle', 'dragon', 'slime', 'wisp'],
     paint(g, w, h, rng) {
       const groundY = Math.round(h * 0.72);
       sky(g, w, groundY, ['#2a0a0a', '#4a1210', '#6a1e14', '#8a2e18']);
