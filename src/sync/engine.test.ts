@@ -59,9 +59,11 @@ class FakeServer {
     const shape =
       (r.kind === 'list' && r.list_id === r.id) || (r.kind === 'task' && r.list_id !== null) || (['hero', 'item', 'potion'].includes(r.kind) && r.list_id === null);
     if (!shape) return false;
-    const ownId = !r.id.startsWith(`${r.kind}:`) || r.id === `${r.kind}:${user}` || r.id.startsWith(`${r.kind}:${user}:`);
+    // own_doc_id(): an id in a personal namespace must match the row's kind and the caller
+    const ownId =
+      !/^(hero|item|potion):/.test(r.id) || (['hero', 'item', 'potion'].includes(r.kind) && (r.id === `${r.kind}:${user}` || r.id.startsWith(`${r.kind}:${user}:`)));
     const taken = this.rows.has(r.id) || this.members.has(r.id);
-    const insertOk = (r.list_id === null && ownId) || (r.list_id !== null && this.isMember(r.list_id, user)) || (r.kind === 'list' && !taken);
+    const insertOk = ownId && (r.list_id === null || this.isMember(r.list_id, user) || (r.kind === 'list' && !taken));
     if (!insertOk) return false;
     const old = this.rows.get(r.id);
     const data = jsonb(r.data);
