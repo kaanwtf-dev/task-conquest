@@ -2,7 +2,7 @@
 // changes, merges them in (LWW per doc, CRDT for the hero) and pushes local edits it has not sent yet.
 // Dirty tracking never touches the store: a persisted map remembers the updatedAt last exchanged per doc.
 import type { Hero, Meta, Task } from '../core/types';
-import { canon, newer, resolveHero, sameDoc } from './merge';
+import { canon, lineage, newer, resolveHero, sameDoc } from './merge';
 import { SyncOfflineError } from './types';
 import type { AdoptStrategy, DocKind, EngineStatus, KeyValue, LocalAdapter, LocalSnapshot, RemoteAdapter, RemoteRow } from './types';
 
@@ -87,6 +87,8 @@ export function fromRow(row: RemoteRow, userId: string): { kind: DocKind; doc: M
       return null;
   }
   if (!plausible(row.kind, row.data)) return null;
+  // access is checked against list_id: a task filed under a shared list must not land in another list here
+  if (row.kind === 'task' && row.data.listId !== row.list_id) return null;
   const updatedAt = Number(row.updated_at);
   const doc: Meta & Record<string, unknown> = { ...row.data, id, updatedAt: Number.isFinite(updatedAt) ? updatedAt : 0 };
   if (row.deleted) doc.deleted = true;
@@ -180,6 +182,8 @@ export class SyncEngine {
   private started = false;
   private stopped = false;
   private lastWake = 0;
+  /** Lists purged here: rows for them still in flight (a pull begun before leaving) are dropped until rejoined. */
+  private readonly left = new Set<string>();
 
   constructor(local: LocalAdapter, remote: RemoteAdapter, kv: KeyValue, userId: string, opts: SyncEngineOptions = {}) {
     this.local = local;

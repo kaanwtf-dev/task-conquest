@@ -2,7 +2,7 @@
 // The store applies the outcome; keeping this pure makes it testable and deterministic per seed.
 import type { Counter, Hero, Item, LogEntry, PotionId, Task, TaskList } from '../core/types';
 import { Rng } from '../core/rng';
-import { dateKey, parseDateKey, todayKey, type TimeCfg } from '../core/time';
+import { dateKey, parseDateKey, streak, todayKey, type TimeCfg } from '../core/time';
 import { heroLevel, heroSkill, sum, taskGold, taskXp } from '../game/progression';
 import { SKILL_BY_ID, spawnMonster } from '../game/catalog';
 import { applyBuffs, computeStats } from '../game/stats';
@@ -51,8 +51,13 @@ export function streakDays(hero: Hero): string[] {
   return [...hero.activeDays, ...(hero.savedDays ?? [])];
 }
 
-function achievementCtx(hero: Hero) {
-  return { bestStreak: bestStreak(streakDays(hero)), level: heroLevel(hero).level };
+/** Best streak ever: the stored record, or the best run still inside the (capped) day history. */
+export function heroBestStreak(hero: Hero): number {
+  return Math.max(hero.bestStreak ?? 0, bestStreak(streakDays(hero)));
+}
+
+export function achievementCtx(hero: Hero) {
+  return { bestStreak: heroBestStreak(hero), level: heroLevel(hero).level };
 }
 
 /** Emit events for achievement tiers newly reached between two hero snapshots. */
@@ -150,6 +155,7 @@ export function taskRewards(p: {
     updatedAt: now,
   };
   hero = { ...hero, savedDays: undeadSave(hero, now, cfg) };
+  hero = { ...hero, bestStreak: Math.max(before.bestStreak ?? 0, streak(streakDays(hero), now, cfg)) };
   events.push({ type: 'kill', monster, xp, gold, crit, theme: theme.id, listId: list.id });
   log.push({ kind: 'kill', text: `Slew a Lv${level} ${monster.name} — "${task.title}" (+${xp} XP, +${gold}g${crit ? ', CRIT!' : ''})` });
 

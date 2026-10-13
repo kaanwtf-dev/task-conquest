@@ -11,7 +11,7 @@ import { STAT_INFO, applyBuffs, computeStats } from '../../game/stats';
 import { describePotion, potionName } from '../../game/potions';
 import { itemPower, sellPrice } from '../../game/loot';
 import { achievementStatus, unlockedTitles } from '../../game/achievements';
-import { bestStreak, streakDays } from '../../state/rewards';
+import { achievementCtx, streakDays } from '../../state/rewards';
 import { Bar, HeroPreview, PxImg, Ui, useMedia } from '../components/common';
 import { ItemIcon, ItemSheet, PotionIcon } from '../components/loot';
 import { sfx } from '../../audio/sfx';
@@ -29,7 +29,7 @@ export default function HeroScreen() {
   const [barber, setBarber] = useState(false);
   const st = heroStats(hero);
   const stats = useMemo(() => applyBuffs(computeStats(hero, items), hero.buffs ?? []), [hero, items]);
-  const ctx = { bestStreak: bestStreak(streakDays(hero)), level: st.level };
+  const ctx = achievementCtx(hero);
   const claimable = achievementStatus(hero, ctx).reduce((n, a) => n + a.claimable, 0);
 
   return (
@@ -249,7 +249,7 @@ function FeatsTab() {
   const s = useStore();
   const hero = s.hero!;
   const level = heroStats(hero).level;
-  const ctx = { bestStreak: bestStreak(streakDays(hero)), level };
+  const ctx = achievementCtx(hero);
   const list = achievementStatus(hero, ctx);
   const titles = unlockedTitles(hero, ctx);
   const claimable = list.reduce((n, a) => n + a.claimable, 0);

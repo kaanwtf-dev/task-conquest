@@ -16,7 +16,7 @@ import { applyBuffs, computeStats } from '../game/stats';
 import { claimRewards } from '../game/achievements';
 import { BAG_MAX, BAG_STEP, dyeKey, themeKey, type ShopOffer } from '../game/shop';
 import { fx } from './fx';
-import { bagCount, bestStreak, inc, questChestRewards, streakDays, taskRewards, type RewardOutcome } from './rewards';
+import { achievementCtx, bagCount, inc, questChestRewards, streakDays, taskRewards, type RewardOutcome } from './rewards';
 
 export const uid = (): string =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -554,8 +554,7 @@ export const useStore = create<State>()(
         claimAchievements() {
           const hero = get().hero;
           if (!hero) return { gold: 0, newTitles: [] };
-          const ctx = { bestStreak: bestStreak(streakDays(hero)), level: heroLevel(hero).level };
-          const r = claimRewards(hero, ctx);
+          const r = claimRewards(hero, achievementCtx(hero));
           if (r.gold <= 0 && !r.newTitles.length) return { gold: 0, newTitles: [] };
           set({
             hero: { ...hero, achievements: { ...hero.achievements, ...r.tiers }, gold: inc(hero.gold, get().deviceId, r.gold), updatedAt: now() },

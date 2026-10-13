@@ -40,3 +40,18 @@ describe('progression', () => {
     expect(roman(1994)).toBe('MCMXCIV');
   });
 });
+
+describe('progression: corrupt input never hangs', () => {
+  it('treats NaN / negative / non-number XP as zero', () => {
+    expect(levelFromXp(NaN).level).toBe(1);
+    expect(levelFromXp(-5).level).toBe(1);
+    expect(levelFromXp('12' as unknown as number).level).toBe(1);
+    expect(skillLevel(Infinity).level).toBe(1);
+  });
+
+  it('titles stay short at absurd levels', () => {
+    expect(levelTitle(1e15)).toMatch(/^Eternal [\d,]+$/);
+    expect(levelTitle(NaN)).toBe('Novice');
+    expect(roman(0)).toBe('');
+  });
+});

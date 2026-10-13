@@ -166,6 +166,7 @@ export interface Hero extends Meta {
   streakSaves: number; // phoenix feathers applied (keeps the streak alive)
   savedDays: string[]; // days covered by a streak save / undead perk
   capeDye?: string; // purchased dye overriding the equipped cape color
+  bestStreak?: number; // longest streak ever (day history is capped, this is not)
 }
 
 /** Combined effective stats (after soft caps) derived from equipped gear + race/class. */
