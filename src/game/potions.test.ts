@@ -66,6 +66,41 @@ describe('potions', () => {
     expect(cur).toEqual([]);
   });
 
+  it('a buff powers exactly as many tasks as it says', () => {
+    for (const p of POTION_IDS) {
+      if (p === 'phoenix') continue;
+      for (const stat of [0, 37, 230]) {
+        const b = makeBuff(p, 2, stat, 'x');
+        const s = POTIONS[p].stats[0];
+        let buffs: Buff[] = [b];
+        let tasks = 0;
+        while (buffBonus(buffs, s) > 0) {
+          tasks++;
+          buffs = tickBuffs(buffs);
+        }
+        expect(tasks).toBe(b.remaining);
+        expect(describePotion(p, 2, stat)).toContain(`for ${b.remaining} tasks`);
+      }
+    }
+  });
+
+  it('shrugs off corrupt buffs and tiers', () => {
+    const junk = [
+      { id: 'a', potion: 'insight', tier: 1, value: NaN, remaining: 5 },
+      { id: 'b', potion: 'nope', tier: 1, value: 50, remaining: 5 },
+      { id: 'c', potion: 'fury', tier: 1, value: 10, remaining: NaN },
+    ] as unknown as Buff[];
+    expect(buffBonus(junk, 'xp')).toBe(0);
+    expect(buffBonus(junk, 'crit')).toBe(0);
+    expect(tickBuffs(junk).map((b) => b.id)).toEqual(['a', 'b']);
+    for (const t of [NaN, -3, 0, Infinity]) {
+      expect(potionName('insight', t)).toBe('Potion of Insight I');
+      expect(makeBuff('insight', t, NaN, 'z')).toMatchObject({ tier: 1, value: POTIONS.insight.baseValue, remaining: POTIONS.insight.baseTasks });
+      expect(potionPrice('insight', t)).toBe(POTIONS.insight.price);
+    }
+    expect(Number.isFinite(makeBuff('luck', 1, 1e300, 'z').remaining)).toBe(true);
+  });
+
   it('buffBonus sums active buffs per stat', () => {
     const buffs: Buff[] = [
       { id: '1', potion: 'insight', tier: 1, value: 20, remaining: 3 },

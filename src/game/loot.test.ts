@@ -17,17 +17,22 @@ import {
   itemDisplayName,
   itemPower,
   luckFactor,
+  materialFor as materialInfo,
   materialName,
   materialOf,
+  rarityWeights,
   rollDrop,
   rollItem,
   rollRarity,
   sellPrice,
   starterItems,
   tierForIlvl,
+  tierMinIlvl,
   upgradeCost,
 } from './loot';
-import { SOFT_CAPS, computeStats } from './stats';
+import { BASE_CRIT, CLASS_BONUS, RACE_BONUS, SOFT_CAPS, applyBuffs, computeStats } from './stats';
+import { RACES } from '../pixel/sprites/hero';
+import { hexToRgb } from '../pixel/pix';
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const stats = (over: Partial<HeroStats> = {}): HeroStats => ({ power: 0, xp: 0, gold: 0, find: 0, crit: 5, boss: 0, luck: 0, skill: 0, potion: 0, ...over });
@@ -194,6 +199,48 @@ describe('materials', () => {
     }
   });
 
+  it('tables are well formed and tier boundaries round-trip', () => {
+    for (const fam of Object.keys(MATERIAL_TABLES) as (keyof typeof MATERIAL_TABLES)[]) {
+      const table = MATERIAL_TABLES[fam];
+      expect(table[0].minIlvl).toBe(1);
+      expect(new Set(table.map((t) => t.name)).size).toBe(table.length);
+      for (let i = 1; i < table.length; i++) expect(table[i].minIlvl).toBeGreaterThan(table[i - 1].minIlvl);
+      for (let t = 1; t < 600; t++) {
+        const lv = tierMinIlvl(fam, t);
+        expect(tierForIlvl(fam, lv)).toBe(t);
+        expect(tierForIlvl(fam, lv - 1)).toBe(t - 1);
+      }
+    }
+  });
+
+  it('extension tiers really change color, gems included', () => {
+    const chroma = (hex: string) => {
+      const [r, g, b] = hexToRgb(hex);
+      return Math.max(r, g, b) - Math.min(r, g, b);
+    };
+    for (const fam of Object.keys(MATERIAL_TABLES) as (keyof typeof MATERIAL_TABLES)[]) {
+      const n = MATERIAL_TABLES[fam].length;
+      // the names that repeat forever need colors that hue rotation can move
+      for (const t of MATERIAL_TABLES[fam].slice(-3)) {
+        expect(chroma(t.pal.main)).toBeGreaterThan(24);
+        expect(chroma(t.pal.gem)).toBeGreaterThan(24);
+      }
+      for (let k = 0; k < 30; k++) {
+        const a = materialInfo(fam, n + k);
+        const b = materialInfo(fam, n + k + 3); // same base name, next numeral
+        expect(b.name).not.toBe(a.name);
+        expect(b.palette.main).not.toBe(a.palette.main);
+        expect(b.palette.gem).not.toBe(a.palette.gem);
+      }
+    }
+  });
+
+  it('every arcane tier has its own colored gem (orbs are drawn in the gem color)', () => {
+    const gems = MATERIAL_TABLES.arcane.map((t) => t.pal.gem.toLowerCase());
+    expect(new Set(gems).size).toBe(gems.length);
+    for (const g of gems) expect(g).not.toBe('#ffffff');
+  });
+
   it('tiers rise with item level forever', () => {
     for (const fam of Object.keys(MATERIAL_TABLES) as (keyof typeof MATERIAL_TABLES)[]) {
       let prev = -1;
@@ -229,6 +276,33 @@ describe('names', () => {
     expect(itemDisplayName({ ...item, name: '' })).toMatch(/\S+ \S+/);
   });
 
+  it('never uses borrowed names', () => {
+    const banned = /daedric|khajiit|phoenix down|mithril|skysteel|sunsilk|netherweave|mooncloth|truesilver|orichalcum/i;
+    const all: string[] = [];
+    for (const fam of Object.keys(MATERIAL_TABLES) as (keyof typeof MATERIAL_TABLES)[]) all.push(...MATERIAL_TABLES[fam].map((t) => t.name));
+    for (const slot of SLOTS) for (const b of BASES[slot]) all.push(baseName(b));
+    for (let s = 0; s < 3000; s++) all.push(rollItem({ seed: s, ilvl: 1 + (s % 300), minRarity: (s % 7) as Rarity, now: 0 }).name);
+    for (const n of all) expect(n).not.toMatch(banned);
+  });
+
+  it('affixes are ordered strongest first and the prefix names the top one', () => {
+    const prefixes: Record<string, string[]> = {
+      xp: ['Wise', 'Learned', 'Insightful'],
+      gold: ['Gilded', 'Golden', 'Prosperous'],
+      find: ['Seeking', 'Searching', 'Questing'],
+      crit: ['Keen', 'Sharp', 'Deadly'],
+      boss: ['Slaying', 'Giantbane', 'Titanic'],
+      luck: ['Lucky', 'Charmed', 'Fortunate'],
+      skill: ['Studious', 'Skilled', 'Masterful'],
+      potion: ['Brewing', 'Bubbling', 'Distilled'],
+    };
+    for (let s = 0; s < 200; s++) {
+      const item = rollItem({ seed: s, ilvl: 1 + s * 13, minRarity: 2, now: 0 });
+      for (let i = 1; i < item.affixes.length; i++) expect(item.affixes[i - 1].value).toBeGreaterThanOrEqual(item.affixes[i].value);
+      if (item.rarity <= 3) expect(prefixes[item.affixes[0].stat]).toContain(item.name.split(' ')[0]);
+    }
+  });
+
   it('commons are "<Material> <Base>", affixed items carry prefix/suffix words', () => {
     const common = rollItem({ seed: 3, ilvl: 1, base: 'plate', now: 0, minRarity: 0, luck: 0 });
     if (common.rarity === 0) expect(common.name).toBe(`${materialOf(common).name} Plate Armor`);
@@ -255,6 +329,46 @@ describe('economy', () => {
       const c = upgradeCost({ ilvl, rarity: 6, upgrade: 1e6 });
       expect(Number.isFinite(c)).toBe(true);
       expect(c).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER);
+    }
+  });
+
+  it('upgrade cost has no jump where geometric growth turns linear', () => {
+    const item = { ilvl: 25, rarity: 2 as Rarity, upgrade: 0 };
+    for (let u = 1; u <= 200; u++) {
+      const ratio = upgradeCost({ ...item, upgrade: u }) / upgradeCost({ ...item, upgrade: u - 1 });
+      expect(ratio).toBeGreaterThan(1);
+      expect(ratio).toBeLessThan(1.18);
+    }
+  });
+
+  it('upgrading and selling never turns a profit', () => {
+    for (const ilvl of [1, 10, 100, 5000, 1e6])
+      for (let rarity = 0 as Rarity; rarity <= 6; rarity = (rarity + 1) as Rarity)
+        for (let upgrade = 0; upgrade <= 120; upgrade++) {
+          const it = { ilvl, rarity, upgrade };
+          expect(upgradeCost(it)).toBeGreaterThan(sellPrice({ ...it, upgrade: upgrade + 1 }) - sellPrice(it));
+        }
+  });
+
+  it('survives legacy items with missing fields', () => {
+    const legacy = { id: 'old', slot: 'weapon', base: 'sword', updatedAt: 0, createdAt: 0, seed: 0 } as unknown as Item;
+    expectSaneName(itemDisplayName(legacy));
+    expect(sellPrice(legacy)).toBeGreaterThanOrEqual(1);
+    expect(Number.isFinite(upgradeCost(legacy))).toBe(true);
+    expect(itemPower(legacy)).toBe(0);
+    expect(materialOf(legacy).palette.main).toMatch(HEX);
+    expect(gearLook({ weapon: legacy }).weapon?.kind).toBe('sword');
+  });
+
+  it('absurd item levels saturate instead of overflowing', () => {
+    for (const ilvl of [1e9, 1e15, 2 ** 60]) {
+      const item = rollItem({ seed: 3, ilvl, minRarity: 6, now: 0 });
+      expect(item.power).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER);
+      expect(Number.isFinite(item.power)).toBe(true);
+      for (const a of item.affixes) expect(Number.isFinite(a.value)).toBe(true);
+      expect(sellPrice(item)).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER);
+      expect(upgradeCost(item)).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER);
+      expectSaneName(materialOf(item).name);
     }
   });
 
@@ -334,6 +448,19 @@ describe('drops + chests', () => {
     expect(elite / 2000).toBeGreaterThan(0.25);
   });
 
+  it('Divine never drops naturally below item level 100, however lucky', () => {
+    expect(rarityWeights(1e9, 0, 99).some(([r]) => r === 6)).toBe(false);
+    expect(rarityWeights(0, 0, 100).some(([r]) => r === 6)).toBe(true);
+    const rng = new Rng(5);
+    for (let i = 0; i < 20000; i++) expect(rollRarity(rng, 1e9, 0, 99)).toBeLessThan(6);
+    for (let s = 0; s < 300; s++) expect(rollDrop({ seed: s, level: 60, stats: stats({ luck: 1e6, find: 1e6 }), elite: true, now: 0 }).item?.rarity ?? 0).toBeLessThan(6);
+  });
+
+  it('boss chest rarity tolerates odd indices', () => {
+    for (const b of [0, -3, NaN, Infinity, 2.5]) expect(bossChestRarity(b)).toBe(3);
+    expect(bossChestRarity(5.9)).toBe(4);
+  });
+
   it('chests honor their minimum rarity', () => {
     expect(bossChestRarity(1)).toBe(3);
     expect(bossChestRarity(5)).toBe(4);
@@ -381,6 +508,29 @@ describe('computeStats', () => {
       const raw = a.affixes.find((x) => x.stat === stat)?.value ?? 0;
       expect(s[stat]).toBeCloseTo(SOFT_CAPS[stat] * (1 - Math.exp(-raw / SOFT_CAPS[stat])) + (perks[stat] ?? 0), 1);
     }
+  });
+
+  it('tolerates legacy heroes and ignores items in the wrong slot', () => {
+    const legacy = { equipped: undefined, appearance: undefined, classId: 'knight' } as unknown as Pick<Hero, 'equipped' | 'appearance' | 'classId'>;
+    expect(computeStats(legacy, {})).toEqual({ power: 0, xp: 0, gold: 0, find: 0, crit: 5, boss: 10, luck: 0, skill: 0, potion: 0 });
+    const ring = rollItem({ seed: 4, ilvl: 30, slot: 'trinket', minRarity: 3, now: 0 });
+    expect(computeStats(hero({ equipped: { weapon: ring.id } }), { [ring.id]: ring }).power).toBe(0);
+  });
+
+  it('every race and class stays within cap + perks, and buffs never mutate stats', () => {
+    const huge: Item = { ...rollItem({ seed: 2, ilvl: 1e6, slot: 'trinket', now: 0 }), affixes: STAT_IDS.map((stat) => ({ stat, value: 1e15 })) };
+    for (const race of RACES)
+      for (const cls of CLASSES) {
+        const s = computeStats(hero({ appearance: { ...appearance, race: race.id }, classId: cls.id, equipped: { trinket: huge.id } }), { [huge.id]: huge });
+        for (const stat of STAT_IDS) {
+          const perks = (RACE_BONUS[race.id]?.[stat] ?? 0) + (CLASS_BONUS[cls.id][stat] ?? 0) + (stat === 'crit' ? BASE_CRIT : 0);
+          expect(s[stat]).toBeLessThanOrEqual(SOFT_CAPS[stat] + perks);
+          expect(Number.isFinite(s[stat])).toBe(true);
+        }
+        expect(s.crit).toBeLessThan(100);
+        const frozen = Object.freeze({ ...s });
+        expect(() => applyBuffs(frozen, [{ id: 'b', potion: 'fury', tier: 3, value: 15, remaining: 2 }])).not.toThrow();
+      }
   });
 
   it('soft caps keep every stat bounded', () => {

@@ -127,7 +127,8 @@ export function tickBuffs(buffs: Buff[]): Buff[] {
 export function buffBonus(buffs: readonly Buff[], stat: StatId): number {
   let total = 0;
   for (const b of buffs) {
-    if (b.remaining <= 0 || !Number.isFinite(b.value)) continue;
+    // same liveness test as tickBuffs, so a corrupt (NaN) charge count never grants a bonus
+    if (!(b.remaining > 0) || !Number.isFinite(b.value)) continue;
     if (POTIONS[b.potion]?.stats.includes(stat)) total += b.value;
   }
   return Math.round(total * 10) / 10;

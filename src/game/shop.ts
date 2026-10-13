@@ -35,13 +35,17 @@ export const shopBucket = (level: number) => Math.floor((posInt(level, 1) - 1) /
 
 /**
  * Gear is rolled at the first level of the hero's bracket so the stock does not shift within it;
- * luck is bucketed for the same reason. Offer ids are stable for the whole day.
+ * luck is bucketed for the same reason. A new bracket is a new stock, so gear offer ids carry the
+ * bracket (a "sold" mark never sticks to an item that was not bought). Luck only re-rolls rarity and
+ * affixes of the same slot + base, so it keeps the offer id: one purchase per offer per day.
  */
 export function dailyStock(dateKey: string, level: number, luck: number, now: number): ShopOffer[] {
   const lv = posInt(level, 1);
   const bucket = shopBucket(lv);
   const ilvl = bucket * SHOP_LEVEL_BUCKET + 1;
-  const l = Number.isFinite(luck) ? Math.max(0, Math.floor(luck / LUCK_BUCKET) * LUCK_BUCKET) : 0;
+  const lb = Number.isFinite(luck) ? Math.max(0, Math.floor(luck / LUCK_BUCKET)) : 0;
+  const l = lb * LUCK_BUCKET;
+  const b36 = bucket.toString(36);
   const rng = new Rng(hashStr(`shop|${dateKey}|${bucket}`));
   const slots = [...SLOTS];
   for (let i = slots.length - 1; i > 0; i--) {
@@ -57,9 +61,9 @@ export function dailyStock(dateKey: string, level: number, luck: number, now: nu
       luck: l,
       source: 'shop',
       now,
-      id: `s-${dateKey}-${bucket.toString(36)}-${i}`,
+      id: `s-${dateKey}-${b36}-${lb.toString(36)}-${i}`,
     });
-    return { id: `shop:${dateKey}:gear:${i}`, kind: 'item', label: itemDisplayName(item), price: Math.min(MAX, sellPrice(item) * SHOP_GEAR_MARKUP), item };
+    return { id: `shop:${dateKey}:${b36}:gear:${i}`, kind: 'item', label: itemDisplayName(item), price: Math.min(MAX, sellPrice(item) * SHOP_GEAR_MARKUP), item };
   });
   for (const potion of POTION_IDS) {
     const tier = potionTierFor(potion, lv);
