@@ -47,7 +47,16 @@ describe('potions', () => {
 
   it('makeBuff scales value by tier and duration by the potion stat', () => {
     const b = makeBuff('insight', 3, 50, 'b1');
-    expect(b).toEqual({ id: 'b1', potion: 'insight', tier: 3, value: POTIONS.insight.baseValue * 1.5, remaining: Math.round(POTIONS.insight.baseTasks * 1.5) });
+    expect(b).toEqual({ id: 'b1', potion: 'insight', tier: 3, value: potionValue('insight', 3), remaining: Math.round(POTIONS.insight.baseTasks * 1.5) });
+    // diminishing returns: always rising with tier, never past 4x the tier-1 value
+    let prev = 0;
+    for (const t of [1, 2, 3, 5, 10, 50, 1e4]) {
+      const v = potionValue('insight', t);
+      expect(v).toBeGreaterThanOrEqual(prev);
+      expect(v).toBeLessThanOrEqual(POTIONS.insight.baseValue * 4);
+      prev = v;
+    }
+    expect(potionValue('insight', 1)).toBe(POTIONS.insight.baseValue);
     expect(makeBuff('fury', 1, 0, 'x').remaining).toBe(POTIONS.fury.baseTasks);
     expect(makeBuff('phoenix', 1, 100, 'p').remaining).toBe(0);
     const big = makeBuff('fortune', 1e5, 1e6, 'big');
@@ -121,7 +130,8 @@ describe('potions', () => {
     expect(s.find).toBe(15 + potionValue('luck', 1));
     expect(s.luck).toBe(potionValue('luck', 1));
     expect(s.power).toBe(10);
-    expect(applyBuffs(base, [makeBuff('fury', 1000, 0, 'f')]).crit).toBe(100);
+    const fury = Array.from({ length: 5 }, (_, i) => makeBuff('fury', 1000, 0, `f${i}`));
+    expect(applyBuffs(base, fury).crit).toBe(100);
     expect(applyBuffs(base, [])).toEqual(base);
   });
 

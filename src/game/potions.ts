@@ -98,7 +98,9 @@ export function potionName(potion: PotionId, tier: number): string {
 export function potionValue(potion: PotionId, tier: number): number {
   const def = POTIONS[potion];
   if (!def) return 0;
-  return Math.round(def.baseValue * (1 + 0.25 * (tierOf(tier) - 1)) * 10) / 10;
+  // diminishing returns: tier II ~1.35x, X ~3x, approaching 4x — potions boost gear, they never dwarf it
+  const growth = 1 + 3 * (1 - Math.exp(-(tierOf(tier) - 1) / 8));
+  return Math.round(def.baseValue * growth * 10) / 10;
 }
 
 /** Duration in tasks, extended by the hero's potion stat (percent). */

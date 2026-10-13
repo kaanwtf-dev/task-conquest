@@ -177,7 +177,7 @@ export const HELD_BOW = [
   '..hh....',
 ];
 
-export function heldBowPix(mat: MaterialPalette, handle = '#7a4a2a'): Pix {
+export function heldBowPix(mat: MaterialPalette, handle = mat.main): Pix {
   const p = new Pix(8, 16).art(HELD_BOW, { h: handle, g: mat.trim }).outline();
   return p.art(HELD_BOW, { s: '#f4f4f4' });
 }
@@ -235,7 +235,9 @@ export const WEAPON_GRIP: Record<string, [number, number]> = {
 
 export const WEAPON_KINDS = ['sword', 'axe', 'dagger', 'staff', 'bow', 'mace', 'spear', 'hammer', 'wand'] as const;
 
-export function weaponPix(kind: string, mat: MaterialPalette, handle = '#7a4a2a'): Pix {
+const WOODEN = new Set(['staff', 'bow', 'wand']);
+
+export function weaponPix(kind: string, mat: MaterialPalette, handle = WOODEN.has(kind) ? mat.main : '#7a4a2a'): Pix {
   // art is drawn on a 16x16 grid, then placed with a 1px margin so the outline never gets clipped
   const art16 = new Pix(16, 16);
   const flip = kind === 'bow'; // bows are mirrored so the hand holds the limb and the bow sits beside the body

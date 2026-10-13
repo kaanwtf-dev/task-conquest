@@ -115,7 +115,7 @@ export function heroPix(app: Appearance, gear: GearLook = {}, pose: Pose = 'idle
   const body = new Pix(32, 32);
   const bodyKind = gear.body?.kind ?? 'tunic';
   const mat = gear.body?.mat;
-  const torsoCol = bodyKind === 'tunic' ? app.outfit : bodyKind === 'leather' ? '#8a5a34' : mat!.main;
+  const torsoCol = bodyKind === 'tunic' ? app.outfit : mat!.main;
   body.rect(12, ty, 8, 24 - ty, torsoCol);
   // sleeves + hands
   const sleeve = bodyKind === 'plate' || bodyKind === 'chain' ? mat!.main : bodyKind === 'leather' ? app.outfit : torsoCol;
@@ -128,8 +128,8 @@ export function heroPix(app: Appearance, gear: GearLook = {}, pose: Pose = 'idle
     body.set(15, ty, skin).set(16, ty, skin).set(15, ty + 1, skinDark).set(16, ty + 1, skinDark);
     body.rect(12, 23, 8, 1, BELT).set(15, 23, '#e0b040').set(16, 23, '#e0b040');
   } else if (bodyKind === 'leather') {
-    for (let i = 0; i < 6; i++) body.set(13 + i, ty + i, '#5a3a20');
-    body.rect(10, ty, 2, 1, '#6a4428').rect(20, ty, 2, 1, '#6a4428');
+    for (let i = 0; i < 6; i++) body.set(13 + i, ty + i, mat!.dark);
+    body.rect(10, ty, 2, 1, mat!.light).rect(20, ty, 2, 1, mat!.light);
     body.rect(12, 23, 8, 1, BELT).set(15, 23, '#c0c0c0').set(16, 23, '#c0c0c0');
   } else if (bodyKind === 'chain') {
     for (let y = ty; y < 24; y++)

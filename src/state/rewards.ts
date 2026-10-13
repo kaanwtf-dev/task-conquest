@@ -21,6 +21,9 @@ export interface RewardOutcome {
   log: { kind: LogEntry['kind']; text: string }[];
 }
 
+/** Seeds are 32-bit hashes; salting ids with the drop time keeps two drops from ever sharing an id. */
+const uniqueId = (item: Item, now: number, salt: string): Item => ({ ...item, id: `${item.id}-${now.toString(36)}${salt}` });
+
 export const inc = (c: Counter | undefined, dev: string, n: number): Counter => ({ ...(c ?? {}), [dev]: ((c ?? {})[dev] ?? 0) + n });
 
 /** Unequipped, non-deleted items count against the bag. */
@@ -152,6 +155,7 @@ export function taskRewards(p: {
 
   // ---- loot ----
   const drop = rollDrop({ seed: (seed ^ 0x9e3779b9) >>> 0, level, stats, elite: monster.elite, now });
+  if (drop.item) drop.item = uniqueId(drop.item, now, 'd');
   if (drop.item) {
     const r = addItemOrSell(hero, items, newItems, drop.item, dev);
     hero = { ...r.hero, itemsFound: inc(r.hero.itemsFound, dev, 1) };
@@ -171,7 +175,7 @@ export function taskRewards(p: {
   const dealt = sum(hero.bossDamage) + dmg;
   if (dealt >= boss.maxHp) {
     const reward = bossReward(boss.index, level);
-    const chest = chestLoot({ seed: (seed * 31 + 7) >>> 0, level, stats, kind: 'boss', bossIndex: boss.index, now });
+    const chest = uniqueId(chestLoot({ seed: (seed * 31 + 7) >>> 0, level, stats, kind: 'boss', bossIndex: boss.index, now }), now, 'b');
     hero = {
       ...hero,
       bossIndex: hero.bossIndex + 1,
@@ -216,7 +220,7 @@ export function questChestRewards(p: { hero: Hero; items: Record<string, Item>; 
   const { level } = heroLevel(before);
   const stats = applyBuffs(computeStats(before, items), before.buffs ?? []);
   const gold = Math.round((5 + level * 2) * (1 + stats.gold / 100));
-  const chest = chestLoot({ seed, level, stats, kind: 'quest', now });
+  const chest = uniqueId(chestLoot({ seed, level, stats, kind: 'quest', now }), now, 'q');
   let hero: Hero = { ...before, gold: inc(before.gold, dev, gold), questsCleared: inc(before.questsCleared, dev, 1), updatedAt: now };
   const r = addItemOrSell(hero, items, [], chest, dev);
   hero = { ...r.hero, itemsFound: inc(r.hero.itemsFound, dev, 1) };
