@@ -5,7 +5,7 @@ import { iconFor } from '../../pixel/iconGen';
 import { THEMES, type ThemeId } from '../../pixel/themes';
 import type { AnimMode, ListType, SkillId } from '../../core/types';
 import { PxImg, themeStyle } from '../components/common';
-import { sfx, setSfxVolume } from '../../audio/sfx';
+import { sfx, setSfxVolume, unlockAudio } from '../../audio/sfx';
 
 export function SettingsScreen() {
   const s = useStore();
@@ -34,6 +34,20 @@ export function SettingsScreen() {
               }}
             >
               {v === 0 ? 'off' : v === 1 ? 'loud' : v === 0.3 ? 'soft' : 'normal'}
+            </button>
+          ))}
+        </Opt>
+        <Opt label="Music">
+          {[0, 0.25, 0.5, 0.8].map((v) => (
+            <button
+              key={v}
+              className={`pill ${cfg.music === v ? 'sel' : ''}`}
+              onClick={() => {
+                unlockAudio();
+                set({ music: v });
+              }}
+            >
+              {v === 0 ? 'off' : v === 0.25 ? 'soft' : v === 0.5 ? 'normal' : 'loud'}
             </button>
           ))}
         </Opt>

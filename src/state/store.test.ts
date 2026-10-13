@@ -118,11 +118,11 @@ describe('store: economy actions', () => {
     const stack = potionStacks(st())[0];
     expect(stack.count).toBe(1);
     expect(st().usePotion(stack.id)).toBe(true);
+    expect(potionStacks(st())).toHaveLength(0); // checked before questing: kills can drop new potions
     const buff = st().hero!.buffs[0];
     expect(buff.remaining).toBeGreaterThan(0);
     st().toggleTask(listTasks(st(), listOf('quests').id)[0].id);
-    expect(st().hero!.buffs[0]?.remaining ?? 0).toBe(buff.remaining - 1);
-    expect(potionStacks(st())).toHaveLength(0);
+    expect(st().hero!.buffs.find((b) => b.id === buff.id)?.remaining ?? 0).toBe(buff.remaining - 1);
   });
 
   it('blacksmith upgrades cost gold', () => {

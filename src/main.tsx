@@ -6,11 +6,26 @@ import { useStore } from './state/store';
 import { fx } from './state/fx';
 import { setSfxVolume } from './audio/sfx';
 import { initSync } from './state/sync';
+import { registerPWA, requestPersistentStorage } from './pwa';
+import { useAppUpdate } from './ui/components/UpdateBanner';
 
 const SpriteLab = lazy(() => import('./dev/SpriteLab'));
 
 setSfxVolume(useStore.getState().settings.sfx);
 initSync();
+registerPWA(
+  (update) => useAppUpdate.setState({ update }),
+  () => fx.emit({ type: 'toast', text: 'READY OFFLINE', small: 'Questlog now works without internet.' }),
+);
+if (useStore.getState().hero) void requestPersistentStorage();
+else {
+  const off = useStore.subscribe((s) => {
+    if (s.hero) {
+      off();
+      void requestPersistentStorage();
+    }
+  });
+}
 
 if (import.meta.env.DEV) Object.assign(window, { __ql: { store: useStore, fx } });
 

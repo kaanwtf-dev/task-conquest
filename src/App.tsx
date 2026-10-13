@@ -3,6 +3,8 @@ import { useStore, visibleLists, TODAY_ID } from './state/store';
 import { Hud, ListChips, Sidebar, TabBar } from './ui/components/chrome';
 import { useMedia, themeStyle } from './ui/components/common';
 import Effects from './ui/components/Effects';
+import UpdateBanner from './ui/components/UpdateBanner';
+import { playMusic, setMusicVolume, stopMusic } from './audio/music';
 import HeroStage from './ui/stage/HeroStage';
 import CreateHero from './ui/screens/CreateHero';
 import QuestsScreen from './ui/screens/QuestsScreen';
@@ -42,6 +44,15 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // background music follows the current list's zone
+  const music = useStore((s) => s.settings.music);
+  const musicTheme = useStore((s) => (s.tab === 'shop' ? 'tavern' : s.activeListId && s.lists[s.activeListId] ? s.lists[s.activeListId].theme : 'castle'));
+  useEffect(() => {
+    setMusicVolume(music);
+    if (music > 0 && hero) playMusic(musicTheme);
+    else stopMusic();
+  }, [music, musicTheme, !!hero]);
 
   if (!hero) return <CreateHero />;
   const theme = list?.theme ?? 'forest';
@@ -88,6 +99,7 @@ export default function App() {
       )}
       {!wide && <TabBar />}
       <Effects />
+      <UpdateBanner />
       {newList && <ListSheet onClose={() => setNewList(false)} />}
     </div>
   );

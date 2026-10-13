@@ -1391,3 +1391,20 @@ canvas.px {
   color: #ff8a5a;
   text-transform: uppercase;
 }
+
+.update-banner {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--tabbar-h) + var(--safe-bot) + 14px);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  width: min(92vw, 460px);
+  font-size: 15px;
+}
+.update-banner span {
+  flex: 1;
+}
