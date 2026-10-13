@@ -61,8 +61,17 @@ export function portraitUrl(app: Appearance, look: GearLook): string {
 }
 
 /** Animated idle hero over a theme backdrop (used in character creation / hero screen). */
-export function HeroPreview({ app, look, theme, w, h, scale }: { app: Appearance; look: GearLook; theme: ThemeId; w: number; h: number; scale: number }) {
+export function HeroPreview({ app, look, theme, w: fixedW, h, scale, fit }: { app: Appearance; look: GearLook; theme: ThemeId; w: number; h: number; scale: number; fit?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const [fitW, setFitW] = useState(fixedW);
+  useEffect(() => {
+    if (!fit || !wrap.current) return;
+    const ro = new ResizeObserver(([e]) => setFitW(Math.max(48, Math.ceil(e.contentRect.width / scale))));
+    ro.observe(wrap.current);
+    return () => ro.disconnect();
+  }, [fit, scale]);
+  const w = fit ? fitW : fixedW;
   useEffect(() => {
     const c = ref.current!;
     c.width = w;
@@ -88,7 +97,14 @@ export function HeroPreview({ app, look, theme, w, h, scale }: { app: Appearance
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, [app, look, theme, w, h]);
-  return <canvas ref={ref} className="px" style={{ width: w * scale, height: h * scale, display: 'block' }} />;
+  const canvas = <canvas ref={ref} className="px" style={{ width: w * scale, height: h * scale, display: 'block', maxWidth: fit ? 'none' : undefined }} />;
+  return fit ? (
+    <div ref={wrap} style={{ width: '100%', overflow: 'hidden' }}>
+      {canvas}
+    </div>
+  ) : (
+    canvas
+  );
 }
 
 /** Full-width animated scene strip. */

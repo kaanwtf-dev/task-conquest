@@ -77,7 +77,7 @@ export default function App() {
             </div>
           </div>
         </aside>
-      ) : corner === 'hidden' ? null : (
+      ) : corner === 'hidden' || tab === 'hero' ? null : (
         <div className="corner-hero" style={themeStyle(theme)}>
           {corner === 'small' ? (
             <HeroStage w={56} h={46} scale={2} heroX={-10} monsterX={35} theme={theme} onTap={() => setTab('hero')} />

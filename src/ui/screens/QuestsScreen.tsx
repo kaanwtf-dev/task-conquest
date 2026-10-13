@@ -237,7 +237,7 @@ function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps)
       ref={sortable?.setNodeRef}
       className={`task ${done ? 'done' : ''} ${sortable?.isDragging ? 'dragging' : ''}`}
       style={style}
-      {...(sortable ? { ...sortable.attributes, ...sortable.listeners } : {})}
+      {...(sortable ? { ...sortable.attributes, ...sortable.listeners, role: 'listitem', 'aria-roledescription': 'draggable quest' } : {})}
       onClick={() => onEdit(task.id)}
     >
       <button
@@ -290,7 +290,9 @@ function SortableRow(props: Omit<RowProps, 'sortable'>) {
 /** Long-press (touch) or drag (mouse) to reorder; a tap still opens the editor. */
 function SortableTasks({ tasks, onEdit }: { tasks: Task[]; onEdit: (id: string) => void }) {
   const reorder = useStore((s) => s.reorderTasks);
-  const listTaskIds = useStore((s) => (tasks[0] ? listTasks(s, tasks[0].listId).map((t) => t.id) : []));
+  const allTasks = useStore((s) => s.tasks);
+  const listId = tasks[0]?.listId;
+  const listTaskIds = useMemo(() => (listId ? listTasks({ tasks: allTasks }, listId).map((t) => t.id) : []), [allTasks, listId]);
   const justDragged = useRef(0);
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),

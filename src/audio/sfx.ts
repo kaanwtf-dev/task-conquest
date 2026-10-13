@@ -25,6 +25,11 @@ export function unlockAudio() {
   ac();
 }
 
+/** The shared AudioContext (music plays through it too); null where WebAudio is unavailable. */
+export function getAudioContext(): AudioContext | null {
+  return ac();
+}
+
 export function setSfxVolume(v: number) {
   volume = v;
   if (master) master.gain.value = v;

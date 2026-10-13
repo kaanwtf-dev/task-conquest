@@ -35,7 +35,7 @@ export default function HeroScreen() {
   return (
     <div className="scroll">
       <div className="win" style={{ overflow: 'hidden' }}>
-        <HeroPreview app={hero.appearance} look={look} theme="tavern" w={wide ? 120 : 92} h={56} scale={4} />
+        <HeroPreview app={hero.appearance} look={look} theme="tavern" w={wide ? 120 : 92} h={56} scale={4} fit />
         <div style={{ padding: 12 }}>
           <div className="win-title">
             {hero.name} · Lv{st.level} {hero.title ?? levelTitle(st.level)}
