@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { useStore, visibleLists, TODAY_ID } from './state/store';
 import { Hud, ListChips, Sidebar, TabBar } from './ui/components/chrome';
 import { useMedia, themeStyle } from './ui/components/common';
@@ -11,7 +11,7 @@ import QuestsScreen from './ui/screens/QuestsScreen';
 import { ListSheet, SettingsScreen } from './ui/screens/OtherScreens';
 import HeroScreen from './ui/screens/HeroScreen';
 import ShopScreen from './ui/screens/ShopScreen';
-import PartyScreen from './ui/screens/PartyScreen';
+const PartyScreen = lazy(() => import('./ui/screens/PartyScreen'));
 
 export default function App() {
   const hero = useStore((s) => s.hero);
@@ -67,7 +67,11 @@ export default function App() {
         {tab === 'hero' && <HeroScreen />}
         {tab === 'settings' && <SettingsScreen />}
         {tab === 'shop' && <ShopScreen />}
-        {tab === 'party' && <PartyScreen />}
+        {tab === 'party' && (
+          <Suspense fallback={<div className="scroll" />}>
+            <PartyScreen />
+          </Suspense>
+        )}
       </div>
       {wide ? (
         <aside className="stage-panel" style={themeStyle(theme)}>
