@@ -231,7 +231,7 @@ const FIRST = encodeName(
 
 const compound = (stem: string, tail: string) => (stem.endsWith(tail[0]) ? `${stem}-${tail}` : stem + tail);
 
-function bossName(index: number): { name: string; archetype: string } {
+function nameParts(index: number): { name: string; archetype: string } {
   const j = (index - 1) % BOSS_NAME_CYCLE;
   const generation = Math.floor((index - 1) / BOSS_NAME_CYCLE);
   const code = (j * STRIDE + FIRST) % BOSS_NAME_CYCLE;
@@ -273,7 +273,7 @@ export interface Boss {
 
 export function bossFor(index: number): Boss {
   const i = posInt(index, 1);
-  const { name, archetype } = bossName(i);
+  const { name, archetype } = nameParts(i);
   const rank = bossRankDef(i);
   const h = hashStr(`boss|${i}`);
   const place = PLACES[h % PLACES.length];
@@ -288,6 +288,9 @@ export function bossFor(index: number): Boss {
     rank: rank.id,
   };
 }
+
+/** Just the name (cheap: no HP model). */
+export const bossName = (index: number): string => nameParts(posInt(index, 1)).name;
 
 /** Gold scales with hero level (like task gold) and boss rank; chests: Epic, Legendary every 5th, Mythic every 25th, Divine every 100th. */
 export function bossReward(index: number, level: number): { gold: number; chestMinRarity: 3 | 4 | 5 | 6 } {
