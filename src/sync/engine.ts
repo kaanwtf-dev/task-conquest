@@ -2,7 +2,7 @@
 // changes, merges them in (LWW per doc, CRDT for the hero) and pushes local edits it has not sent yet.
 // Dirty tracking never touches the store: a persisted map remembers the updatedAt last exchanged per doc.
 import type { Hero, Meta, Task } from '../core/types';
-import { canon, newer, resolveHero, sameDoc } from './merge';
+import { canon, lineage, newer, resolveHero, sameDoc } from './merge';
 import { SyncOfflineError } from './types';
 import type { AdoptStrategy, DocKind, EngineStatus, KeyValue, LocalAdapter, LocalSnapshot, RemoteAdapter, RemoteRow } from './types';
 
@@ -87,6 +87,8 @@ export function fromRow(row: RemoteRow, userId: string): { kind: DocKind; doc: M
       return null;
   }
   if (!plausible(row.kind, row.data)) return null;
+  // access is checked against list_id: a task filed under a shared list must not land in another list here
+  if (row.kind === 'task' && row.data.listId !== row.list_id) return null;
   const updatedAt = Number(row.updated_at);
   const doc: Meta & Record<string, unknown> = { ...row.data, id, updatedAt: Number.isFinite(updatedAt) ? updatedAt : 0 };
   if (row.deleted) doc.deleted = true;
@@ -180,6 +182,8 @@ export class SyncEngine {
   private started = false;
   private stopped = false;
   private lastWake = 0;
+  /** Lists purged here: rows for them still in flight (a pull begun before leaving) are dropped until rejoined. */
+  private readonly left = new Set<string>();
 
   constructor(local: LocalAdapter, remote: RemoteAdapter, kv: KeyValue, userId: string, opts: SyncEngineOptions = {}) {
     this.local = local;
@@ -250,6 +254,7 @@ export class SyncEngine {
   async pullList(listId: string): Promise<void> {
     const rows = await this.remote.pullList(listId);
     if (this.stopped) return;
+    this.left.delete(listId);
     this.apply(rows);
     if (this.st.lists && !this.st.lists.includes(listId)) this.st.lists = [...this.st.lists, listId].sort();
     this.save();
@@ -257,12 +262,13 @@ export class SyncEngine {
 
   /** Drop a list and its tasks from this device without tombstoning them (after leaving it). */
   purgeList(listId: string): void {
+    this.left.add(listId);
     const snap = this.local.read();
     const lists = { ...snap.lists };
     const tasks = { ...snap.tasks };
     delete lists[listId];
     delete this.st.synced[docKey('list', listId)];
-    for (const t of Object.values(snap.tasks)) {
+    for (const t of Object.values(snap.tasks ?? {})) {
       if (t.listId !== listId) continue;
       delete tasks[t.id];
       delete this.st.synced[docKey('task', t.id)];
@@ -354,6 +360,8 @@ export class SyncEngine {
     if (this.stopped) return;
     // push everything this device has, then pull the rest (shared lists stay)
     this.st = fresh();
+    // the cloud hero was seen and overruled on purpose: its lineage is replaced, not merged as a first contact
+    if (cloudHero) this.st.synced[docKey('hero', HERO_ID)] = cloudHero.updatedAt;
     this.save();
     return this.syncNow();
   }
@@ -473,12 +481,13 @@ export class SyncEngine {
       for (const id of prev) if (!now.has(id)) this.purgeList(id);
       const known = new Set(prev);
       for (const id of ids) {
-        if (known.has(id)) continue;
+        if (known.has(id) && !this.left.has(id)) continue;
         const rows = await this.remote.pullList(id);
         if (this.stopped) return;
+        this.left.delete(id); // (re)joined, here or on another device
         this.apply(rows);
       }
-    }
+    } else for (const id of ids) this.left.delete(id); // a full pull follows
     this.st.lists = ids;
     this.save();
   }
@@ -510,7 +519,7 @@ export class SyncEngine {
     let heroChanged = false;
     let needPush = false;
     const put = (coll: Coll, doc: Meta) => {
-      (out[coll] ??= { ...(snap[coll] as DocMap) })[doc.id] = doc;
+      (out[coll] ??= { ...((snap[coll] ?? {}) as DocMap) })[doc.id] = doc;
     };
     for (const row of rows) {
       const m = fromRow(row, this.userId);
@@ -519,11 +528,20 @@ export class SyncEngine {
       const remote = m.doc;
       if (m.kind === 'hero') {
         if (remote.deleted) continue;
-        if (hero && hero.updatedAt < (synced[key] ?? -Infinity)) {
-          hero = { ...hero, updatedAt: synced[key] + 1 };
+        const known = synced[key];
+        // dropped on this device after syncing (start over): an echo of the copy it held must not bring it back
+        if (!hero && known !== undefined && remote.updatedAt <= known) continue;
+        if (hero && known !== undefined && hero.updatedAt < known) {
+          hero = { ...hero, updatedAt: known + 1 };
           heroChanged = needPush = true;
         }
-        let merged = hero ? resolveHero(hero, remote as Hero) : (remote as Hero);
+        let base = hero;
+        if (base && known === undefined && lineage(base) !== lineage(remote as Hero)) {
+          // first contact with a different save that adoptStrategy() never settled (e.g. the check failed
+          // offline): merge into the cloud's lineage, keeping its identity, rather than erase either save
+          base = { ...base, createdAt: lineage(remote as Hero), updatedAt: Math.min(base.updatedAt, remote.updatedAt - 1) };
+        }
+        let merged = base ? resolveHero(base, remote as Hero) : (remote as Hero);
         const ahead = canon(merged) !== canon(remote);
         if (ahead && merged.updatedAt <= remote.updatedAt) merged = { ...merged, updatedAt: remote.updatedAt + 1 };
         if (!hero || canon(merged) !== canon(hero)) {
@@ -534,8 +552,9 @@ export class SyncEngine {
         synced[key] = Math.max(synced[key] ?? -Infinity, remote.updatedAt);
         continue;
       }
+      if (row.list_id && this.left.has(row.list_id)) continue;
       const coll = COLL_OF[m.kind];
-      let cur: Meta | undefined = (out[coll] ?? (snap[coll] as DocMap))[remote.id];
+      let cur: Meta | undefined = (out[coll] ?? ((snap[coll] ?? {}) as DocMap))[remote.id];
       if (cur && cur.updatedAt < (synced[key] ?? -Infinity)) {
         cur = { ...cur, updatedAt: synced[key] + 1 }; // edited on a clock behind the version already synced
         put(coll, cur);
@@ -575,14 +594,14 @@ export class SyncEngine {
         // edited on a clock running behind the version already synced: restamp so the edit still wins
         d = { ...doc, updatedAt: at + 1 };
         bumped ??= {};
-        if (coll) ((bumped as Record<Coll, DocMap>)[coll] ??= { ...(snap[coll] as DocMap) })[d.id] = d;
+        if (coll) ((bumped as Record<Coll, DocMap>)[coll] ??= { ...((snap[coll] ?? {}) as DocMap) })[d.id] = d;
         else bumped.hero = d as Hero;
       }
       rows.push(toRow(kind, d, this.userId));
       marks.push([key, d.updatedAt]);
     };
     if (snap.hero) visit('hero', snap.hero, null);
-    for (const [kind, coll] of COLLS) for (const doc of Object.values(snap[coll] as DocMap)) visit(kind, doc, coll);
+    for (const [kind, coll] of COLLS) for (const doc of Object.values((snap[coll] ?? {}) as DocMap)) visit(kind, doc, coll);
     return { rows, marks, bumped };
   }
 

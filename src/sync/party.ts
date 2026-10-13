@@ -26,9 +26,10 @@ function client() {
   return c;
 }
 
-/** Codes are 6 chars from an unambiguous alphabet; accept lower case, spaces and dashes. */
+/** Codes are 6 chars from an unambiguous alphabet; accept lower case, spaces, dashes and a pasted invite link. */
 export function normalizeCode(code: string): string {
-  return code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const link = /[#&?]join=([A-Za-z0-9 -]+)/i.exec(code);
+  return (link ? link[1] : code).toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
 export function inviteUrl(code: string): string {

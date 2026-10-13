@@ -1,6 +1,6 @@
 // Supabase connection: config (build-time env or entered in the app), email+password auth, and the
 // RemoteAdapter over the `docs` table (supabase/schema.sql).
-import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
+import { createClient, isAuthRetryableFetchError, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { SyncOfflineError } from './types';
 import type { PushResult, RemoteAdapter, RemoteRow } from './types';
 
@@ -115,20 +115,42 @@ export async function signOut(): Promise<void> {
   if (error) throw new Error(authMessage(error.message));
 }
 
+/**
+ * User of the session kept in storage. Offline with an expired access token, auth-js reports no session
+ * but keeps it (and refreshes it once back online); the player is still signed in.
+ */
+function storedUser(): AuthUser | null {
+  try {
+    const raw = storage()?.getItem(AUTH_STORAGE_KEY);
+    const s = raw ? (JSON.parse(raw) as { refresh_token?: unknown; user?: { id?: unknown; email?: unknown } }) : null;
+    const u = s?.user;
+    if (!s || typeof s.refresh_token !== 'string' || !u || typeof u.id !== 'string') return null;
+    return { id: u.id, email: typeof u.email === 'string' ? u.email : null };
+  } catch {
+    return null;
+  }
+}
+
 /** The signed-in user from the stored session (no network needed). */
 export async function getUser(): Promise<AuthUser | null> {
   const c = getClient();
   if (!c) return null;
-  const { data } = await c.auth.getSession();
-  return data.session ? toUser(data.session.user) : null;
+  const { data, error } = await c.auth.getSession();
+  if (data.session) return toUser(data.session.user);
+  return error && isAuthRetryableFetchError(error) ? storedUser() : null;
 }
 
 export function onAuthChange(cb: (user: AuthUser | null) => void): () => void {
   const c = getClient();
   if (!c) return () => undefined;
-  const { data } = c.auth.onAuthStateChange((_event, session) => {
+  const { data } = c.auth.onAuthStateChange((event, session) => {
     // deferred: calling Supabase inside this callback can deadlock on the auth lock
-    setTimeout(() => cb(session ? toUser(session.user) : null), 0);
+    setTimeout(() => {
+      if (session) cb(toUser(session.user));
+      // the initial session comes back empty when an expired token cannot be refreshed offline
+      else if (event === 'INITIAL_SESSION') getUser().then(cb, () => cb(null));
+      else cb(null);
+    }, 0);
   });
   return () => data.subscription.unsubscribe();
 }
@@ -257,9 +279,11 @@ export class SupabaseRemote implements RemoteAdapter {
   async push(rows: RemoteRow[]): Promise<PushResult> {
     const rejected: string[] = [];
     if (!rows.length) return { rejected };
-    const { data } = await this.client.auth.getSession();
+    const { data, error } = await this.client.auth.getSession();
     // without a session the request would run as anon: never mistake that for per-row refusals
-    if (!data.session) throw new RemoteError('Not signed in', 'auth');
+    if (!data.session) {
+      throw error && isAuthRetryableFetchError(error) ? new SyncOfflineError(error.message) : new RemoteError('Not signed in', 'auth');
+    }
     for (const group of [rows.filter((r) => r.kind === 'list'), rows.filter((r) => r.kind !== 'list')]) {
       for (let i = 0; i < group.length; i += CHUNK) await this.upsert(group.slice(i, i + CHUNK), rejected);
     }
@@ -292,7 +316,8 @@ export class SupabaseRemote implements RemoteAdapter {
         if (row && typeof row.id === 'string' && row.data && typeof row.data === 'object') onRow(normRow(row));
         else onResync?.(); // payload too large / truncated: fetch it instead
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'list_members' }, () => onResync?.())
+      // own memberships only: lists joined or left on another device (others joining add no docs to fetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'list_members', filter: `user_id=eq.${this.userId}` }, () => onResync?.())
       .subscribe((status) => {
         // after a reconnect, catch up on whatever was missed while the socket was down
         if (status === 'SUBSCRIBED' && opened) onResync?.();

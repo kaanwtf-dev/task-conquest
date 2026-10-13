@@ -98,6 +98,9 @@ function heroWinner(a: Hero, b: Hero): Hero {
 
 const finiteOr = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 
+/** A hero's lineage id (its createdAt): saves of the same lineage merge, different ones replace each other. */
+export const lineage = (h: Pick<Hero, 'createdAt'>): number => finiteOr(h.createdAt, 0);
+
 /**
  * Hero CRDT join (commutative, associative, idempotent):
  * - progress counters: per-device max, so offline progress on every device adds up
@@ -114,7 +117,7 @@ export function mergeHero(a: Hero, b: Hero): Hero {
   return {
     ...win,
     updatedAt: Math.max(stamp(a), stamp(b)),
-    createdAt: Math.min(finiteOr(a.createdAt, Infinity), finiteOr(b.createdAt, Infinity), Number.MAX_SAFE_INTEGER),
+    createdAt: Math.min(lineage(a), lineage(b)),
     xp: mergeCounter(a.xp, b.xp),
     gold: mergeCounter(a.gold, b.gold),
     goldSpent: mergeCounter(a.goldSpent, b.goldSpent),
@@ -142,8 +145,8 @@ export function mergeHero(a: Hero, b: Hero): Hero {
  * on another device): the newest lineage replaces the other wholesale, even against later offline edits.
  */
 export function resolveHero(local: Hero, remote: Hero): Hero {
-  const cl = finiteOr(local.createdAt, 0);
-  const cr = finiteOr(remote.createdAt, 0);
+  const cl = lineage(local);
+  const cr = lineage(remote);
   if (cl === cr) return mergeHero(local, remote);
   return cr > cl ? remote : local;
 }
