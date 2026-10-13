@@ -1,6 +1,7 @@
 // App chrome: HUD, mobile tab bar, list chips, desktop sidebar.
 import { useMemo } from 'react';
 import { useStore, visibleLists, listTasks, TODAY_ID, type Tab } from '../../state/store';
+import { useAttention } from '../../state/attention';
 import { todaySections, todayRemaining } from '../../state/today';
 import { heroGold, heroLevel, levelTitle } from '../../game/progression';
 import { streak, isDone, isActiveToday } from '../../core/time';
@@ -61,6 +62,7 @@ const TABS: { id: Tab; label: string; icon: UiSprite }[] = [
 export function TabBar() {
   const tab = useStore((s) => s.tab);
   const setTab = useStore((s) => s.setTab);
+  const flags = useAttention();
   return (
     <nav className="tabbar">
       {TABS.map((t) => (
@@ -74,6 +76,7 @@ export function TabBar() {
         >
           <Ui name={t.icon} size={26} />
           {t.label}
+          {flags[t.id as keyof typeof flags] && <span className="tab-dot" aria-label="needs your attention" />}
         </button>
       ))}
     </nav>
@@ -143,6 +146,7 @@ export function ListChips({ onNew }: { onNew: () => void }) {
 
 export function Sidebar({ onNew }: { onNew: () => void }) {
   const s = useStore();
+  const flags = useAttention();
   const lists = visibleLists(s);
   return (
     <aside className="side">
@@ -172,6 +176,7 @@ export function Sidebar({ onNew }: { onNew: () => void }) {
         {TABS.filter((t) => t.id !== 'quests').map((t) => (
           <button key={t.id} className={`side-item ${s.tab === t.id ? 'active' : ''}`} onClick={() => (sfx.tick(), s.setTab(t.id))}>
             <Ui name={t.icon} size={24} /> {t.label}
+            {flags[t.id as keyof typeof flags] && <span className="tab-dot" aria-label="needs your attention" />}
           </button>
         ))}
       </div>

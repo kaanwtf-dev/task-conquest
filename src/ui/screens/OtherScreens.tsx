@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useStore, heroStats, LIST_TYPE_INFO } from '../../state/store';
+import { useStore, heroStats, isForeignList, LIST_TYPE_INFO } from '../../state/store';
 import { SKILLS } from '../../game/catalog';
 import { iconFor } from '../../pixel/iconGen';
 import { THEMES, type ThemeId } from '../../pixel/themes';
@@ -117,7 +117,12 @@ export function SettingsScreen() {
         <button
           className="btn ghost"
           onClick={() => {
-            if (confirm('Delete your hero and all lists on this device?')) s.resetAll();
+            if (
+              confirm(
+                'Delete your hero, loot and all your lists? When signed in to the cloud this also deletes them on your other devices, and lists you shared are deleted for their party. Party lists you joined are left, not deleted.',
+              )
+            )
+              s.resetAll();
           }}
         >
           Start over
@@ -239,20 +244,35 @@ export function ListSheet({ onClose, editId }: { onClose: () => void; editId?: s
           </Opt>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 14 }}>
             <div>
-              {existing && (
-                <button
-                  type="button"
-                  className="btn ghost"
-                  onClick={() => {
-                    if (confirm(`Delete "${existing.name}" and all its tasks?`)) {
-                      s.deleteList(existing.id);
-                      onClose();
-                    }
-                  }}
-                >
-                  Delete
-                </button>
-              )}
+              {existing &&
+                (isForeignList(existing, s.accountId) ? (
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => {
+                      if (confirm(`Leave "${existing.name}"? It is removed from this device; the rest of the party keeps it.`)) {
+                        s.leaveList(existing.id);
+                        onClose();
+                      }
+                    }}
+                  >
+                    Leave
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => {
+                      const party = existing.shared ? ' It is deleted for everyone in its party too.' : '';
+                      if (confirm(`Delete "${existing.name}" and all its tasks?${party}`)) {
+                        s.deleteList(existing.id);
+                        onClose();
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                ))}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" className="btn ghost" onClick={onClose}>

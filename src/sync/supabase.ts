@@ -113,12 +113,21 @@ export async function signIn(email: string, password: string): Promise<AuthUser>
   return toUser(data.user);
 }
 
-/** Signs out this device only (works offline). */
+/**
+ * Signs out this device only. Works offline too: auth-js asks the server first and keeps the session when it
+ * can't reach it, so then the stored session is dropped here (its token simply expires on the server).
+ */
 export async function signOut(): Promise<void> {
   const c = getClient();
   if (!c) return;
   const { error } = await c.auth.signOut({ scope: 'local' });
-  if (error) throw new Error(authMessage(error.message));
+  if (!error) return;
+  if (!isAuthRetryableFetchError(error)) throw new Error(authMessage(error.message));
+  try {
+    storage()?.removeItem(AUTH_STORAGE_KEY);
+  } catch {
+    // storage unavailable: nothing persisted to remove
+  }
 }
 
 /**

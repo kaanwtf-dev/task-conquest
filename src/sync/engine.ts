@@ -216,6 +216,8 @@ export class SyncEngine {
   private lastWake = 0;
   /** Lists purged here: rows for them still in flight (a pull begun before leaving) are dropped until rejoined. */
   private readonly left = new Set<string>();
+  /** Lists left here whose leave hasn't reached the server yet: never pulled back in the meantime. */
+  private readonly leaving = new Set<string>();
 
   constructor(local: LocalAdapter, remote: RemoteAdapter, kv: KeyValue, userId: string, opts: SyncEngineOptions = {}) {
     this.local = local;
@@ -287,14 +289,19 @@ export class SyncEngine {
     const rows = await this.remote.pullList(listId);
     if (this.stopped) return;
     this.left.delete(listId);
+    this.leaving.delete(listId);
     this.apply(rows);
     if (this.st.lists && !this.st.lists.includes(listId)) this.st.lists = [...this.st.lists, listId].sort();
     this.save();
   }
 
-  /** Drop a list and its tasks from this device without tombstoning them (after leaving it). */
-  purgeList(listId: string): void {
+  /**
+   * Drop a list and its tasks from this device without tombstoning them (after leaving it). `pending`:
+   * the server doesn't know yet (offline), so membership still lists it until leaveConfirmed().
+   */
+  purgeList(listId: string, pending = false): void {
     this.left.add(listId);
+    if (pending) this.leaving.add(listId);
     const snap = this.local.read();
     const lists = { ...snap.lists };
     const tasks = { ...snap.tasks };
@@ -308,6 +315,11 @@ export class SyncEngine {
     this.local.write({ lists, tasks });
     if (this.st.lists) this.st.lists = this.st.lists.filter((id) => id !== listId);
     this.save();
+  }
+
+  /** The server has processed a pending leave. */
+  leaveConfirmed(listId: string): void {
+    this.leaving.delete(listId);
   }
 
   async inspectRemoteHero(): Promise<Hero | null> {
@@ -505,7 +517,7 @@ export class SyncEngine {
    * no longer belongs to (left elsewhere) are dropped locally.
    */
   private async reconcileLists(): Promise<void> {
-    const ids = [...new Set(await this.remote.memberships())].sort();
+    const ids = [...new Set(await this.remote.memberships())].filter((id) => !this.leaving.has(id)).sort();
     if (this.stopped) return;
     const prev = this.st.lists;
     if (prev && this.st.cursor !== null) {

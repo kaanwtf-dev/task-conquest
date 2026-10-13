@@ -3,14 +3,14 @@ import type { Counter, Hero, Item, PotionStack, Task, TaskList } from '../core/t
 import { sum } from '../game/progression';
 import { AuthRetryableFetchError, type SupabaseClient } from '@supabase/supabase-js';
 import { fromRow, HERO_ID, remoteId, SyncEngine, toRow, tsMs } from './engine';
-import { getClient, getSyncConfig, getUser, onAuthChange, RemoteError, setSyncConfig, signIn, SupabaseRemote } from './supabase';
+import { getClient, getSyncConfig, getUser, onAuthChange, RemoteError, setSyncConfig, signIn, signOut, SupabaseRemote } from './supabase';
 import { canon } from './merge';
 import { inviteUrl, normalizeCode, toMember } from './party';
 import { SyncOfflineError } from './types';
 import type { EngineStatus, LocalSnapshot, PushResult, RemoteAdapter, RemoteRow } from './types';
 
 // getClient() builds its client through createClient: hand it a stub auth (no network in tests)
-const auth = vi.hoisted(() => ({ getSession: vi.fn(), onAuthStateChange: vi.fn(), stopAutoRefresh: vi.fn() }));
+const auth = vi.hoisted(() => ({ getSession: vi.fn(), onAuthStateChange: vi.fn(), stopAutoRefresh: vi.fn(), signOut: vi.fn() }));
 vi.mock('@supabase/supabase-js', async (importOriginal) => {
   const real = await importOriginal<typeof import('@supabase/supabase-js')>();
   const createClient = vi.fn((url: string, key: string) => {
@@ -650,6 +650,23 @@ describe('party lists', () => {
     expect(bo.snap.lists.S).toBeUndefined();
   });
 
+  it('a list left while offline stays gone until the server hears about it', async () => {
+    const { server, mac, bo } = await party();
+    bo.engine.purgeList('S', true); // the leave hasn't reached the server: membership still lists S
+    await bo.engine.syncNow();
+    expect(bo.snap.lists.S).toBeUndefined();
+    mac.addTask('s3', 'S', 'Bread'); // the party keeps editing
+    await mac.engine.syncNow();
+    await bo.engine.syncNow();
+    expect(bo.snap.lists.S).toBeUndefined();
+    expect(bo.snap.tasks.s3).toBeUndefined();
+    server.leaveList(B, 'S');
+    bo.engine.leaveConfirmed('S');
+    await bo.engine.syncNow();
+    expect(bo.snap.lists.S).toBeUndefined();
+    expect(server.rows.get('S')!.deleted).toBe(false); // left, never deleted for the party
+  });
+
   it('refused rows are reported and not retried every cycle', async () => {
     const { bo } = await party();
     bo.addList('L-home', 'Hijack'); // id already taken by Ayla's private list
@@ -1232,6 +1249,20 @@ describe('auth from the stored session', () => {
     expect(await getUser()).toBeNull();
     auth.getSession.mockResolvedValue({ data: { session: { user: { id: B, email: null } } }, error: null });
     expect(await getUser()).toEqual({ id: B, email: null });
+  });
+
+  it('signing out offline still forgets the session on this device', async () => {
+    const store = memoryStorage();
+    setSyncConfig({ url: 'https://example.supabase.co', anonKey: 'anon-key-for-tests' });
+    store.set('questlog-auth', JSON.stringify(saved));
+    auth.signOut.mockResolvedValue({ error: new AuthRetryableFetchError('Failed to fetch', 0) });
+    await signOut();
+    expect(store.has('questlog-auth')).toBe(false);
+    // a real server refusal is reported, not papered over
+    store.set('questlog-auth', JSON.stringify(saved));
+    auth.signOut.mockResolvedValue({ error: new Error('boom') });
+    await expect(signOut()).rejects.toThrow();
+    expect(store.has('questlog-auth')).toBe(true);
   });
 
   it('a malformed project URL reads as "not set up" with a clear message instead of throwing', async () => {

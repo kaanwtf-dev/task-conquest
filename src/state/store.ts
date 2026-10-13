@@ -82,8 +82,16 @@ function chestPeriod(list: TaskList, now: number, cfg: TimeCfg): string {
   return r.kind === 'none' ? `d${todayKey(now, cfg)}` : periodKey(r, now, cfg);
 }
 
+/** A list someone else owns that we joined: we can leave it, never delete it for the whole party. */
+export const isForeignList = (list: TaskList, accountId: string | null): boolean => !!list.ownerId && list.ownerId !== accountId;
+
+/** Set by the sync layer: tells the server we left a party list (now, or once back online). */
+export const listHooks: { leave?: (listId: string) => void } = {};
+
 export interface State {
   deviceId: string;
+  /** Account this device's data belongs to (set when it syncs); null if it never has. */
+  accountId: string | null;
   hero: Hero | null;
   lists: Record<string, TaskList>;
   tasks: Record<string, Task>;
@@ -101,6 +109,8 @@ export interface State {
   addList(p: { name: string; type: ListType; theme: ThemeId; skill: SkillId; icon?: string; color?: string }): string;
   updateList(id: string, patch: Partial<TaskList>): void;
   deleteList(id: string): void;
+  /** Leave a joined party list: removed from this device only, the party keeps it. */
+  leaveList(id: string): void;
   addTask(listId: string, title: string, extra?: Partial<Task>): string | null;
   updateTask(id: string, patch: Partial<Task>): void;
   deleteTask(id: string): void;
@@ -212,6 +222,7 @@ export const useStore = create<State>()(
 
       return {
         deviceId: uid(),
+        accountId: null,
         hero: null,
         lists: {},
         tasks: {},
@@ -264,6 +275,9 @@ export const useStore = create<State>()(
         },
 
         deleteList(id) {
+          const list = get().lists[id];
+          if (!list) return;
+          if (isForeignList(list, get().accountId)) return get().leaveList(id);
           const t = now();
           set((s) => {
             const lists = { ...s.lists, [id]: { ...s.lists[id], deleted: true, updatedAt: t } };
@@ -568,6 +582,18 @@ export const useStore = create<State>()(
           if (hero) set({ hero: { ...hero, title, updatedAt: now() } });
         },
 
+        leaveList(id) {
+          set((s) => {
+            const lists = { ...s.lists };
+            delete lists[id];
+            // dropped without tombstones: those would delete the list for everyone in the party
+            const tasks = Object.fromEntries(Object.entries(s.tasks).filter(([, tk]) => tk.listId !== id));
+            const next = Object.values(lists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
+            return { lists, tasks, activeListId: s.activeListId === id ? next?.id ?? null : s.activeListId };
+          });
+          listHooks.leave?.(id);
+        },
+
         updateHero(patch) {
           const hero = get().hero;
           if (hero) set({ hero: { ...hero, ...patch, updatedAt: now() } });
@@ -583,20 +609,30 @@ export const useStore = create<State>()(
             const d = JSON.parse(json);
             if (d?.app !== 'questlog' || typeof d.lists !== 'object' || typeof d.tasks !== 'object') return false;
             const hero = d.hero ? { ...heroDefaults(), ...d.hero } : null;
-            const first = Object.values(d.lists as Record<string, TaskList>).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
+            const cur = get();
+            // party lists we joined aren't ours to restore or remove: keep the live ones, ignore backup copies
+            const foreign = new Set(Object.values(cur.lists).filter((l) => isForeignList(l, cur.accountId)).map((l) => l.id));
+            for (const l of Object.values((d.lists ?? {}) as Record<string, TaskList>)) if (l && isForeignList(l, cur.accountId)) foreign.add(l.id);
+            const ownLists = Object.fromEntries(Object.entries(d.lists as Record<string, TaskList>).filter(([k]) => !foreign.has(k)));
+            const ownTasks = Object.fromEntries(Object.entries(d.tasks as Record<string, Task>).filter(([, tk]) => !foreign.has(tk?.listId)));
+            const first = Object.values(ownLists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
             // local docs that aren't in the backup become tombstones so the removal syncs too
             const t = now();
-            const keep = <T extends { deleted?: boolean; updatedAt: number }>(cur: Record<string, T>, incoming: Record<string, T> = {}) => {
+            const keep = <T extends { deleted?: boolean; updatedAt: number }>(
+              cur: Record<string, T>,
+              incoming: Record<string, T> = {},
+              untouched: (v: T) => boolean = () => false,
+            ) => {
               // restamp imported docs so they beat newer cloud copies when sync merges (last write wins)
               const out: Record<string, T> = Object.fromEntries(Object.entries(incoming).map(([k, v]) => [k, { ...v, updatedAt: t }]));
-              for (const [k, v] of Object.entries(cur)) if (!(k in out)) out[k] = v.deleted ? v : { ...v, deleted: true, updatedAt: t };
+              for (const [k, v] of Object.entries(cur))
+                if (!(k in out)) out[k] = v.deleted || untouched(v) ? v : { ...v, deleted: true, updatedAt: t };
               return out;
             };
-            const cur = get();
             set({
               hero: hero && { ...hero, updatedAt: t },
-              lists: keep(cur.lists, d.lists),
-              tasks: keep(cur.tasks, d.tasks),
+              lists: keep(cur.lists, ownLists, (l) => foreign.has(l.id)),
+              tasks: keep(cur.tasks, ownTasks, (tk) => foreign.has(tk.listId)),
               items: keep(cur.items, d.items),
               potions: keep(cur.potions, d.potions),
               settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) }, log: d.log ?? [], activeListId: first?.id ?? null,
@@ -608,6 +644,9 @@ export const useStore = create<State>()(
         },
 
         resetAll() {
+          // party lists we joined are left, not deleted: they belong to their owner
+          const s0 = get();
+          for (const l of Object.values(s0.lists)) if (!l.deleted && isForeignList(l, s0.accountId)) get().leaveList(l.id);
           // tombstone instead of wiping so a signed-in device deletes the old data in the cloud too
           const t = now();
           const kill = <T extends { deleted?: boolean; updatedAt: number }>(r: Record<string, T>) =>
@@ -623,7 +662,7 @@ export const useStore = create<State>()(
       name: 'questlog-v1',
       version: 3,
       partialize: (s) => ({
-        deviceId: s.deviceId, hero: s.hero, lists: s.lists, tasks: s.tasks, items: s.items, potions: s.potions,
+        deviceId: s.deviceId, accountId: s.accountId, hero: s.hero, lists: s.lists, tasks: s.tasks, items: s.items, potions: s.potions,
         settings: s.settings, log: s.log, tab: s.tab, activeListId: s.activeListId, shopDay: s.shopDay,
       }),
       migrate: (persisted, version) => {

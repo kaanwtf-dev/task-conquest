@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useStore, visibleLists } from '../../state/store';
-import { useSync, joinByCode, resolveConflict, resolveAccountSwitch, restartSync, syncNow, afterLeave } from '../../state/sync';
-import { getSyncConfig, setSyncConfig, signIn, signOut, signUp } from '../../sync/supabase';
-import { createInvite, leaveList, listParty } from '../../sync/party';
+import { isForeignList, useStore, visibleLists } from '../../state/store';
+import { useSync, joinByCode, resolveConflict, resolveAccountSwitch, restartSync, signOutHere, syncNow } from '../../state/sync';
+import { getSyncConfig, setSyncConfig, signIn, signUp } from '../../sync/supabase';
+import { createInvite, listParty } from '../../sync/party';
 import { iconFor } from '../../pixel/iconGen';
 import { heroPix, type Appearance } from '../../pixel/sprites/hero';
 import { spriteUrl } from '../../pixel/pix';
@@ -146,8 +146,10 @@ function SignedIn() {
     offline: 'Offline — will sync when back online',
     error: 'Sync error — retrying',
     'signed-out': 'Signed out',
+    conflict: 'Paused — waiting for your choice',
     off: 'Off',
   };
+  const [signingOut, setSigningOut] = useState(false);
   return (
     <>
       <div className="section-label">Account</div>
@@ -167,11 +169,32 @@ function SignedIn() {
           <button className="btn small" onClick={() => syncNow()}>
             Sync now
           </button>
-          <button className="btn ghost small" onClick={() => signOut()}>
+          <button
+            className="btn ghost small"
+            disabled={signingOut}
+            onClick={async () => {
+              setSigningOut(true);
+              try {
+                await signOutHere();
+              } catch (e) {
+                alert(e instanceof Error ? e.message : 'Could not sign out. Try again.');
+              } finally {
+                setSigningOut(false);
+              }
+            }}
+          >
             Sign out
           </button>
         </div>
       </div>
+      {sync.joinError && (
+        <div className="win" style={{ padding: 12 }} role="alert">
+          <div>The invite link didn't work: {sync.joinError}</div>
+          <button className="btn ghost small" style={{ marginTop: 8 }} onClick={() => useSync.setState({ joinError: null })}>
+            OK
+          </button>
+        </div>
+      )}
 
       <div className="section-label">Join a party list</div>
       <form
@@ -261,7 +284,7 @@ function ListParty({ list }: { list: TaskList }) {
     alert('Invite copied!');
   };
 
-  const mine = !list.ownerId || list.ownerId === myId;
+  const mine = !isForeignList(list, s.accountId ?? myId);
   return (
     <div className="win party-list" style={themeStyle(list.theme)}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -308,10 +331,9 @@ function ListParty({ list }: { list: TaskList }) {
         <button
           className="btn ghost small"
           style={{ marginTop: 8 }}
-          onClick={async () => {
-            if (!confirm(`Leave "${list.name}"? It will be removed from this device.`)) return;
-            await leaveList(list.id);
-            afterLeave(list.id);
+          onClick={() => {
+            // removed here at once; the server is told now, or when this device is back online
+            if (confirm(`Leave "${list.name}"? It is removed from this device; the rest of the party keeps it.`)) s.leaveList(list.id);
           }}
         >
           Leave party list
@@ -324,6 +346,26 @@ function ListParty({ list }: { list: TaskList }) {
 function ConflictSheet() {
   const c = useSync((s) => s.conflict)!;
   const hero = useStore((s) => s.hero);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  // one choice at a time; a failed one (offline) leaves the sheet up with the reason
+  const choose = (fn: () => Promise<void>) => async () => {
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await fn();
+    } catch (e) {
+      setErr(e instanceof Error && e.message ? e.message : 'Could not reach the cloud. Check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const errLine = err && (
+    <p role="alert" style={{ fontSize: 15, color: '#ff8a80' }}>
+      {err}
+    </p>
+  );
   if (c.kind === 'account')
     return (
       <div className="sheet-back">
@@ -333,13 +375,14 @@ function ConflictSheet() {
             This device was last synced with another account. Its hero and lists ({hero?.name ?? 'no hero'}) belong to that account.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <button className="btn" onClick={() => resolveAccountSwitch('fresh')}>
+            <button className="btn" disabled={busy} onClick={choose(() => resolveAccountSwitch('fresh'))}>
               Start fresh with this account
             </button>
-            <button className="btn ghost" onClick={() => resolveAccountSwitch('bring')}>
+            <button className="btn ghost" disabled={busy} onClick={choose(() => resolveAccountSwitch('bring'))}>
               Bring this device's data into this account
             </button>
           </div>
+          {errLine}
         </div>
       </div>
     );
@@ -351,16 +394,17 @@ function ConflictSheet() {
           The cloud already has <b>{c.cloudName}</b> (Lv{c.cloudLevel}). This device has <b>{hero?.name}</b>. What should happen?
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <button className="btn" onClick={() => resolveConflict('cloud')}>
+          <button className="btn" disabled={busy} onClick={choose(() => resolveConflict('cloud'))}>
             Use the cloud save on this device
           </button>
-          <button className="btn ghost" onClick={() => resolveConflict('merge')}>
+          <button className="btn ghost" disabled={busy} onClick={choose(() => resolveConflict('merge'))}>
             Merge both (keep all lists, combine progress)
           </button>
-          <button className="btn ghost" onClick={() => resolveConflict('local')}>
+          <button className="btn ghost" disabled={busy} onClick={choose(() => resolveConflict('local'))}>
             Overwrite the cloud with this device
           </button>
         </div>
+        {errLine}
       </div>
     </div>
   );

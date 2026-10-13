@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useStore, bagItems, potionStacks, listTasks, visibleLists } from './store';
+import { useStore, bagItems, potionStacks, listTasks, listHooks, visibleLists } from './store';
 import { fx, type FxEvent } from './fx';
 import { sum, heroGold } from '../game/progression';
 import { bossFor } from '../game/bosses';
@@ -253,5 +253,60 @@ describe('store: anti-farming + data safety (review regressions)', () => {
     const id = st().addList({ name: 'After backup', type: 'quests', theme: 'forest', skill: 'lore' });
     expect(st().importData(json)).toBe(true);
     expect(st().lists[id]?.deleted).toBe(true);
+  });
+});
+
+describe('store: party lists are left, never deleted for the party', () => {
+  let left: string[] = [];
+  beforeEach(() => {
+    fresh();
+    left = [];
+    listHooks.leave = (id) => void left.push(id);
+    const t = Date.now();
+    useStore.setState((s) => ({
+      accountId: 'u-me',
+      lists: {
+        ...s.lists,
+        J: { id: 'J', name: 'Bo’s groceries', type: 'supply', theme: 'tavern', skill: 'mercantile', icon: '', color: '', order: 9, createdAt: t, updatedAt: t, shared: true, ownerId: 'u-bo' },
+        M: { id: 'M', name: 'Our chores', type: 'quests', theme: 'tavern', skill: 'hearthcraft', icon: '', color: '', order: 10, createdAt: t, updatedAt: t, shared: true, ownerId: 'u-me' },
+      },
+    }));
+    st().addTask('J', 'Oat milk');
+    st().addTask('M', 'Vacuum');
+  });
+  afterEach(() => {
+    listHooks.leave = undefined;
+  });
+
+  it('Delete on a joined list leaves it: dropped here without tombstones', () => {
+    st().deleteList('J');
+    expect(st().lists.J).toBeUndefined();
+    expect(Object.values(st().tasks).some((t) => t.listId === 'J')).toBe(false);
+    expect(left).toEqual(['J']);
+  });
+
+  it('Delete on my own shared list really deletes it (tombstones sync to the party)', () => {
+    st().deleteList('M');
+    expect(st().lists.M.deleted).toBe(true);
+    expect(left).toEqual([]);
+  });
+
+  it('Start over leaves joined lists and tombstones my own', () => {
+    st().resetAll();
+    expect(st().lists.J).toBeUndefined();
+    expect(left).toEqual(['J']);
+    expect(st().lists.M.deleted).toBe(true);
+    expect(Object.values(st().tasks).every((t) => t.deleted)).toBe(true);
+  });
+
+  it('Import keeps joined lists as they are and ignores backup copies of them', () => {
+    const backup = JSON.parse(st().exportData());
+    backup.lists.J = { ...backup.lists.J, name: 'stale copy' };
+    const live = Object.values(st().tasks).find((t) => t.listId === 'J')!;
+    expect(st().importData(JSON.stringify(backup))).toBe(true);
+    expect(st().lists.J.name).toBe('Bo’s groceries');
+    expect(st().lists.J.deleted).toBeFalsy();
+    expect(st().tasks[live.id]).toEqual(live); // not restamped: a backup must not win over the party's edits
+    expect(left).toEqual([]);
   });
 });
