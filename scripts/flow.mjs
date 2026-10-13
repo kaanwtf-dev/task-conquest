@@ -57,7 +57,7 @@ await run('phone', { width: 390, height: 844 }, 2, async (page, shot) => {
   await create(page, 'Human', 'Knight');
   await page.waitForTimeout(500);
   await shot('02-daily');
-  await page.getByRole('button', { name: 'Complete', exact: true }).nth(1).click();
+  await page.getByRole('button', { name: /^Complete / }).nth(1).click();
   await page.waitForTimeout(380);
   await shot('03-battle');
   await page.waitForTimeout(1600);
@@ -114,7 +114,7 @@ await run('desktop', { width: 1440, height: 900 }, 1, async (page, shot) => {
   await page.waitForTimeout(3000);
   await page.getByRole('button', { name: /Weekly Quests/ }).click();
   await page.waitForTimeout(300);
-  await page.getByRole('button', { name: 'Complete', exact: true }).first().click();
+  await page.getByRole('button', { name: /^Complete / }).first().click();
   await page.waitForTimeout(420);
   await shot('1-weekly-battle');
   await page.waitForTimeout(1600);
