@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   DndContext,
   KeyboardSensor,
@@ -25,8 +26,11 @@ import { todaySections } from '../../state/today';
 import BossBar from '../components/BossBar';
 import { ListSheet } from './OtherScreens';
 
+/** Only what the list screens read: the hero's progress changing on every kill must not re-render them. */
+const listState = (st: ReturnType<typeof useStore.getState>) => ({ activeListId: st.activeListId, lists: st.lists, tasks: st.tasks, settings: st.settings });
+
 export default function QuestsScreen() {
-  const s = useStore();
+  const s = useStore(useShallow(listState));
   const wide = useMedia('(min-width: 900px)');
   const now = useNow(20000);
   const [editTask, setEditTask] = useState<string | null>(null);
@@ -89,7 +93,7 @@ export default function QuestsScreen() {
 // ---------------------------------------------------------------- Today
 
 function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wide: boolean; onEdit: (id: string) => void; editTask: string | null; closeEdit: () => void }) {
-  const s = useStore();
+  const s = useStore(useShallow(listState));
   const cfg = s.settings;
   const lists = visibleLists(s).filter((l) => l.type !== 'supply');
   const { overdue, dueToday, routine, week, doneToday } = todaySections(s.lists, s.tasks, now, cfg);
@@ -221,14 +225,11 @@ interface RowProps {
   sortable?: ReturnType<typeof useSortable>;
 }
 
-function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps) {
-  const toggle = useStore((s) => s.toggleTask);
-  const haptics = useStore((s) => s.settings.haptics);
-  const sfxOn = useStore((s) => s.settings.sfx > 0);
-  const listName = useStore((s) => (showList ? s.lists[task.listId]?.name : undefined));
-  const shared = useStore((s) => !!s.lists[task.listId]?.shared);
-  const d = DIFFICULTY[task.difficulty];
-  const rl = repeatLabel(task.repeat);
+/**
+ * A task row: this wrapper takes the drag-and-drop props (which change for every row whenever the list
+ * changes), and the memoized body holds everything costly, so it only re-renders for its own task.
+ */
+const TaskRow = memo(function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps) {
   const style = sortable
     ? { transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition, opacity: inactive ? 0.45 : 1 }
     : inactive
@@ -249,6 +250,21 @@ function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps)
         } else (sortable?.listeners as { onKeyDown?: (ev: React.KeyboardEvent) => void } | undefined)?.onKeyDown?.(e);
       }}
     >
+      <TaskRowBody task={task} done={done} inactive={inactive} showList={showList} />
+    </div>
+  );
+});
+
+const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }: Pick<RowProps, 'task' | 'done' | 'inactive' | 'showList'>) {
+  const toggle = useStore((s) => s.toggleTask);
+  const haptics = useStore((s) => s.settings.haptics);
+  const sfxOn = useStore((s) => s.settings.sfx > 0);
+  const listName = useStore((s) => (showList ? s.lists[task.listId]?.name : undefined));
+  const shared = useStore((s) => !!s.lists[task.listId]?.shared);
+  const d = DIFFICULTY[task.difficulty];
+  const rl = repeatLabel(task.repeat);
+  return (
+    <>
       <button
         className={`check ${done ? 'on' : ''}`}
         aria-label={done ? 'Mark not done' : 'Complete'}
@@ -292,14 +308,14 @@ function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps)
         )}
       </div>
       {task.difficulty > 0 && <Stars n={d.stars} />}
-    </div>
+    </>
   );
-}
+});
 
-function SortableRow(props: Omit<RowProps, 'sortable'>) {
+const SortableRow = memo(function SortableRow(props: Omit<RowProps, 'sortable'>) {
   const sortable = useSortable({ id: props.task.id });
   return <TaskRow {...props} sortable={sortable} />;
-}
+});
 
 /** Long-press (touch) or drag (mouse) to reorder; a tap still opens the editor. */
 function SortableTasks({ tasks, onEdit }: { tasks: Task[]; onEdit: (id: string) => void }) {
@@ -316,7 +332,9 @@ function SortableTasks({ tasks, onEdit }: { tasks: Task[]; onEdit: (id: string) 
       keyboardCodes: { start: ['Space'], cancel: ['Escape'], end: ['Space', 'Enter'] },
     }),
   );
-  const ids = tasks.map((t) => t.id);
+  // the same ids array while the order is unchanged: a new one re-renders every sortable row
+  const idsKey = tasks.map((t) => t.id).join('\n');
+  const ids = useMemo(() => (idsKey ? idsKey.split('\n') : []), [idsKey]);
   const onDragEnd = (e: DragEndEvent) => {
     justDragged.current = Date.now();
     if (!e.over || e.active.id === e.over.id) return;
@@ -329,9 +347,12 @@ function SortableTasks({ tasks, onEdit }: { tasks: Task[]; onEdit: (id: string) 
     reorder(full);
     sfx.tick();
   };
-  const guardedEdit = (id: string) => {
-    if (Date.now() - justDragged.current > 250) onEdit(id);
-  };
+  const guardedEdit = useCallback(
+    (id: string) => {
+      if (Date.now() - justDragged.current > 250) onEdit(id);
+    },
+    [onEdit],
+  );
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={() => haptic()} onDragEnd={onDragEnd}>
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
@@ -379,7 +400,7 @@ function TaskView({ tasks, now, onEdit }: { tasks: Task[]; now: number; onEdit: 
 }
 
 function SupplyView({ list, tasks, onEdit }: { list: TaskList; tasks: Task[]; onEdit: (id: string) => void }) {
-  const s = useStore();
+  const restockStaples = useStore((st) => st.restockStaples);
   const need = tasks.filter((t) => !t.doneFor);
   const pantry = tasks.filter((t) => t.doneFor).sort((a, b) => Number(!!b.staple) - Number(!!a.staple) || b.timesDone - a.timesDone);
   const groups = new Map<string, Task[]>();
@@ -410,7 +431,7 @@ function SupplyView({ list, tasks, onEdit }: { list: TaskList; tasks: Task[]; on
           <button
             className="btn"
             onClick={() => {
-              const n = s.restockStaples(list.id);
+              const n = restockStaples(list.id);
               if (n) sfx.loot();
             }}
           >
@@ -432,7 +453,7 @@ function SupplyView({ list, tasks, onEdit }: { list: TaskList; tasks: Task[]; on
   );
 }
 
-function PantryChip({ task, onEdit }: { task: Task; onEdit: (id: string) => void }) {
+const PantryChip = memo(function PantryChip({ task, onEdit }: { task: Task; onEdit: (id: string) => void }) {
   const updateTask = useStore((s) => s.updateTask);
   const timer = useRef<number | undefined>(undefined);
   const held = useRef(false);
@@ -465,4 +486,4 @@ function PantryChip({ task, onEdit }: { task: Task; onEdit: (id: string) => void
       <span className="plus">+</span>
     </button>
   );
-}
+});

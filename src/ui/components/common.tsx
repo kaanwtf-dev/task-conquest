@@ -60,6 +60,40 @@ export function portraitUrl(app: Appearance, look: GearLook): string {
   });
 }
 
+export const prefersReducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Redraw a canvas every `ms` while it is on screen and the page is visible. The first frame is drawn at
+ * once; a still scene (or a player who prefers reduced motion) is drawn once and never ticks.
+ * Returns the cleanup for the calling effect.
+ */
+function canvasTicker(el: Element | null, ms: number, animate: boolean, draw: (now: number) => void): () => void {
+  draw(performance.now());
+  if (!animate || prefersReducedMotion()) return () => undefined;
+  let timer: number | undefined;
+  let onScreen = true;
+  let stopped = false;
+  const run = () => {
+    timer = undefined;
+    if (stopped || !onScreen || document.hidden) return; // resume() picks it up again
+    draw(performance.now());
+    timer = window.setTimeout(run, ms);
+  };
+  const resume = () => {
+    if (!stopped && timer === undefined && onScreen && !document.hidden) timer = window.setTimeout(run, 0);
+  };
+  timer = window.setTimeout(run, ms);
+  const io = el && typeof IntersectionObserver === 'function' ? new IntersectionObserver(([e]) => ((onScreen = e.isIntersecting), resume())) : null;
+  if (el) io?.observe(el);
+  document.addEventListener('visibilitychange', resume);
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+    io?.disconnect();
+    document.removeEventListener('visibilitychange', resume);
+  };
+}
+
 /** Animated idle hero over a theme backdrop (used in character creation / hero screen). */
 export function HeroPreview({ app, look, theme, w: fixedW, h, scale, fit }: { app: Appearance; look: GearLook; theme: ThemeId; w: number; h: number; scale: number; fit?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -82,20 +116,14 @@ export function HeroPreview({ app, look, theme, w: fixedW, h, scale, fit }: { ap
     const frames = [0, 1].map((b) => heroPix(app, look, 'idle', b).toCanvas(1));
     const blink = heroPix(app, look, 'idle', 0, true).toCanvas(1);
     const ground = Math.round(h * (theme === 'beach' || theme === 'desert' ? 0.68 : theme === 'forest' || theme === 'snow' ? 0.7 : 0.72));
-    let raf = 0;
-    let last = 0;
     const draw = (t: number) => {
-      raf = requestAnimationFrame(draw);
-      if (t - last < 90) return;
-      last = t;
       ctx.drawImage(sceneCanvas(theme, w, h, 5), 0, 0);
       THEME_BY_ID[theme].animate?.(g, w, h, t);
       const bob = Math.floor(t / 520) % 2;
       const isBlink = t % 3600 < 130;
       ctx.drawImage(isBlink ? blink : frames[bob], Math.round(w / 2 - 20), ground - 33);
     };
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
+    return canvasTicker(c, 90, true, draw);
   }, [app, look, theme, w, h]);
   const canvas = <canvas ref={ref} className="px" style={{ width: w * scale, height: h * scale, display: 'block', maxWidth: fit ? 'none' : undefined }} />;
   return fit ? (
@@ -125,17 +153,11 @@ export function SceneBanner({ theme, height, scale, children }: { theme: ThemeId
     ctx.imageSmoothingEnabled = false;
     const g = new Painter(ctx);
     const t = THEME_BY_ID[theme];
-    let raf = 0;
-    let last = 0;
-    const draw = (now: number) => {
-      if (t.animate) raf = requestAnimationFrame(draw);
-      if (now - last < 120) return;
-      last = now;
+    // the first frame is drawn right away (a throttled first rAF used to leave fast-starting banners blank)
+    return canvasTicker(c, 120, !!t.animate, (now) => {
       ctx.drawImage(sceneCanvas(theme, cw, height, 11), 0, 0);
       t.animate?.(g, cw, height, now);
-    };
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
+    });
   }, [theme, cw, height]);
   return (
     <div className="banner" ref={wrap}>

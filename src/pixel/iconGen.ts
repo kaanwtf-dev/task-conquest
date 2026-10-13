@@ -192,19 +192,30 @@ export function proceduralItem(text: string): Pix {
   return p.outline('#222034');
 }
 
-const iconCache = new Map<string, string>();
+/** emoji -> icon (null: this platform can't draw it, so titles fall back to a procedural icon) */
+const emojiIcons = new Map<string, string | null>();
+/** title / explicit key -> icon; bounded because quick-add previews every prefix while typing */
+const titleIcons = new Map<string, string>();
+const TITLE_CACHE_MAX = 2000;
 
-/** Icon dataURL for a task/item title (or an explicit emoji / icon key). Cached. */
+/** Icon dataURL for a task/item title (or an explicit emoji / icon key). Cached per title and per emoji. */
 export function iconFor(text: string, explicit?: string): string {
   const key = explicit ? `x:${explicit}` : `t:${text.toLowerCase().trim()}`;
-  const hit = iconCache.get(key);
+  const hit = titleIcons.get(key);
   if (hit) return hit;
-  let pix: Pix | null = null;
   const emoji = explicit || matchKeyword(text) || firstEmoji(text);
-  if (emoji) pix = pixelizeEmoji(emoji);
-  if (!pix) pix = proceduralItem(text || '?');
-  const url = pix.toCanvas(1).toDataURL();
-  iconCache.set(key, url);
+  let url: string | null = null;
+  if (emoji) {
+    if (emojiIcons.has(emoji)) url = emojiIcons.get(emoji)!;
+    else {
+      const pix = pixelizeEmoji(emoji); // the costly part: once per emoji, not once per title
+      url = pix ? pix.toCanvas(1).toDataURL() : null;
+      emojiIcons.set(emoji, url);
+    }
+  }
+  url ??= proceduralItem(text || '?').toCanvas(1).toDataURL();
+  if (titleIcons.size >= TITLE_CACHE_MAX) titleIcons.delete(titleIcons.keys().next().value!);
+  titleIcons.set(key, url);
   return url;
 }
 

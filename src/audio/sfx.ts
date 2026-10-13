@@ -20,9 +20,9 @@ function ac(): AudioContext | null {
   return ctx;
 }
 
-/** iOS only allows audio after a user gesture; call from the first tap. */
+/** iOS only allows audio after a user gesture; call from the first tap. Muted players never get a context. */
 export function unlockAudio() {
-  ac();
+  if (volume > 0) ac();
 }
 
 /** The shared AudioContext (music plays through it too); null where WebAudio is unavailable. */
@@ -36,8 +36,9 @@ export function setSfxVolume(v: number) {
 }
 
 function tone(freq: number, start: number, dur: number, wave: Wave = 'square', vol = 0.18, slideTo?: number) {
+  if (volume <= 0) return; // muted: don't even create (and keep running) an AudioContext
   const c = ac();
-  if (!c || !master || volume <= 0) return;
+  if (!c || !master) return;
   const t0 = c.currentTime + start;
   const o = c.createOscillator();
   const g = c.createGain();
@@ -53,8 +54,9 @@ function tone(freq: number, start: number, dur: number, wave: Wave = 'square', v
 
 let noiseBuf: AudioBuffer | null = null;
 function noise(start: number, dur: number, vol = 0.15, hp = 800) {
+  if (volume <= 0) return; // muted: don't even create (and keep running) an AudioContext
   const c = ac();
-  if (!c || !master || volume <= 0) return;
+  if (!c || !master) return;
   if (!noiseBuf) {
     noiseBuf = c.createBuffer(1, c.sampleRate * 0.5, c.sampleRate);
     const d = noiseBuf.getChannelData(0);

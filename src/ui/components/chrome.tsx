@@ -1,5 +1,6 @@
 // App chrome: HUD, mobile tab bar, list chips, desktop sidebar.
 import { useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useStore, visibleLists, listTasks, TODAY_ID, type Tab } from '../../state/store';
 import { useAttention } from '../../state/attention';
 import { todaySections, todayRemaining } from '../../state/today';
@@ -84,16 +85,17 @@ export function TabBar() {
 }
 
 function useListCounts(l: TaskList) {
-  const s = useStore();
   const now = useNow();
-  const ts = listTasks(s, l.id);
-  if (l.type === 'supply') {
-    const need = ts.filter((t) => !t.doneFor).length;
-    return { label: `${need}`, done: false };
-  }
-  const active = ts.filter((t) => isActiveToday(t, now, s.settings));
-  const done = active.filter((t) => isDone(t, now, s.settings)).length;
-  return { label: `${done}/${active.length}`, done: active.length > 0 && done === active.length };
+  // a string, so the chip re-renders only when its own count changes, not on every store update
+  const key = useStore((s) => {
+    const ts = listTasks(s, l.id);
+    if (l.type === 'supply') return `${ts.filter((t) => !t.doneFor).length}|`;
+    const active = ts.filter((t) => isActiveToday(t, now, s.settings));
+    const done = active.filter((t) => isDone(t, now, s.settings)).length;
+    return `${done}/${active.length}|${active.length > 0 && done === active.length ? 'done' : ''}`;
+  });
+  const [label, done] = key.split('|');
+  return { label, done: done === 'done' };
 }
 
 function ChipItem({ l, active, onPick, className }: { l: TaskList; active: boolean; onPick: () => void; className: string }) {
@@ -127,9 +129,11 @@ function TodayItem({ className, active, onPick }: { className: string; active: b
   );
 }
 
+const navState = (st: ReturnType<typeof useStore.getState>) => ({ lists: st.lists, activeListId: st.activeListId, tab: st.tab, setActiveList: st.setActiveList, setTab: st.setTab });
+
 export function ListChips({ onNew }: { onNew: () => void }) {
-  const s = useStore();
-  const lists = visibleLists(s);
+  const s = useStore(useShallow(navState));
+  const lists = useMemo(() => visibleLists(s), [s.lists]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="chips">
       <TodayItem className="chip" active={s.activeListId === TODAY_ID} onPick={() => (sfx.tick(), s.setActiveList(TODAY_ID))} />
@@ -145,9 +149,9 @@ export function ListChips({ onNew }: { onNew: () => void }) {
 }
 
 export function Sidebar({ onNew }: { onNew: () => void }) {
-  const s = useStore();
+  const s = useStore(useShallow(navState));
   const flags = useAttention();
-  const lists = visibleLists(s);
+  const lists = useMemo(() => visibleLists(s), [s.lists]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <aside className="side">
       <div style={{ padding: '18px 16px 6px' }}>

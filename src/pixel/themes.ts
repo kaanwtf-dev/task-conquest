@@ -325,19 +325,23 @@ export const THEMES: ThemeDef[] = [
 export const THEME_BY_ID: Record<ThemeId, ThemeDef> = Object.fromEntries(THEMES.map((t) => [t.id, t])) as Record<ThemeId, ThemeDef>;
 
 const sceneCache = new Map<string, HTMLCanvasElement>();
+/** Backdrops kept (least recently used dropped first): resizing a window makes a new size per pixel. */
+const SCENE_CACHE_MAX = 24;
 
 /** Static (non-animated) backdrop for a theme at a given low-res size. */
 export function sceneCanvas(id: ThemeId, w: number, h: number, seed = 7): HTMLCanvasElement {
   const key = `${id}:${w}x${h}:${seed}`;
   let c = sceneCache.get(key);
-  if (!c) {
+  if (c) sceneCache.delete(key); // re-inserted below as the most recent
+  else {
     c = document.createElement('canvas');
     c.width = w;
     c.height = h;
     const g = new Painter(c.getContext('2d')!);
     THEME_BY_ID[id].paint(g, w, h, new Rng(seed + id));
-    sceneCache.set(key, c);
+    if (sceneCache.size >= SCENE_CACHE_MAX) sceneCache.delete(sceneCache.keys().next().value!);
   }
+  sceneCache.set(key, c);
   return c;
 }
 
