@@ -5,6 +5,7 @@ import { useMedia, themeStyle } from './ui/components/common';
 import Effects from './ui/components/Effects';
 import UpdateBanner from './ui/components/UpdateBanner';
 import { playMusic, setMusicVolume, stopMusic } from './audio/music';
+import { setSfxVolume } from './audio/sfx';
 import HeroStage from './ui/stage/HeroStage';
 import CreateHero from './ui/screens/CreateHero';
 import QuestsScreen from './ui/screens/QuestsScreen';
@@ -44,6 +45,9 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  const sfxVolume = useStore((s) => s.settings.sfx);
+  useEffect(() => setSfxVolume(sfxVolume), [sfxVolume]);
 
   // background music follows the current list's zone
   const music = useStore((s) => s.settings.music);

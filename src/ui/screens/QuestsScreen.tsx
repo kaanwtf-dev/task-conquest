@@ -143,7 +143,15 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
           )}
         </div>
       </SceneBanner>
-      <QuickAdd list={lists.find((l) => l.type === 'quests') ?? lists.find((l) => l.type === 'custom') ?? lists[0]} dueToday />
+      <QuickAdd
+        list={
+          lists.find((l) => l.type === 'quests' && !l.shared) ??
+          lists.find((l) => l.type === 'custom' && !l.shared) ??
+          lists.find((l) => !l.shared) ??
+          lists[0]
+        }
+        dueToday
+      />
       {overdue.length + dueToday.length + routine.length + week.length === 0 && (
         <div className="win tasks">
           <div className="empty">Nothing due today. Go touch some grass, adventurer.</div>
@@ -221,6 +229,8 @@ function QuickAdd({ list, dueToday }: { list?: TaskList; dueToday?: boolean }) {
   );
 }
 
+let lastToggle = 0;
+
 interface RowProps {
   task: Task;
   done: boolean;
@@ -259,6 +269,9 @@ function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps)
         onKeyDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
+          // rows reflow when a task completes; a quick second tap must not hit the next task
+          if (Date.now() - lastToggle < 380) return;
+          lastToggle = Date.now();
           unlockAudio();
           const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
           markTap(r.left + r.width / 2 + 40, r.top);

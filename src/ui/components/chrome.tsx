@@ -28,7 +28,7 @@ export function Hud() {
         <div className="hud-name">
           <span className="lv">Lv{level}</span>
           <span>{hero.name}</span>
-          <span className="title">{levelTitle(level)}</span>
+          <span className="title">{hero.title ?? levelTitle(level)}</span>
         </div>
         <Bar value={into} max={need} label={`${into}/${need} XP`} />
       </div>

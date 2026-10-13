@@ -3,7 +3,7 @@ import { useStore, heroStats, bagItems, potionStacks, equippedItems } from '../.
 import { heroGold, heroSkill, levelTitle } from '../../game/progression';
 import { SKILLS, CLASS_BY_ID } from '../../game/catalog';
 import { RACE_BY_ID, HAIR_STYLES, HAIR_COLORS, EYE_COLORS, OUTFIT_COLORS, type BeardStyle } from '../../pixel/sprites/hero';
-import { useHeroLook } from '../../game/look';
+import { heroLook, useHeroLook } from '../../game/look';
 import { streak } from '../../core/time';
 import { iconFor } from '../../pixel/iconGen';
 import { SLOTS, type Item, type Slot, type StatId } from '../../core/types';
@@ -322,9 +322,10 @@ function LogTab() {
 function BarberSheet({ onClose }: { onClose: () => void }) {
   const s = useStore();
   const hero = s.hero!;
-  const look = useHeroLook();
   const [app, setApp] = useState(hero.appearance);
   const [name, setName] = useState(hero.name);
+  const [capeDye, setCapeDye] = useState(hero.capeDye);
+  const previewLook = useMemo(() => heroLook({ ...hero, capeDye }, s.items), [hero, capeDye, s.items]);
   const race = RACE_BY_ID[app.race];
   const dyes = (target: string) => hero.owned.filter((o) => o.startsWith(`dye:${target}:`)).map((o) => o.split(':')[2]);
   const capeDyes = dyes('cape');
@@ -333,7 +334,7 @@ function BarberSheet({ onClose }: { onClose: () => void }) {
       <div className="win sheet" onClick={(e) => e.stopPropagation()}>
         <div className="win-title">Barber & Tailor</div>
         <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 0' }}>
-          <HeroPreview app={app} look={look} theme="tavern" w={64} h={48} scale={3} />
+          <HeroPreview app={app} look={previewLook} theme="tavern" w={64} h={48} scale={3} />
         </div>
         <Row label="Name">
           <input className="text-in" value={name} maxLength={16} onChange={(e) => setName(e.target.value)} />
@@ -383,11 +384,11 @@ function BarberSheet({ onClose }: { onClose: () => void }) {
         </Row>
         {capeDyes.length > 0 && (
           <Row label="Cape dye">
-            <button className={`pill ${!hero.capeDye ? 'sel' : ''}`} onClick={() => s.updateHero({ capeDye: undefined })}>
+            <button className={`pill ${!capeDye ? 'sel' : ''}`} onClick={() => setCapeDye(undefined)}>
               None
             </button>
             {capeDyes.map((c) => (
-              <button key={c} className={`swatch ${hero.capeDye === c ? 'sel' : ''}`} style={{ background: c }} onClick={() => s.updateHero({ capeDye: c })} />
+              <button key={c} className={`swatch ${capeDye === c ? 'sel' : ''}`} style={{ background: c }} onClick={() => setCapeDye(c)} />
             ))}
           </Row>
         )}
@@ -401,7 +402,7 @@ function BarberSheet({ onClose }: { onClose: () => void }) {
           <button
             className="btn"
             onClick={() => {
-              s.updateHero({ appearance: app, name: name.trim() || hero.name });
+              s.updateHero({ appearance: app, name: name.trim() || hero.name, capeDye });
               sfx.loot();
               onClose();
             }}

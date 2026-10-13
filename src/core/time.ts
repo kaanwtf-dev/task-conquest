@@ -119,7 +119,7 @@ export function repeatLabel(r: Repeat): string {
     case 'monthly':
       return 'Monthly';
     case 'days':
-      return r.days.map((x) => 'SMTWTFS'[x]).join('');
+      return r.days.length === 7 ? 'Daily' : r.days.map((x) => ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'][x]).join(' ');
     case 'interval':
       return `Every ${r.every}d`;
   }

@@ -588,13 +588,14 @@ export const useStore = create<State>()(
             // local docs that aren't in the backup become tombstones so the removal syncs too
             const t = now();
             const keep = <T extends { deleted?: boolean; updatedAt: number }>(cur: Record<string, T>, incoming: Record<string, T> = {}) => {
-              const out: Record<string, T> = { ...incoming };
+              // restamp imported docs so they beat newer cloud copies when sync merges (last write wins)
+              const out: Record<string, T> = Object.fromEntries(Object.entries(incoming).map(([k, v]) => [k, { ...v, updatedAt: t }]));
               for (const [k, v] of Object.entries(cur)) if (!(k in out)) out[k] = v.deleted ? v : { ...v, deleted: true, updatedAt: t };
               return out;
             };
             const cur = get();
             set({
-              hero,
+              hero: hero && { ...hero, updatedAt: t },
               lists: keep(cur.lists, d.lists),
               tasks: keep(cur.tasks, d.tasks),
               items: keep(cur.items, d.items),

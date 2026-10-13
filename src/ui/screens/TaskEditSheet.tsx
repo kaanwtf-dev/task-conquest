@@ -20,6 +20,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
   const [orig] = useState<Task | undefined>(task);
   const [draft, setDraft] = useState<Task | undefined>(task);
   const [emojiText, setEmojiText] = useState(task?.icon ?? '');
+  const [everyText, setEveryText] = useState<string | null>(null);
   if (!task || !draft || !list || !orig) return null;
 
   const level = s.hero ? heroLevel(s.hero).level : 1;
@@ -166,14 +167,19 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
                   <input
                     className="text-in"
                     type="number"
+                    inputMode="numeric"
                     min={1}
                     max={365}
                     style={{ maxWidth: 80 }}
-                    value={draft.repeat.every}
+                    value={everyText ?? String(draft.repeat.every)}
                     onChange={(e) => {
+                      // keep the raw text while typing (so it can be cleared); clamp into the draft
+                      setEveryText(e.target.value);
+                      const n = Math.max(1, Math.min(365, Math.round(Number(e.target.value)) || 1));
                       const r = draft.repeat as Extract<Repeat, { kind: 'interval' }>;
-                      patch({ repeat: { ...r, every: Math.max(1, Math.min(365, Number(e.target.value) || 1)) } });
+                      patch({ repeat: { ...r, every: n } });
                     }}
+                    onBlur={() => setEveryText(null)}
                   />
                   days
                 </label>

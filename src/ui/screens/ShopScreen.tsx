@@ -11,6 +11,7 @@ import { THEME_BY_ID } from '../../pixel/themes';
 import { PxImg, Ui, themeStyle, useNow } from '../components/common';
 import { ItemIcon, ItemSheet, PotionIcon, rarityColor } from '../components/loot';
 import { sfx } from '../../audio/sfx';
+import { fx } from '../../state/fx';
 
 const GREETINGS = [
   'Welcome, traveler! Gold for goods, goods for gold.',
@@ -38,6 +39,7 @@ export default function ShopScreen() {
     if (s.buyOffer(o)) {
       sfx.coin();
       setTimeout(() => sfx.loot(), 90);
+      fx.emit({ type: 'toast', text: 'PURCHASED', small: o.kind === 'dye' ? `${o.label} — applied! Change it any time at the barber.` : o.label });
       return true;
     }
     sfx.error();
@@ -126,7 +128,7 @@ export default function ShopScreen() {
 
       {dyes.length > 0 && (
         <>
-          <div className="section-label">Dyes · apply at the barber</div>
+          <div className="section-label">Dyes · applied on purchase, swap at the barber</div>
           <div className="win pantry">
             {dyes.map((o) => (
               <button key={o.id} className="pchip" disabled={gold < o.price} onClick={() => buy(o)} title={o.label}>

@@ -47,6 +47,18 @@ body {
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
+  /* long-press is ours (drag / edit), not Safari's image callout */
+  -webkit-touch-callout: none;
+}
+
+html,
+body,
+input,
+textarea,
+button {
+  /* Pixelify Sans maps "fi"/"fl" to a ligature glyph that reads like an "A" */
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'clig' 0;
 }
 
 input,
@@ -748,7 +760,7 @@ canvas.px {
   top: calc(var(--safe-top) + 70px);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 60;
+  z-index: 90;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -757,7 +769,7 @@ canvas.px {
   pointer-events: none;
 }
 .toast {
-  pointer-events: auto;
+  pointer-events: none;
   padding: 10px 14px;
   text-align: center;
   animation: toastIn 0.25s steps(5);
@@ -844,9 +856,11 @@ canvas.px {
 }
 .opt span {
   max-width: 100%;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
   text-align: center;
   line-height: 1.1;
+  font-size: 12px;
+  letter-spacing: -0.02em;
 }
 .class-grid {
   display: grid;
@@ -1407,4 +1421,9 @@ canvas.px {
 }
 .update-banner span {
   flex: 1;
+}
+@media (max-width: 480px) {
+  .class-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }

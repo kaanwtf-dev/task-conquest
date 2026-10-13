@@ -67,7 +67,8 @@ export default function Effects() {
         if (lastTap) {
           const id = uid();
           const at = lastTap;
-          setFloats((f) => [...f, { id, x: at.x, y: at.y - 10, text: `+${e.xp} XP  +${e.gold}g`, color: e.crit ? '#ff7a5a' : '#ffd860' }]);
+          // concurrent floats stack upwards instead of smearing on one spot
+          setFloats((f) => [...f, { id, x: at.x, y: at.y - 10 - Math.min(f.length, 4) * 16, text: `+${e.xp} XP  +${e.gold}g`, color: e.crit ? '#ff7a5a' : '#ffd860' }]);
           setTimeout(() => setFloats((f) => f.filter((x) => x.id !== id)), 950);
         }
         if (settings.anim === 'off' && sound) sfx.coin();
@@ -129,7 +130,7 @@ export default function Effects() {
       ))}
       <div className="toast-wrap">
         {banners.map((b) => (
-          <div key={b.id} className="win toast" onClick={() => setBanners((bs) => bs.filter((x) => x.id !== b.id))}>
+          <div key={b.id} className="win toast">
             <div className="toast-row">
               {b.icon && <img className="px" src={b.icon} width={40} height={40} alt="" />}
               <div>

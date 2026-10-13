@@ -121,11 +121,12 @@ export class Stage {
 
   /** Tap to skip: finish all pending battles instantly. */
   skip() {
-    if (!this.battle && !this.queue.length) return false;
+    if (!this.busy && !this.floaters.length) return false;
     this.battle = null;
     this.queue = [];
     this.particles = [];
     this.pops = [];
+    this.floaters = [];
     return true;
   }
 
@@ -298,11 +299,13 @@ export class Stage {
     this.floaters = this.floaters.filter((f) => {
       const k = (now - f.t0) / f.dur;
       if (k >= 1) return false;
-      const y = Math.round(f.y - k * 12);
+      const y = Math.max(8, Math.round(f.y - k * 12));
+      const half = ctx.measureText(f.text).width / 2;
+      const x = Math.round(Math.min(w - half - 1, Math.max(half + 1, f.x)));
       ctx.fillStyle = '#140c1c';
-      ctx.fillText(f.text, Math.round(f.x) + 1, y + 1);
+      ctx.fillText(f.text, x + 1, y + 1);
       ctx.fillStyle = f.color;
-      ctx.fillText(f.text, Math.round(f.x), y);
+      ctx.fillText(f.text, x, y);
       return true;
     });
 
