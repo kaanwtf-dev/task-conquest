@@ -11,6 +11,7 @@ export default defineConfig({
       // the app shows its own "update ready" prompt; registration happens in src/pwa.ts
       registerType: 'prompt',
       injectRegister: null,
+      includeManifestIcons: false, // already precached by globPatterns; avoids duplicate entries
       manifest: {
         name: 'Questlog',
         short_name: 'Questlog',

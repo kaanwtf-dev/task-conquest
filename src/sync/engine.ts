@@ -361,7 +361,7 @@ export class SyncEngine {
     // push everything this device has, then pull the rest (shared lists stay)
     this.st = fresh();
     // the cloud hero was seen and overruled on purpose: its lineage is replaced, not merged as a first contact
-    if (cloudHero) this.st.synced[docKey('hero', HERO_ID)] = cloudHero.updatedAt;
+    if (cloudHero && snap.hero) this.st.synced[docKey('hero', HERO_ID)] = cloudHero.updatedAt;
     this.save();
     return this.syncNow();
   }

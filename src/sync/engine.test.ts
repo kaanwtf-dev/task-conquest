@@ -3,7 +3,7 @@ import type { Counter, Hero, Item, PotionStack, Task, TaskList } from '../core/t
 import { sum } from '../game/progression';
 import { AuthRetryableFetchError, type SupabaseClient } from '@supabase/supabase-js';
 import { fromRow, HERO_ID, remoteId, SyncEngine, toRow, tsMs } from './engine';
-import { getUser, onAuthChange, RemoteError, setSyncConfig, SupabaseRemote } from './supabase';
+import { getClient, getSyncConfig, getUser, onAuthChange, RemoteError, setSyncConfig, signIn, SupabaseRemote } from './supabase';
 import { canon } from './merge';
 import { inviteUrl, normalizeCode, toMember } from './party';
 import { SyncOfflineError } from './types';
@@ -13,7 +13,11 @@ import type { EngineStatus, LocalSnapshot, PushResult, RemoteAdapter, RemoteRow 
 const auth = vi.hoisted(() => ({ getSession: vi.fn(), onAuthStateChange: vi.fn(), stopAutoRefresh: vi.fn() }));
 vi.mock('@supabase/supabase-js', async (importOriginal) => {
   const real = await importOriginal<typeof import('@supabase/supabase-js')>();
-  return { ...real, createClient: vi.fn(() => ({ auth, removeAllChannels: vi.fn() })) };
+  const createClient = vi.fn((url: string, key: string) => {
+    real.createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }); // real URL validation
+    return { auth, removeAllChannels: vi.fn() };
+  });
+  return { ...real, createClient };
 });
 
 // ---------------------------------------------------------------- in-memory server (mirrors supabase/schema.sql)
@@ -1189,6 +1193,20 @@ describe('auth from the stored session', () => {
     expect(await getUser()).toBeNull();
     auth.getSession.mockResolvedValue({ data: { session: { user: { id: B, email: null } } }, error: null });
     expect(await getUser()).toEqual({ id: B, email: null });
+  });
+
+  it('a malformed project URL reads as "not set up" with a clear message instead of throwing', async () => {
+    memoryStorage();
+    setSyncConfig({ url: 'https://abc .supabase.co', anonKey: 'anon-key-for-tests' });
+    expect(getClient()).toBeNull();
+    expect(onAuthChange(() => undefined)).toBeTypeOf('function');
+    await expect(getUser()).resolves.toBeNull();
+    await expect(signIn('a@test', 'secret1')).rejects.toThrow(/Project URL looks wrong/);
+    setSyncConfig({ url: ' https://abc.supabase.co/rest/v1/ ', anonKey: ' anon-key-for-tests ' });
+    expect(getSyncConfig()).toEqual({ url: 'https://abc.supabase.co', anonKey: 'anon-key-for-tests' });
+    expect(getClient()).not.toBeNull();
+    setSyncConfig(null);
+    expect(getClient()).toBeNull();
   });
 
   it('the initial auth event falls back to the stored session; sign-out events do not', async () => {

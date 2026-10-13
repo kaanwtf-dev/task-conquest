@@ -3,12 +3,15 @@
 
 const UPDATE_CHECK_MS = 60 * 60 * 1000;
 
+let registered = false;
+
 /**
- * Registers the service worker in production builds (no-op in dev and tests).
+ * Registers the service worker in production builds (no-op in dev and tests; later calls are ignored).
  * `onNeedRefresh` receives `update`, which activates the waiting worker and reloads the page.
  */
 export function registerPWA(onNeedRefresh: (update: () => void) => void, onOfflineReady?: () => void): void {
-  if (!import.meta.env.PROD || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  if (registered || !import.meta.env.PROD || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+  registered = true;
   void import('virtual:pwa-register')
     .then(({ registerSW }) => {
       const updateSW = registerSW({

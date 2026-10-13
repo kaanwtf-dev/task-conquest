@@ -196,6 +196,7 @@ function background(G, { frame, transparentCorners }) {
     if (big && G >= 32) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) g[y + dy][x + dx] = C.star;
   }
   if (!frame) return g;
+  if (typeof frame === 'object') return roundedFrame(g, G, frame);
   const edge = (x, y) => Math.min(x, y, G - 1 - x, G - 1 - y);
   const corner = (x, y) => Math.min(x, G - 1 - x) + Math.min(y, G - 1 - y); // 0 at the very corner
   for (let y = 0; y < G; y++)
@@ -205,6 +206,23 @@ function background(G, { frame, transparentCorners }) {
       if (k <= 1) g[y][x] = transparentCorners ? null : C.bg;
       else if (e === 0 || k === 2) g[y][x] = x === 0 || y === 0 || (k === 2 && x + y < G) ? C.frameHi : C.frame;
       else if (e === 1 || k === 3) g[y][x] = C.frameLo;
+    }
+  return g;
+}
+
+/**
+ * Frame inset `inset` cells from the edge with pixel-circle corners of `radius` cells, for platforms
+ * that round the icon themselves (iOS): a square frame would be cut off at the corners by their mask.
+ */
+function roundedFrame(g, G, { inset, radius }) {
+  const lo = inset + radius, hi = G - inset - radius; // corner circle centres
+  for (let y = 0; y < G; y++)
+    for (let x = 0; x < G; x++) {
+      const dx = x + 0.5 - Math.min(Math.max(x + 0.5, lo), hi);
+      const dy = y + 0.5 - Math.min(Math.max(y + 0.5, lo), hi);
+      const depth = radius - Math.hypot(dx, dy); // cells inside the rounded rect's edge
+      if (depth < 1 && depth >= 0) g[y][x] = dx + dy < 0 ? C.frameHi : C.frame; // lit top-left
+      else if (depth < 2 && depth >= 1) g[y][x] = C.frameLo;
     }
   return g;
 }
@@ -333,8 +351,9 @@ const outputs = [
   { file: 'favicon-64.png', size: 64, unit: 2, scale: 2 },
   { file: 'icon-192.png', size: 192, unit: 6, scale: 6 },
   { file: 'icon-512.png', size: 512, unit: 16, scale: 16 },
-  // iOS masks its own rounded corners and shows transparency as black: full bleed, roomier padding
-  { file: 'apple-touch-icon.png', size: 180, unit: 5, scale: 5, transparentCorners: false },
+  // iOS masks its own rounded corners (r ~ 22% = 8 cells) and shows transparency as black: full bleed,
+  // with the frame inset and rounded to sit just inside that mask
+  { file: 'apple-touch-icon.png', size: 180, unit: 5, scale: 5, frame: { inset: 1, radius: 7 }, transparentCorners: false },
   // maskable: no frame (it would be cropped), art inside the 80% safe circle
   { file: 'icon-maskable-512.png', size: 512, unit: 8, scale: maskableScale(512), frame: false, transparentCorners: false },
 ];

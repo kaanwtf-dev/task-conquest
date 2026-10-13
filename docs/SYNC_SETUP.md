@@ -36,12 +36,12 @@ Go to **Authentication → Sign In / Providers → Email** (older dashboards: **
 
 ## 4. Connect the app
 
-You need two values from Supabase. Click **Connect** at the top of the project dashboard, or go to **Project Settings → API**:
+You need two values from Supabase. Click **Connect** at the top of the project dashboard, or open **Project Settings**:
 
-- **Project URL**, which looks like `https://abcdefgh.supabase.co`
-- **anon public key**, a long text that starts with `eyJ…`
+- **Project URL** (Project Settings → **Data API**), which looks like `https://abcdefgh.supabase.co`. Copy only that part, without `/rest/v1`.
+- **anon public key** (Project Settings → **API Keys** → **Legacy API Keys** tab), a long text that starts with `eyJ…`. If your project has no legacy tab, use the **Publishable key** (`sb_publishable_…`) instead.
 
-> The anon key is meant to be public. Your data is protected by the access rules in `schema.sql`: each person can only read their own hero and the lists they belong to. **Never** paste the `service_role` (secret) key into the app.
+> The anon / publishable key is meant to be public. Your data is protected by the access rules in `schema.sql`: each person can only read their own hero and the lists they belong to. **Never** paste the `service_role` or **secret** key (`sb_secret_…`) into the app.
 
 Then connect the app in one of two ways.
 
@@ -69,13 +69,14 @@ Everyone who opens your site is then connected automatically. This is the easies
   3. Friends need their own account on the **same Supabase project**. Either they use your site (Option B), or they enter your URL and key (Option A).
 - **What everyone sees:** checks appear for everyone within a second or two. Whoever completes a quest gets the XP and gold.
 - **Leave a list:** tap **Leave party list**. The list disappears from your devices, and the others keep it.
-- **Offline:** keep playing. Changes sync automatically when the connection returns. The Party tab shows the sync status, and **Sync now** forces a sync.
+- **Offline:** keep playing; you stay signed in. Changes sync automatically when the connection returns. The Party tab shows the sync status, and **Sync now** forces a sync.
 
 ## Troubleshooting
 
 | Message or problem | Fix |
 | --- | --- |
 | *Wrong email or password* | Check both. Passwords are case-sensitive. |
+| *The Project URL looks wrong* | Tap **Change cloud project** and paste the URL again, exactly like `https://abcdefgh.supabase.co`. |
 | *Confirm your email first* | Open the confirmation email, or switch **Confirm email** off (step 3). |
 | *This list is not in the cloud yet* | The list was just created. Wait a few seconds and try again. |
 | *That invite code does not exist* | Check the code. Codes never use 0, O, 1, I or L. |

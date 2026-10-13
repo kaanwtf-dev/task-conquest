@@ -25,7 +25,8 @@ function storage(): Storage | null {
   }
 }
 
-const cleanUrl = (u: string) => u.trim().replace(/\/+$/, '');
+/** Trims, and drops trailing slashes and a pasted API path ('https://x.supabase.co/rest/v1/'). */
+const cleanUrl = (u: string) => u.trim().replace(/\/+$/, '').replace(/\/(rest|auth|realtime)\/v1$/i, '');
 
 function envConfig(): SyncConfig | null {
   const env = import.meta.env as Record<string, unknown> | undefined;
@@ -69,19 +70,24 @@ export function getClient(): SupabaseClient | null {
       void cached.client.auth.stopAutoRefresh();
       void cached.client.removeAllChannels();
     }
-    cached = {
-      key,
-      client: createClient(cfg.url, cfg.anonKey, {
-        auth: { persistSession: true, autoRefreshToken: true, storageKey: AUTH_STORAGE_KEY },
-      }),
-    };
+    cached = null;
+    try {
+      cached = {
+        key,
+        client: createClient(cfg.url, cfg.anonKey, {
+          auth: { persistSession: true, autoRefreshToken: true, storageKey: AUTH_STORAGE_KEY },
+        }),
+      };
+    } catch {
+      return null; // malformed URL (a typo): treated as not set up instead of throwing on every launch
+    }
   }
   return cached.client;
 }
 
 function need(): SupabaseClient {
   const c = getClient();
-  if (!c) throw new Error('Cloud sync is not set up yet.');
+  if (!c) throw new Error(getSyncConfig() ? 'The Project URL looks wrong. Fix it under Change cloud project.' : 'Cloud sync is not set up yet.');
   return c;
 }
 
