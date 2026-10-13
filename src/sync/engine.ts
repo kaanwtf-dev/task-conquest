@@ -3,7 +3,7 @@
 // Dirty tracking never touches the store: a persisted map remembers the updatedAt last exchanged per doc.
 import type { Difficulty, Hero, ListType, Meta, Repeat, SkillId, Task, TaskList } from '../core/types';
 import type { ThemeId } from '../pixel/themes';
-import { canon, lineage, newer, resolveHero, sameDoc } from './merge';
+import { canon, lineage, newer, rekeyCounters, resolveHero, sameDoc } from './merge';
 import { SyncOfflineError } from './types';
 import type { AdoptStrategy, DocKind, EngineStatus, KeyValue, LocalAdapter, LocalSnapshot, RemoteAdapter, RemoteRow } from './types';
 
@@ -153,9 +153,11 @@ interface Persisted {
   synced: Record<string, number>;
   /** list ids the user was a member of at the last full sync (null = not looked yet). */
   lists: string[] | null;
+  /** Hero lineage deleted on this device (Start over) whose deletion the cloud hasn't seen yet. */
+  heroGone: number | null;
 }
 
-const fresh = (): Persisted => ({ cursor: null, synced: {}, lists: null });
+const fresh = (): Persisted => ({ cursor: null, synced: {}, lists: null, heroGone: null });
 
 // ---------------------------------------------------------------- browser hooks
 
@@ -322,6 +324,17 @@ export class SyncEngine {
     this.leaving.delete(listId);
   }
 
+  /**
+   * Start over: the hero of this lineage is deleted in the cloud too (now, or once it is reachable), and
+   * until then copies of it are never pulled back onto this device.
+   */
+  deleteHero(lineageId: number): void {
+    if (this.stopped) return;
+    this.st.heroGone = lineageId;
+    this.save();
+    void this.request(false);
+  }
+
   async inspectRemoteHero(): Promise<Hero | null> {
     const row = await this.remote.pullDoc(remoteId('hero', HERO_ID, this.userId));
     const m = row ? fromRow(row, this.userId) : null;
@@ -339,7 +352,9 @@ export class SyncEngine {
     if (strategy === 'merge') {
       const cloud = await this.inspectRemoteHero();
       const mine = this.local.read().hero;
-      if (cloud && mine && cloud.createdAt !== mine.createdAt) this.local.write({ hero: { ...mine, createdAt: cloud.createdAt } });
+      // the local save's counters are re-keyed so they add to the cloud's instead of max'ing per device
+      if (cloud && mine && cloud.createdAt !== mine.createdAt)
+        this.local.write({ hero: { ...rekeyCounters(mine, String(lineage(mine))), createdAt: cloud.createdAt } });
       this.st = { ...this.st, cursor: null, lists: null };
       this.save();
       return this.syncNow();
@@ -361,7 +376,7 @@ export class SyncEngine {
         else (next[COLL_OF[kind]] as DocMap)[doc.id] = doc;
       }
       this.local.write({ ...next, hero: hero ?? snap.hero });
-      this.st = { cursor: this.maxTs(rows), synced, lists: null };
+      this.st = { cursor: this.maxTs(rows), synced, lists: null, heroGone: null };
       this.save();
       return;
     }
@@ -421,6 +436,7 @@ export class SyncEngine {
         cursor: typeof p.cursor === 'string' ? p.cursor : null,
         synced: isObj(p.synced) ? (p.synced as Record<string, number>) : {},
         lists: Array.isArray(p.lists) ? p.lists.filter(isStr) : null,
+        heroGone: typeof p.heroGone === 'number' && Number.isFinite(p.heroGone) ? p.heroGone : null,
       };
     } catch {
       return fresh();
@@ -478,9 +494,11 @@ export class SyncEngine {
 
   private async cycle(pull: boolean): Promise<void> {
     if (offlineNow()) return this.setStatus('offline');
-    if (!pull && !this.collect().rows.length) return; // nothing to push: stay quiet
+    if (!pull && this.st.heroGone === null && !this.collect().rows.length) return; // nothing to push: stay quiet
     this.setStatus('syncing');
     try {
+      if (this.st.heroGone !== null) await this.pushHeroGone();
+      if (this.stopped) return;
       if (pull) {
         await this.reconcileLists();
         if (this.stopped) return;
@@ -498,6 +516,24 @@ export class SyncEngine {
     } catch (e) {
       if (!this.stopped) this.setStatus(e instanceof SyncOfflineError || offlineNow() ? 'offline' : 'error');
     }
+  }
+
+  /** Tombstone the cloud hero deleted here by Start over, unless the cloud already moved on to another hero. */
+  private async pushHeroGone(): Promise<void> {
+    const gone = this.st.heroGone;
+    if (gone === null) return;
+    const row = await this.remote.pullDoc(remoteId('hero', HERO_ID, this.userId));
+    if (this.stopped) return;
+    const m = row ? fromRow(row, this.userId) : null;
+    if (m && !m.doc.deleted && lineage(m.doc as Hero) === gone) {
+      const at = m.doc.updatedAt + 1;
+      await this.remote.push([toRow('hero', { ...m.doc, deleted: true, updatedAt: at }, this.userId)]);
+      if (this.stopped) return;
+      const key = docKey('hero', HERO_ID);
+      this.st.synced[key] = Math.max(this.st.synced[key] ?? -Infinity, at);
+    }
+    this.st.heroGone = null;
+    this.save();
   }
 
   /** Newest server_ts among rows and the current cursor, as ISO (null if none). */
@@ -571,8 +607,17 @@ export class SyncEngine {
       const key = docKey(m.kind, m.doc.id);
       const remote = m.doc;
       if (m.kind === 'hero') {
-        if (remote.deleted) continue;
         const known = synced[key];
+        if (remote.deleted) {
+          // Start over on another device: this device drops the same hero too, unless it played it since
+          if (hero && lineage(hero) === lineage(remote as Hero) && hero.updatedAt <= remote.updatedAt) {
+            hero = null;
+            heroChanged = true;
+          }
+          synced[key] = Math.max(known ?? -Infinity, remote.updatedAt);
+          continue;
+        }
+        if (!hero && this.st.heroGone === lineage(remote as Hero)) continue; // deleted here; the cloud hears soon
         // dropped on this device after syncing (start over): an echo of the copy it held must not bring it back
         if (!hero && known !== undefined && remote.updatedAt <= known) continue;
         if (hero && known !== undefined && hero.updatedAt < known) {
@@ -583,7 +628,11 @@ export class SyncEngine {
         if (base && known === undefined && lineage(base) !== lineage(remote as Hero)) {
           // first contact with a different save that adoptStrategy() never settled (e.g. the check failed
           // offline): merge into the cloud's lineage, keeping its identity, rather than erase either save
-          base = { ...base, createdAt: lineage(remote as Hero), updatedAt: Math.min(base.updatedAt, remote.updatedAt - 1) };
+          base = {
+            ...rekeyCounters(base, String(lineage(base))),
+            createdAt: lineage(remote as Hero),
+            updatedAt: Math.min(base.updatedAt, remote.updatedAt - 1),
+          };
         }
         let merged = base ? resolveHero(base, remote as Hero) : (remote as Hero);
         const ahead = canon(merged) !== canon(remote);

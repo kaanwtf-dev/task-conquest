@@ -141,6 +141,21 @@ export function mergeHero(a: Hero, b: Hero): Hero {
   };
 }
 
+const COUNTERS = ['xp', 'gold', 'goldSpent', 'kills', 'tasksDone', 'bossDamage', 'bossesSlain', 'itemsFound', 'potionsUsed', 'questsCleared'] as const;
+
+/**
+ * Move a save's per-device counters under keys of their own (`<device>~<tag>`) before it is merged into
+ * another lineage: the same device may have played both saves, and per-device max would then drop one.
+ */
+export function rekeyCounters(h: Hero, tag: string): Hero {
+  const rk = (c: Counter | undefined): Counter =>
+    Object.fromEntries(Object.entries(isObj(c) ? c : {}).filter(([k]) => k !== '__proto__').map(([k, v]) => [`${k}~${tag}`, num(v)]));
+  const out: Hero = { ...h };
+  for (const k of COUNTERS) out[k] = rk(h[k]);
+  out.skillXp = Object.fromEntries(Object.entries(isObj(h.skillXp) ? h.skillXp : {}).map(([s, c]) => [s, rk(c)])) as Hero['skillXp'];
+  return out;
+}
+
 /**
  * What the engine applies when a remote hero arrives. Heroes of the same lineage (same createdAt) merge
  * as a CRDT. A different lineage is a different save (a hero re-created, or "overwrite the cloud" chosen

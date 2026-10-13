@@ -69,7 +69,8 @@ Everyone who opens your site is then connected automatically. This is the easies
   3. Friends need their own account on the **same Supabase project**. Either they use your site (Option B), or they enter your URL and key (Option A).
 - **What everyone sees:** checks appear for everyone within a second or two. Whoever completes a quest gets the XP and gold.
 - **Leave a list:** tap **Leave party list** in the Party tab, or **Leave** in the list's **⋯** menu. The list disappears from your devices, and the others keep it. This also works offline: the server is told once you are back online.
-- **Delete vs. leave:** only the owner can delete a party list, and deleting it removes it for everyone. **Start over** (Options) and **Import save** never delete lists you joined. Start over leaves them, and an import keeps them as they are.
+- **Delete vs. leave:** only the owner can delete a party list, and deleting it removes it for everyone. **Start over** (Options) and **Import save** never delete lists you joined. Start over leaves them, and an import keeps them as they are. When you import a backup of a list you share, it is merged with what the party did since, so nobody's items are lost.
+- **Start over** deletes your hero, loot and lists on all your devices, including ones that were offline or signed out at the time; they catch up at their next sync.
 - **A different account on the same device:** if someone signs in with another account on a device that holds a hero, Questlog asks whether to start fresh or bring this device's hero and lists into the new account. Nothing is uploaded until you choose. Party lists stay with the account that joined them.
 - **Offline:** keep playing; you stay signed in. Changes sync automatically when the connection returns. The Party tab shows the sync status, and **Sync now** forces a sync. Signing out also works offline.
 

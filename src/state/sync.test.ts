@@ -19,13 +19,18 @@ describe('party news', () => {
     expect(news[0].log).toBeTruthy();
   });
 
-  it('a first pull or a join is not news: tasks never seen here are not "just completed"', () => {
+  it('tasks never seen here: a completion is not news, a new open task in a known list is (toast only)', () => {
     const before = { hero, lists, tasks: {} };
     const pulled = { a: task('a', 'S', { doneFor: 'once', doneBy: 'Bo', createdBy: 'Bo' }), b: task('b', 'S', { createdBy: 'Bo' }) };
     const news = partyNews(before, { tasks: pulled });
-    // completions are dropped; a fresh addition by someone else is toasted but never logged
     expect(news.map((n) => n.text)).toEqual(['Bo added "b" to S']);
     expect(news.every((n) => !n.log)).toBe(true);
+  });
+
+  it('a list arriving whole (joined here or on another device) is not news', () => {
+    const before = { hero, lists: { P: lists.P }, tasks: {} };
+    const pulled = { a: task('a', 'S', { createdBy: 'Bo' }), b: task('b', 'S', { createdBy: 'Bo' }) };
+    expect(partyNews(before, { lists, tasks: pulled })).toEqual([]);
   });
 
   it('ignores my own actions, private lists and deletions', () => {
@@ -42,17 +47,22 @@ describe('party news', () => {
 });
 
 describe('bringing a device into another account', () => {
-  it('re-keys own lists and tasks, drops party lists and tombstones', () => {
+  it('re-keys own lists and tasks, brings shared ones as private copies, drops joined lists and tombstones', () => {
     let n = 0;
     const s = {
       activeListId: 'L1',
       lists: { L1: list('L1'), S: list('S', { shared: true, ownerId: 'u-a' }), J: list('J', { shared: true, ownerId: 'u-bo' }), D: list('D', { deleted: true }) },
-      tasks: { t1: task('t1', 'L1'), t2: task('t2', 'S'), t3: task('t3', 'L1', { deleted: true }), t4: task('t4', 'D') },
+      tasks: { t1: task('t1', 'L1'), t2: task('t2', 'S'), t3: task('t3', 'L1', { deleted: true }), t4: task('t4', 'D'), t5: task('t5', 'J') },
     };
-    const out = rekeyOwnData(s, 50, () => `new${++n}`);
-    expect(Object.keys(out.lists)).toEqual(['new1']);
+    const out = rekeyOwnData(s, 50, 'u-a', () => `new${++n}`);
+    expect(Object.values(out.lists).map((l) => l.name)).toEqual(['L1', 'S']);
     expect(out.lists.new1).toMatchObject({ id: 'new1', name: 'L1', updatedAt: 50 });
-    expect(Object.values(out.tasks)).toEqual([expect.objectContaining({ id: 'new2', listId: 'new1', title: 't1', updatedAt: 50 })]);
+    expect(out.lists.new2.shared).toBeUndefined();
+    expect(out.lists.new2.ownerId).toBeUndefined();
+    expect(Object.values(out.tasks).map((t) => [t.title, out.lists[t.listId].name])).toEqual([
+      ['t1', 'L1'],
+      ['t2', 'S'],
+    ]);
     expect(out.activeListId).toBe('new1');
   });
 });

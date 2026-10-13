@@ -102,7 +102,7 @@ export function SettingsScreen() {
               const f = e.target.files?.[0];
               e.target.value = '';
               if (!f) return;
-              if (!confirm('Replace everything on this device with this backup?')) return;
+              if (!confirm('Replace everything on this device with this backup? Party lists are merged with what the party did since, never replaced.')) return;
               const ok = s.importData(await f.text());
               alert(ok ? 'Backup restored!' : 'That file is not a Questlog backup.');
             }}

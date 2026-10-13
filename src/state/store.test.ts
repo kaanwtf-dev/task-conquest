@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useStore, bagItems, potionStacks, listTasks, listHooks, visibleLists } from './store';
+import { useStore, bagItems, potionStacks, listTasks, syncHooks, visibleLists } from './store';
 import { fx, type FxEvent } from './fx';
 import { sum, heroGold } from '../game/progression';
 import { bossFor } from '../game/bosses';
@@ -261,7 +261,7 @@ describe('store: party lists are left, never deleted for the party', () => {
   beforeEach(() => {
     fresh();
     left = [];
-    listHooks.leave = (id) => void left.push(id);
+    syncHooks.leave = (id) => void left.push(id);
     const t = Date.now();
     useStore.setState((s) => ({
       accountId: 'u-me',
@@ -275,7 +275,7 @@ describe('store: party lists are left, never deleted for the party', () => {
     st().addTask('M', 'Vacuum');
   });
   afterEach(() => {
-    listHooks.leave = undefined;
+    syncHooks.leave = undefined;
   });
 
   it('Delete on a joined list leaves it: dropped here without tombstones', () => {

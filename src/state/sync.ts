@@ -1,7 +1,7 @@
 // App-side wiring for cloud sync: store <-> SyncEngine adapter, auth lifecycle, party join links.
 import { create } from 'zustand';
 import type { Hero, Task, TaskList } from '../core/types';
-import { listHooks, TODAY_ID, uid, useStore, visibleLists, type State } from './store';
+import { syncHooks, TODAY_ID, uid, useStore, visibleLists, type State } from './store';
 import { fx } from './fx';
 import { useAttention } from './attention';
 import { heroLevel } from '../game/progression';
@@ -82,6 +82,8 @@ const engineKey = (userId: string) => `questlog-sync:${userId}`;
 const decidedKey = (userId: string) => `questlog-sync-adopted:${userId}`;
 const lineage = (hero: Hero | null) => (hero ? String(hero.createdAt) : 'none');
 const leavesKey = (userId: string) => `questlog-pending-leave:${userId}`;
+/** Hero lineage deleted by Start over while no engine ran for this account: deleted in the cloud at the next sync. */
+const heroResetKey = (userId: string) => `questlog-hero-reset:${userId}`;
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
@@ -115,7 +117,8 @@ export function partyNews(before: Pick<State, 'hero' | 'lists' | 'tasks'>, patch
   for (const t of Object.values(patch.tasks) as Task[]) {
     const prev = before.tasks[t.id];
     const list = ((patch.lists ?? before.lists) as Record<string, TaskList>)[t.listId];
-    if (!list?.shared || t.deleted) continue;
+    // a list this device didn't have yet (joined here or on another device) arrives whole: not news
+    if (!list?.shared || t.deleted || !before.lists[t.listId]) continue;
     // a task this device never saw is new to us, not news: only a change we watched happen is
     if (prev && t.doneFor && prev.doneFor !== t.doneFor && t.doneBy && t.doneBy !== me)
       out.push({ id: `p-${t.id}-${t.updatedAt}`, text: `${t.doneBy} completed "${t.title}" in ${list.name}`, log: `${t.doneBy} completed "${t.title}" (${list.name})` });
@@ -164,6 +167,7 @@ const hasLiveData = (s: State) => !!s.hero || Object.values(s.lists).some((l) =>
 function forgetEngineState(userId: string) {
   kv.del(engineKey(userId));
   kv.del(decidedKey(userId));
+  kv.del(heroResetKey(userId));
 }
 
 function showConflict(conflict: NonNullable<SyncUi['conflict']>) {
@@ -200,7 +204,8 @@ async function startEngine(userId: string) {
   });
 
   // a hero this device hasn't settled with the cloud yet (first sign-in, Start over, an import, a new hero)
-  if (kv.get(decidedKey(userId)) !== lineage(useStore.getState().hero)) {
+  const decided = kv.get(decidedKey(userId));
+  if (decided !== lineage(useStore.getState().hero)) {
     let cloud: Hero | null = null;
     try {
       cloud = await e.inspectRemoteHero();
@@ -212,12 +217,26 @@ async function startEngine(userId: string) {
     }
     if (engine !== e) return; // signed out or switched account meanwhile
     const mine = useStore.getState().hero;
+    // this device started over (now, or before a relaunch): that hero is deleted in the cloud, never restored
+    if (cloud && (!mine || lineage(mine) !== lineage(cloud))) {
+      const gone = kv.get(heroResetKey(userId)) === lineage(cloud) || (!mine && decided === lineage(cloud));
+      if (gone) {
+        kv.set(heroResetKey(userId), lineage(cloud));
+        cloud = null;
+      }
+    }
     if (cloud && mine && cloud.createdAt !== mine.createdAt) {
       showConflict({ kind: 'hero', cloudName: cloud.name, cloudLevel: heroLevel(cloud).level });
       return; // resolveConflict() continues
     }
     if (cloud && !mine) {
-      await hushed(() => e.adoptStrategy('cloud'));
+      try {
+        await hushed(() => e.adoptStrategy('cloud'));
+      } catch {
+        // the cloud became unreachable mid-way: sync normally, and look again on the next start
+        if (engine === e) await beginSyncing(e, userId);
+        return;
+      }
       if (engine !== e) return;
       pickLiveList();
     }
@@ -227,17 +246,19 @@ async function startEngine(userId: string) {
 }
 
 /**
- * Re-key this device's own lists and tasks (ids are global: the old account's server copies keep theirs),
- * dropping party lists, which can't move between accounts.
+ * Re-key this device's own lists and tasks (ids are global: the old account's server copies keep theirs).
+ * Lists it shared come along as private copies (the party stays with the old account); lists it joined
+ * from others are dropped.
  */
-export function rekeyOwnData(s: Pick<State, 'lists' | 'tasks' | 'activeListId'>, t: number, newId: () => string = uid) {
+export function rekeyOwnData(s: Pick<State, 'lists' | 'tasks' | 'activeListId'>, t: number, oldAccount: string | null, newId: () => string = uid) {
   const ids = new Map<string, string>();
   const lists: Record<string, TaskList> = {};
   for (const l of Object.values(s.lists)) {
-    if (l.deleted || l.shared || l.ownerId) continue;
+    if (l.deleted || (l.ownerId && l.ownerId !== oldAccount)) continue;
     const id = newId();
     ids.set(l.id, id);
-    lists[id] = { ...l, id, updatedAt: t };
+    const { shared: _shared, ownerId: _owner, ...rest } = l;
+    lists[id] = { ...rest, id, updatedAt: t };
   }
   const tasks: Record<string, Task> = {};
   for (const tk of Object.values(s.tasks)) {
@@ -260,14 +281,20 @@ export async function resolveAccountSwitch(choice: 'fresh' | 'bring') {
     useStore.setState({ hero: null, lists: {}, tasks: {}, items: {}, potions: {}, activeListId: null, tab: 'quests' });
   } else {
     const s = useStore.getState();
-    useStore.setState({ ...rekeyOwnData(s, Date.now()), items: liveOnly(s.items), potions: liveOnly(s.potions) });
+    useStore.setState({ ...rekeyOwnData(s, Date.now(), prev), items: liveOnly(s.items), potions: liveOnly(s.potions) });
     pickLiveList();
   }
   if (prev) forgetEngineState(prev);
   forgetEngineState(userId);
   useStore.setState({ accountId: userId });
   useSync.setState({ conflict: null, status: 'syncing' });
-  await startEngine(userId);
+  await startEngine(userId).catch(() => failedStart());
+}
+
+/** A start that threw: show it, and let the next auth event, focus or Sync now try again. */
+function failedStart() {
+  stopEngine();
+  useSync.setState({ status: 'error' });
 }
 
 const liveOnly = <T extends { deleted?: boolean }>(r: Record<string, T>): Record<string, T> =>
@@ -280,6 +307,11 @@ async function beginSyncing(e: SyncEngine, userId: string) {
   kv.del(LAST_USER_KEY); // superseded by the store's accountId
   for (const id of pendingLeaves(userId)) e.purgeList(id, true);
   void flushLeaves(userId);
+  const reset = Number(kv.get(heroResetKey(userId)) ?? NaN);
+  if (Number.isFinite(reset)) {
+    e.deleteHero(reset); // the engine keeps it until the cloud has it
+    kv.del(heroResetKey(userId));
+  }
   unsubStore?.();
   unsubStore = useStore.subscribe((s, prev) => {
     if (s.hero !== prev.hero || s.lists !== prev.lists || s.tasks !== prev.tasks || s.items !== prev.items || s.potions !== prev.potions)
@@ -325,6 +357,8 @@ function pickLiveList() {
 }
 
 export async function syncNow() {
+  const { userId, conflict } = useSync.getState();
+  if (!engine && userId && !conflict) return startEngine(userId).catch(() => failedStart()); // an earlier start failed
   await engine?.syncNow();
 }
 
@@ -335,6 +369,7 @@ export async function joinByCode(code: string): Promise<string | null> {
     useSync.setState({ pendingJoin: clean, joinError: null });
     return null;
   }
+  await flushing; // a leave being sent right now must not land after this join
   const listId = await joinList(clean);
   setPendingLeaves(engineUser ?? '', pendingLeaves(engineUser ?? '').filter((id) => id !== listId)); // rejoined
   await hushed(() => e.pullList(listId));
@@ -374,6 +409,7 @@ function flushLeaves(userId: string): Promise<void> {
   flushing = (async () => {
     for (const id of pendingLeaves(userId)) {
       if (engineUser !== userId) return; // signed out / switched: the next sign-in retries
+      if (!pendingLeaves(userId).includes(id)) continue; // rejoined meanwhile
       try {
         await leaveList(id);
       } catch {
@@ -389,7 +425,7 @@ function flushLeaves(userId: string): Promise<void> {
 }
 
 /** The store left a party list (Leave, Delete on a joined list, Start over): drop it here, tell the server. */
-listHooks.leave = (listId: string) => {
+syncHooks.leave = (listId: string) => {
   const userId = boundAccount();
   if (!userId) return;
   setPendingLeaves(userId, [...new Set([...pendingLeaves(userId), listId])]);
@@ -397,6 +433,15 @@ listHooks.leave = (listId: string) => {
     engine.purgeList(listId, true);
     void flushLeaves(userId);
   }
+};
+
+/** Start over dropped the hero: delete it in the cloud too (the account's engine now, or at the next sync). */
+syncHooks.heroReset = (born: number) => {
+  const userId = boundAccount();
+  if (!userId) return;
+  if (engine && engineUser === userId) engine.deleteHero(born);
+  else kv.set(heroResetKey(userId), String(born));
+  kv.set(decidedKey(userId), lineage(null)); // this device has settled on having no hero
 };
 
 /** Signs this device out, even offline. */
@@ -426,7 +471,7 @@ export function initSync() {
       // token refreshes and tab focus re-announce the same user: only a new engine means a new sync
       if (changed || engineUser !== user.id) {
         useSync.setState({ status: 'syncing', conflict: null });
-        startEngine(user.id).catch(() => useSync.setState({ status: 'error' }));
+        startEngine(user.id).catch(() => failedStart());
       }
     } else {
       stopEngine();

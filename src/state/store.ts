@@ -82,11 +82,22 @@ function chestPeriod(list: TaskList, now: number, cfg: TimeCfg): string {
   return r.kind === 'none' ? `d${todayKey(now, cfg)}` : periodKey(r, now, cfg);
 }
 
-/** A list someone else owns that we joined: we can leave it, never delete it for the whole party. */
-export const isForeignList = (list: TaskList, accountId: string | null): boolean => !!list.ownerId && list.ownerId !== accountId;
+/**
+ * A list someone else owns that we joined: we can leave it, never delete it for the whole party.
+ * Without a known account (a device that never synced) nothing counts as foreign.
+ */
+export const isForeignList = (list: TaskList, accountId: string | null): boolean => !!accountId && !!list.ownerId && list.ownerId !== accountId;
 
-/** Set by the sync layer: tells the server we left a party list (now, or once back online). */
-export const listHooks: { leave?: (listId: string) => void } = {};
+/** Set by the sync layer. */
+export const syncHooks: {
+  /** We left a party list: tell the server (now, or once back online). */
+  leave?: (listId: string) => void;
+  /** Start over dropped the hero of this lineage: delete it in the cloud as well. */
+  heroReset?: (lineage: number) => void;
+} = {};
+
+/** Before the store remembered its account, the sync layer kept the last synced user here. */
+const LEGACY_LAST_USER_KEY = 'questlog-sync-last-user';
 
 export interface State {
   deviceId: string;
@@ -591,7 +602,7 @@ export const useStore = create<State>()(
             const next = Object.values(lists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
             return { lists, tasks, activeListId: s.activeListId === id ? next?.id ?? null : s.activeListId };
           });
-          listHooks.leave?.(id);
+          syncHooks.leave?.(id);
         },
 
         updateHero(patch) {
@@ -601,41 +612,64 @@ export const useStore = create<State>()(
 
         exportData() {
           const { hero, lists, tasks, items, potions, settings, log: entries } = get();
-          return JSON.stringify({ app: 'questlog', version: 3, exportedAt: now(), hero, lists, tasks, items, potions, settings, log: entries });
+          const { accountId } = get();
+          return JSON.stringify({ app: 'questlog', version: 3, exportedAt: now(), accountId, hero, lists, tasks, items, potions, settings, log: entries });
         },
 
         importData(json) {
           try {
             const d = JSON.parse(json);
-            if (d?.app !== 'questlog' || typeof d.lists !== 'object' || typeof d.tasks !== 'object') return false;
-            const hero = d.hero ? { ...heroDefaults(), ...d.hero } : null;
+            const isMap = (v: unknown) => !!v && typeof v === 'object' && !Array.isArray(v);
+            if (d?.app !== 'questlog' || !isMap(d.lists) || !isMap(d.tasks)) return false;
             const cur = get();
-            // party lists we joined aren't ours to restore or remove: keep the live ones, ignore backup copies
-            const foreign = new Set(Object.values(cur.lists).filter((l) => isForeignList(l, cur.accountId)).map((l) => l.id));
-            for (const l of Object.values((d.lists ?? {}) as Record<string, TaskList>)) if (l && isForeignList(l, cur.accountId)) foreign.add(l.id);
-            const ownLists = Object.fromEntries(Object.entries(d.lists as Record<string, TaskList>).filter(([k]) => !foreign.has(k)));
-            const ownTasks = Object.fromEntries(Object.entries(d.tasks as Record<string, Task>).filter(([, tk]) => !foreign.has(tk?.listId)));
-            const first = Object.values(ownLists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
-            // local docs that aren't in the backup become tombstones so the removal syncs too
             const t = now();
-            const keep = <T extends { deleted?: boolean; updatedAt: number }>(
-              cur: Record<string, T>,
-              incoming: Record<string, T> = {},
-              untouched: (v: T) => boolean = () => false,
+            // whose save this is: this device's account, or on a device that never synced, the exporter's
+            const acct = cur.accountId ?? (typeof d.accountId === 'string' ? d.accountId : null);
+            const inLists = d.lists as Record<string, TaskList>;
+            const all = [...Object.values(cur.lists), ...Object.values(inLists)].filter((l): l is TaskList => isMap(l));
+            // joined lists aren't ours to restore or remove: the live copy stays, the backup's is ignored
+            const foreign = new Set(all.filter((l) => isForeignList(l, acct)).map((l) => l.id));
+            // our own party lists merge instead of being replaced: a restore must not undo what the party did since
+            const party = new Set(all.filter((l) => l.shared && !foreign.has(l.id)).map((l) => l.id));
+            const restore = <T extends { deleted?: boolean; updatedAt: number }>(
+              live: Record<string, T>,
+              incoming: unknown,
+              listOf: (v: T) => string | undefined = () => undefined,
             ) => {
-              // restamp imported docs so they beat newer cloud copies when sync merges (last write wins)
-              const out: Record<string, T> = Object.fromEntries(Object.entries(incoming).map(([k, v]) => [k, { ...v, updatedAt: t }]));
-              for (const [k, v] of Object.entries(cur))
-                if (!(k in out)) out[k] = v.deleted || untouched(v) ? v : { ...v, deleted: true, updatedAt: t };
+              const out: Record<string, T> = {};
+              for (const [k, v] of Object.entries(isMap(incoming) ? (incoming as Record<string, T>) : {})) {
+                if (!isMap(v)) continue;
+                const l = listOf(v);
+                if (l && foreign.has(l)) continue;
+                // a party doc we lost comes back with its own stamp, so sync keeps whichever copy is newer
+                if (l && party.has(l)) {
+                  if (!live[k]) out[k] = v;
+                  continue;
+                }
+                out[k] = { ...v, updatedAt: t }; // restamped so it beats newer cloud copies (last write wins)
+              }
+              // anything else not in the backup becomes a tombstone so the removal syncs too
+              for (const [k, v] of Object.entries(live)) {
+                if (k in out) continue;
+                const l = listOf(v);
+                out[k] = v.deleted || (l && (foreign.has(l) || party.has(l))) ? v : { ...v, deleted: true, updatedAt: t };
+              }
               return out;
             };
+            const lists = restore(cur.lists, inLists, (l) => l.id);
+            let hero: Hero | null = d.hero ? { ...heroDefaults(), ...d.hero, updatedAt: t } : null;
+            // a different hero than this device's replaces it on every synced device: give it the newer lineage
+            if (hero && cur.hero && hero.createdAt !== cur.hero.createdAt)
+              hero = { ...hero, createdAt: Math.max(hero.createdAt, cur.hero.createdAt + 1) };
+            const first = Object.values(lists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
             set({
-              hero: hero && { ...hero, updatedAt: t },
-              lists: keep(cur.lists, ownLists, (l) => foreign.has(l.id)),
-              tasks: keep(cur.tasks, ownTasks, (tk) => foreign.has(tk.listId)),
-              items: keep(cur.items, d.items),
-              potions: keep(cur.potions, d.potions),
-              settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) }, log: d.log ?? [], activeListId: first?.id ?? null,
+              accountId: acct,
+              hero,
+              lists,
+              tasks: restore(cur.tasks, d.tasks, (tk) => tk.listId),
+              items: restore(cur.items, d.items),
+              potions: restore(cur.potions, d.potions),
+              settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) }, log: Array.isArray(d.log) ? d.log : [], activeListId: first?.id ?? null,
             });
             return true;
           } catch {
@@ -647,6 +681,7 @@ export const useStore = create<State>()(
           // party lists we joined are left, not deleted: they belong to their owner
           const s0 = get();
           for (const l of Object.values(s0.lists)) if (!l.deleted && isForeignList(l, s0.accountId)) get().leaveList(l.id);
+          if (s0.hero) syncHooks.heroReset?.(s0.hero.createdAt); // and the hero goes in the cloud too
           // tombstone instead of wiping so a signed-in device deletes the old data in the cloud too
           const t = now();
           const kill = <T extends { deleted?: boolean; updatedAt: number }>(r: Record<string, T>) =>
@@ -660,7 +695,7 @@ export const useStore = create<State>()(
     },
     {
       name: 'questlog-v1',
-      version: 3,
+      version: 4,
       partialize: (s) => ({
         deviceId: s.deviceId, accountId: s.accountId, hero: s.hero, lists: s.lists, tasks: s.tasks, items: s.items, potions: s.potions,
         settings: s.settings, log: s.log, tab: s.tab, activeListId: s.activeListId, shopDay: s.shopDay,
@@ -679,6 +714,14 @@ export const useStore = create<State>()(
               st.items = { ...st.items, ...kit.items };
               st.hero.equipped = kit.equipped;
             }
+          }
+        }
+        if (version < 4) {
+          // the account this device's data belongs to used to live only in the sync layer's key
+          try {
+            st.accountId = st.accountId ?? localStorage.getItem(LEGACY_LAST_USER_KEY);
+          } catch {
+            st.accountId = st.accountId ?? null;
           }
         }
         return st;
