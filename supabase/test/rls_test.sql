@@ -90,8 +90,16 @@ select _expect((select data->>'title' from docs where id = 'T1') = 'Milk', 'stal
 select _expect((select count(*) from list_members where list_id = 'L1') = 2, 'B sees both members');
 select _expect((select count(*) from list_party('L1')) = 2, 'list_party returns members');
 
+-- ---------------------------------------------------------------- profiles are party-only
+select set_config('request.jwt.claim.sub', :'A', false);
+insert into profiles (user_id, name, data) values (:'A', 'Alice', '{}') on conflict (user_id) do update set name = excluded.name;
+select set_config('request.jwt.claim.sub', :'B', false);
+insert into profiles (user_id, name, data) values (:'B', 'Bob', '{}') on conflict (user_id) do update set name = excluded.name;
+select _expect((select count(*) from profiles where user_id = :'A'::uuid) = 1, 'party member B can read A''s hero card');
+
 -- ---------------------------------------------------------------- C still locked out
 select set_config('request.jwt.claim.sub', :'C', false);
+select _expect((select count(*) from profiles where user_id <> :'C'::uuid) = 0, 'stranger C cannot read anyone''s hero card');
 select _expect((select count(*) from docs) = 0, 'C sees nothing');
 select _expect((select count(*) from list_members) = 0, 'C sees no memberships');
 do $$ begin

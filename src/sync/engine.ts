@@ -117,6 +117,14 @@ export function fromRow(row: RemoteRow, userId: string): { kind: DocKind; doc: M
   const doc: Meta & Record<string, unknown> = { ...row.data, id, updatedAt: Number.isFinite(updatedAt) ? updatedAt : 0 };
   if (row.deleted) doc.deleted = true;
   else delete doc.deleted;
+  // list ownership is the server's (immutable owner column), never a doc field a stale edit could clear;
+  // someone else's list that we can see is by definition shared with us
+  if (row.kind === 'list' && isStr(row.owner)) {
+    if (row.owner !== userId) {
+      doc.ownerId = row.owner;
+      doc.shared = true;
+    } else if (isStr(doc.ownerId) && doc.ownerId !== userId) doc.ownerId = userId;
+  }
   return { kind: row.kind, doc };
 }
 

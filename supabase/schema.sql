@@ -61,6 +61,15 @@ language sql stable security definer set search_path = '' as $$
   );
 $$;
 
+-- true when the caller and p_user share at least one list (party members can see each other's hero card)
+create or replace function public.shares_list(p_user uuid) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.list_members a join public.list_members b on a.list_id = b.list_id
+    where a.user_id = auth.uid() and b.user_id = p_user
+  );
+$$;
+
 -- true once anyone has created this list (stops a stranger from "creating" someone else's list id)
 create or replace function public.list_taken(p_list_id text) returns boolean
 language sql stable security definer set search_path = '' as $$
@@ -157,7 +166,8 @@ create policy "members: leave" on public.list_members for delete to authenticate
 -- joining only happens through join_list() / the list-creation trigger
 
 drop policy if exists "profiles: read" on public.profiles;
-create policy "profiles: read" on public.profiles for select to authenticated using (true);
+create policy "profiles: read" on public.profiles for select to authenticated
+  using (user_id = (select auth.uid()) or public.shares_list(user_id));
 
 drop policy if exists "profiles: insert own" on public.profiles;
 create policy "profiles: insert own" on public.profiles for insert to authenticated with check (user_id = (select auth.uid()));

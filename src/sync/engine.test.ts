@@ -398,6 +398,15 @@ describe('doc mapping', () => {
     expect(fromRow({ id: 'X', kind: 'bogus' as never, list_id: null, data: {}, updated_at: 1, deleted: false }, A)).toBeNull();
   });
 
+  it('takes list ownership from the server owner column, not the doc', () => {
+    const row = { id: 'L9', kind: 'list' as const, list_id: 'L9', data: { name: 'Groceries', type: 'supply', theme: 'tavern', skill: 'mercantile', order: 0, shared: false }, updated_at: 5, deleted: false };
+    // someone else's list we can read is shared with us, even if a stale edit cleared the flags
+    expect(fromRow({ ...row, owner: B }, A)!.doc).toMatchObject({ ownerId: B, shared: true });
+    // our own list keeps whatever sharing state it has, and a forged owner field is corrected
+    expect(fromRow({ ...row, owner: A }, A)!.doc).toMatchObject({ shared: false });
+    expect(fromRow({ ...row, data: { ...row.data, ownerId: B }, owner: A }, A)!.doc).toMatchObject({ ownerId: A });
+  });
+
   it('parses Postgres and realtime timestamp formats', () => {
     const ms = Date.UTC(2026, 9, 13, 12, 34, 56, 123);
     expect(tsMs('2026-10-13T12:34:56.123456+00:00')).toBe(ms);
