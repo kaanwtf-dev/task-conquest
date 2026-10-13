@@ -1,7 +1,7 @@
 // Local-first sync engine: the store stays the source of truth on each device; the engine pulls remote
 // changes, merges them in (LWW per doc, CRDT for the hero) and pushes local edits it has not sent yet.
 // Dirty tracking never touches the store: a persisted map remembers the updatedAt last exchanged per doc.
-import type { Difficulty, Hero, ListType, Meta, Repeat, SkillId, Task } from '../core/types';
+import type { Difficulty, Hero, ListType, Meta, Repeat, SkillId, Task, TaskList } from '../core/types';
 import type { ThemeId } from '../pixel/themes';
 import { canon, lineage, newer, resolveHero, sameDoc } from './merge';
 import { SyncOfflineError } from './types';
@@ -606,7 +606,14 @@ export class SyncEngine {
       }
       if (!cur && remote.deleted) continue; // never had it: nothing to delete
       if (!cur || sameDoc(cur, remote) || newer(cur, remote) === remote) {
-        if (!cur || !sameDoc(cur, remote)) put(coll, remote);
+        const unshared = m.kind === 'list' && cur && (cur as TaskList).shared && !(remote as TaskList).shared;
+        if (unshared) {
+          // a list never stops being shared: a copy edited before it was shared (an offline device) must not
+          // un-share it, or moves out of it would stop copying and members would keep ghost tasks
+          const c = cur as TaskList;
+          put(coll, { ...remote, shared: true, ownerId: (remote as TaskList).ownerId ?? c.ownerId, updatedAt: remote.updatedAt + 1 } as Meta);
+          needPush = true;
+        } else if (!cur || !sameDoc(cur, remote)) put(coll, remote);
         synced[key] = Math.max(synced[key] ?? -Infinity, remote.updatedAt);
       } else if (cur.updatedAt === remote.updatedAt) {
         put(coll, { ...cur, updatedAt: remote.updatedAt + 1 }); // ours wins the tie-break: make it strictly newer

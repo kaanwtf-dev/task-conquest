@@ -650,6 +650,24 @@ describe('party lists', () => {
     expect(bo.snap.lists.S).toBeUndefined();
   });
 
+  it('a stale copy from before the list was shared never un-shares it', async () => {
+    const { server, mac, phone } = await party();
+    // the owner's phone went offline before sharing reached it, then renamed the list
+    phone.online = false;
+    const stale = { ...phone.snap.lists.S, shared: false, ownerId: undefined, name: 'Groceries!', updatedAt: phone.now() + 1_000_000 };
+    phone.snap = { ...phone.snap, lists: { ...phone.snap.lists, S: stale } };
+    phone.online = true;
+    await phone.engine.syncNow();
+    await mac.engine.syncNow();
+    expect(mac.snap.lists.S).toMatchObject({ name: 'Groceries!', shared: true, ownerId: A });
+    await vi.waitFor(async () => {
+      await mac.engine.syncNow();
+      expect(fromRow(server.rows.get('S')!, A)!.doc).toMatchObject({ name: 'Groceries!', shared: true });
+    });
+    await phone.engine.syncNow();
+    expect(phone.snap.lists.S).toMatchObject({ name: 'Groceries!', shared: true, ownerId: A });
+  });
+
   it('a list left while offline stays gone until the server hears about it', async () => {
     const { server, mac, bo } = await party();
     bo.engine.purgeList('S', true); // the leave hasn't reached the server: membership still lists S
