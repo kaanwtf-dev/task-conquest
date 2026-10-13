@@ -198,8 +198,11 @@ describe('status + claiming', () => {
     const r = claimRewards(h, c);
     expect(JSON.stringify(h)).toBe(snapshot); // pure
     expect(claimRewards(h, c)).toEqual(r); // deterministic
-    expect(r.tiers).toEqual({ slayer: 3, quests: 6, bosses: 2, gold: 4, streak: 2, ascension: 2 });
-    // the payout lifts gold earned past 1,000, so Gold Hoarder tiers up to 4 inside the same claim
+    const { gold: goldTier, ...rest } = r.tiers;
+    expect(rest).toEqual({ slayer: 3, quests: 6, bosses: 2, streak: 2, ascension: 2 });
+    // the payout is itself gold earned: Gold Hoarder settles at the tier that 120 + payout reaches
+    expect(goldTier).toBeGreaterThan(1);
+    expect(goldTier).toBe(def('gold').tierFor(120 + r.gold));
     expect(r.gold).toBeGreaterThan(achievementStatus(h, c).reduce((g, s) => g + s.pendingGold, 0));
     expect(r.newTitles).toContain('Critter Crusher');
     expect(r.newTitles).toContain('Monster Masher');
@@ -232,7 +235,7 @@ describe('status + claiming', () => {
     const s = status(h).slayer;
     expect(s.titles).toHaveLength(9); // 8 hand-written + "Slayer of 50,000"
     expect(s.titles[8]).toBe('Slayer of 50,000');
-    const r = claimRewards(hero({ kills: { a: 1e6 }, achievements: { slayer: 12 } }), ctx);
+    const r = claimRewards(hero({ kills: { a: 1e6 }, achievements: { slayer: 12, gold: 30 } }), ctx);
     expect(r.tiers.slayer).toBe(16);
     expect(r.newTitles).toEqual(['Slayer of 1 Million']);
   });

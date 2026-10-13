@@ -280,10 +280,11 @@ function FeatsTab() {
               </div>
               <div className="muted small" style={{ marginBottom: 4 }}>
                 {a.description}
+                {a.nextTitle && !a.maxed && <> · next title: <i>{a.nextTitle}</i></>}
               </div>
               <Bar value={a.value - a.prevThreshold} max={Math.max(1, a.nextThreshold - a.prevThreshold)} label={`${a.value.toLocaleString()} / ${a.nextThreshold.toLocaleString()}`} kind="gold" />
             </div>
-            {a.claimable > 0 && <span className="claim-dot">!</span>}
+            {a.claimable > 0 ? <span className="claim-dot" title={`${a.pendingGold}g waiting`}>!</span> : a.maxed ? <span className="muted small">MAX</span> : null}
           </div>
         ))}
       </div>

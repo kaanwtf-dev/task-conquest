@@ -1387,3 +1387,7 @@ canvas.px {
   text-align: center;
   overflow: hidden;
 }
+.boss-rank {
+  color: #ff8a5a;
+  text-transform: uppercase;
+}

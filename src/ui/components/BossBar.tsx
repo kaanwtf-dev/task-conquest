@@ -1,7 +1,7 @@
 // Compact boss window: every completed task chips away at the current boss on the infinite ladder.
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store';
-import { bossFor, bossReward } from '../../game/bosses';
+import { bossFor, bossRankDef, bossReward } from '../../game/bosses';
 import { sum, heroLevel } from '../../game/progression';
 import { bossUrl } from '../../pixel/sprites/items';
 import { fx } from '../../state/fx';
@@ -24,6 +24,7 @@ export default function BossBar() {
   );
 
   const reward = bossReward(boss.index, heroLevel(hero).level);
+  const rank = boss.rank !== 'boss' ? bossRankDef(boss.index).label : null;
   return (
     <>
       <button className="win boss-bar" onClick={() => setInfo(true)} aria-label={`Boss ${boss.name}`}>
@@ -32,7 +33,7 @@ export default function BossBar() {
         </span>
         <span className="boss-main">
           <span className="boss-name">
-            <span className="boss-idx">#{boss.index}</span> {boss.name}
+            <span className="boss-idx">#{boss.index}</span> {rank && <span className="boss-rank">{rank}</span>} {boss.name}
           </span>
           <Bar value={boss.maxHp - dealt} max={boss.maxHp} kind="boss" label={`${(boss.maxHp - dealt).toLocaleString()} HP`} />
         </span>
@@ -42,7 +43,7 @@ export default function BossBar() {
           <div className="win sheet" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
             <PxImg src={bossUrl(boss.archetype, boss.hue)} size={120} style={{ margin: '0 auto', display: 'block' }} />
             <div className="win-title" style={{ marginTop: 8 }}>
-              Boss #{boss.index}: {boss.name}
+              {rank ?? 'Boss'} #{boss.index}: {boss.name}
             </div>
             <div style={{ margin: '6px 0 12px', color: 'var(--muted)' }}>{boss.title}</div>
             <Bar value={boss.maxHp - dealt} max={boss.maxHp} kind="boss" label={`${(boss.maxHp - dealt).toLocaleString()} / ${boss.maxHp.toLocaleString()} HP`} />
