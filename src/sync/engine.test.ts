@@ -1,12 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Counter, Hero, Item, PotionStack, Task, TaskList } from '../core/types';
 import { sum } from '../game/progression';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { AuthRetryableFetchError, type SupabaseClient } from '@supabase/supabase-js';
 import { fromRow, HERO_ID, remoteId, SyncEngine, toRow, tsMs } from './engine';
-import { RemoteError, SupabaseRemote } from './supabase';
+import { getUser, onAuthChange, RemoteError, setSyncConfig, SupabaseRemote } from './supabase';
 import { canon } from './merge';
+import { inviteUrl, normalizeCode, toMember } from './party';
 import { SyncOfflineError } from './types';
 import type { EngineStatus, LocalSnapshot, PushResult, RemoteAdapter, RemoteRow } from './types';
+
+// getClient() builds its client through createClient: hand it a stub auth (no network in tests)
+const auth = vi.hoisted(() => ({ getSession: vi.fn(), onAuthStateChange: vi.fn(), stopAutoRefresh: vi.fn() }));
+vi.mock('@supabase/supabase-js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@supabase/supabase-js')>();
+  return { ...real, createClient: vi.fn(() => ({ auth, removeAllChannels: vi.fn() })) };
+});
 
 // ---------------------------------------------------------------- in-memory server (mirrors supabase/schema.sql)
 
@@ -350,6 +358,7 @@ async function seededMac(server: FakeServer) {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 // ---------------------------------------------------------------- tests
@@ -794,12 +803,159 @@ describe('first sign-in on a device that already has a hero', () => {
   });
 });
 
+describe('review: hostile rows, lineage first contact, start over, leave races', () => {
+  async function party() {
+    const server = new FakeServer();
+    const mac = await seededMac(server);
+    mac.addList('S', 'Groceries', { shared: true, ownerId: A });
+    mac.addTask('s1', 'S', 'Milk');
+    await mac.engine.syncNow();
+    const bo = new Device(server, B, 'bo-phone', 3_000_000);
+    bo.createHero('Bo');
+    await bo.engine.syncNow();
+    const code = server.createInvite(A, 'S');
+    await bo.engine.pullList(server.joinList(B, code));
+    return { server, mac, bo, code };
+  }
+
+  it('a task filed under a shared list cannot be planted into a private list', async () => {
+    const { mac, bo } = await party();
+    const planted = { id: 'evil', listId: 'L-home', title: 'pwned', difficulty: 2, repeat: { kind: 'none' }, order: 0, createdAt: 1, timesDone: 0 };
+    const res = await bo.remote.push([{ id: 'evil', kind: 'task', list_id: 'S', data: planted, updated_at: 5_000_000, deleted: false }]);
+    expect(res.rejected).toEqual([]); // the server only sees a task in S, which Bo may write
+    await mac.engine.syncNow();
+    expect(mac.snap.tasks.evil).toBeUndefined();
+    expect(fromRow({ id: 'evil', kind: 'task', list_id: 'S', data: planted, updated_at: 1, deleted: false }, A)).toBeNull();
+  });
+
+  it('nobody can squat another player’s personal ids (schema own_doc_id)', async () => {
+    const { server, mac, bo } = await party();
+    const squat = (id: string, kind: RemoteRow['kind'], list_id: string | null) =>
+      bo.remote.push([{ id, kind, list_id, data: { name: 'x', listId: list_id, title: 'x' }, updated_at: 1, deleted: false }]);
+    expect((await squat(`hero:${A}-x`, 'item', null)).rejected).toHaveLength(1);
+    expect((await squat(`item:${A}:new-sword`, 'potion', null)).rejected).toHaveLength(1);
+    expect((await squat(`potion:${A}:fury:1`, 'task', 'S')).rejected).toHaveLength(1);
+    expect((await squat(`item:${B}:fine`, 'item', null)).rejected).toEqual([]);
+    mac.addItem('new-sword', 'Fresh Sword');
+    await mac.engine.syncNow();
+    expect(mac.engine.lastRejected).toEqual([]);
+    expect(server.rows.get(`item:${A}:new-sword`)!.owner).toBe(A);
+  });
+
+  it('first contact with a different hero (choice skipped, e.g. offline) merges instead of erasing a save', async () => {
+    const server = new FakeServer();
+    const mac = await seededMac(server);
+    mac.complete('t1', 100);
+    await mac.engine.syncNow();
+    const ipad = new Device(server, A, 'ipad', 7_000_000); // newer hero: the old rule let it replace Ayla everywhere
+    ipad.createHero('Ivo');
+    ipad.addList('L-ipad', 'iPad list');
+    ipad.addTask('i1', 'L-ipad', 'Sketch');
+    ipad.complete('i1', 60);
+    await ipad.engine.syncNow();
+    await mac.engine.syncNow();
+    for (const d of [mac, ipad]) {
+      expect(d.snap.hero!.name).toBe('Ayla'); // the established cloud identity is kept
+      expect(d.snap.hero!.xp).toEqual({ mac: 100, ipad: 60 });
+      expect(d.snap.lists['L-ipad']).toBeDefined();
+      expectServerAgrees(server, d);
+    }
+    expect(ipad.live()).toBe(mac.live());
+    // later re-creations on a device that has synced still start a new lineage everywhere
+    ipad.createHero('Ivo II');
+    await ipad.engine.syncNow();
+    await mac.engine.syncNow();
+    expect(mac.snap.hero!.name).toBe('Ivo II');
+    expect(mac.snap.hero!.xp).toEqual({});
+  });
+
+  it('start over: an echo of the old hero does not resurrect it; the new hero replaces it everywhere', async () => {
+    const server = new FakeServer();
+    const mac = await seededMac(server);
+    const phone = new Device(server, A, 'phone', 2_000_000);
+    await phone.engine.syncNow();
+    mac.complete('t1', 10);
+    await mac.engine.syncNow();
+    // like store.resetAll(): drop the hero, tombstone everything else
+    const t = mac.now();
+    const kill = <T extends { updatedAt: number }>(r: Record<string, T>) =>
+      Object.fromEntries(Object.entries(r).map(([k, v]) => [k, { ...v, deleted: true, updatedAt: t }]));
+    mac.snap = { hero: null, lists: kill(mac.snap.lists), tasks: kill(mac.snap.tasks), items: kill(mac.snap.items), potions: kill(mac.snap.potions) };
+    const pulled: RemoteRow[] = [];
+    const pull = mac.remote.pull.bind(mac.remote);
+    mac.remote.pull = async (since) => {
+      const rows = await pull(since);
+      pulled.push(...rows);
+      return rows;
+    };
+    await mac.engine.syncNow();
+    expect(pulled.some((r) => r.kind === 'hero')).toBe(true); // the old hero did come back in the overlap window
+    expect(mac.snap.hero).toBeNull();
+    mac.createHero('Neo');
+    await mac.engine.syncNow();
+    await phone.engine.syncNow();
+    expect(phone.snap.hero!.name).toBe('Neo');
+    expect(Object.values(phone.snap.lists).every((l) => l.deleted)).toBe(true);
+    expect(phone.live()).toBe(mac.live());
+  });
+
+  it('a pull that was in flight while leaving a list does not bring the list back', async () => {
+    const { server, bo, code } = await party();
+    let release = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    let started = false;
+    const pull = bo.remote.pull.bind(bo.remote);
+    bo.remote.pull = async (since) => {
+      const rows = await pull(since); // answered before the leave...
+      started = true;
+      await gate; // ...delivered after it
+      return rows;
+    };
+    bo.addTask('s9', 'S', 'pending edit'); // keeps S's rows in the stale page
+    await bo.remote.push([toRow('task', bo.snap.tasks.s9, B)]);
+    const sync = bo.engine.syncNow();
+    await vi.waitFor(() => expect(started).toBe(true));
+    server.leaveList(B, 'S');
+    bo.engine.purgeList('S');
+    release();
+    await sync;
+    bo.remote.pull = pull;
+    expect(bo.snap.lists.S).toBeUndefined();
+    expect(Object.values(bo.snap.tasks).filter((t) => t.listId === 'S')).toEqual([]);
+    await bo.engine.syncNow();
+    expect(bo.snap.lists.S).toBeUndefined();
+    // rejoining brings it back
+    await bo.engine.pullList(server.joinList(B, code));
+    expect(bo.snap.lists.S.name).toBe('Groceries');
+    expect(bo.liveTasks()).toContain('s1');
+  });
+
+  it('a list left on another device is purged here even if the leave raced this device’s pull', async () => {
+    const { server, bo } = await party();
+    const tablet = new Device(server, B, 'bo-tablet');
+    await tablet.engine.syncNow();
+    expect(tablet.snap.lists.S).toBeDefined();
+    server.leaveList(B, 'S');
+    bo.engine.purgeList('S');
+    await tablet.engine.syncNow();
+    expect(tablet.snap.lists.S).toBeUndefined();
+    expect(tablet.liveTasks()).toEqual([]);
+  });
+});
+
 // ---------------------------------------------------------------- SupabaseRemote against a mock PostgREST client
 
 type Row = Record<string, unknown>;
 
-function mockClient(table: Row[], opts: { session?: boolean; upsert?: (body: Row[]) => { error: { message: string; code?: string } | null; status: number } } = {}) {
+interface MockOpts {
+  session?: boolean;
+  sessionError?: unknown;
+  upsert?: (body: Row[]) => { error: { message: string; code?: string } | null; status: number };
+}
+
+function mockClient(table: Row[], opts: MockOpts = {}) {
   const log: string[] = [];
+  const channels: { name: string; listeners: { filter: Record<string, string>; cb: (p: unknown) => void }[]; status?: (s: string) => void; removed: boolean }[] = [];
   const cmp = (col: string, a: unknown, b: unknown) =>
     col === 'server_ts' ? tsMs(String(a)) - tsMs(String(b)) : String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
   class Query implements PromiseLike<unknown> {
@@ -870,9 +1026,24 @@ function mockClient(table: Row[], opts: { session?: boolean; upsert?: (body: Row
   }
   const client = {
     from: (name: string) => new Query(name),
-    auth: { getSession: async () => ({ data: { session: opts.session === false ? null : { user: { id: A } } } }) },
+    auth: {
+      getSession: async () => ({ data: { session: opts.session === false ? null : { user: { id: A } } }, error: opts.sessionError ?? null }),
+    },
+    channel(name: string) {
+      const ch = { name, listeners: [] as (typeof channels)[number]['listeners'], status: undefined as ((s: string) => void) | undefined, removed: false };
+      channels.push(ch);
+      const api = {
+        on: (_type: string, filter: Record<string, string>, cb: (p: unknown) => void) => (ch.listeners.push({ filter, cb }), api),
+        subscribe: (cb: (s: string) => void) => ((ch.status = cb), api),
+      };
+      return api;
+    },
+    removeChannel: async (api: unknown) => {
+      void api;
+      channels[channels.length - 1].removed = true;
+    },
   };
-  return { client: client as unknown as SupabaseClient, log };
+  return { client: client as unknown as SupabaseClient, log, channels };
 }
 
 const pgTs = (sec: number, micros = 0) =>
@@ -952,5 +1123,110 @@ describe('SupabaseRemote', () => {
     expect((await remote.pullList('L')).map((r) => r.id)).toEqual(['t00001']);
     const members = mockClient([{ list_id: 'L', user_id: A }, { list_id: 'M', user_id: B }, { list_id: 'N', user_id: A }]);
     expect((await new SupabaseRemote(members.client, A).memberships()).sort()).toEqual(['L', 'N']);
+  });
+});
+
+describe('SupabaseRemote realtime and session edge cases', () => {
+  it('a token refresh that fails offline makes the push offline, not an error', async () => {
+    const rows = [docRow(1, pgTs(1)) as unknown as RemoteRow];
+    const m = mockClient([], { session: false, sessionError: new AuthRetryableFetchError('Failed to fetch', 0) });
+    await expect(new SupabaseRemote(m.client, A).push(rows)).rejects.toBeInstanceOf(SyncOfflineError);
+    expect(m.log).toEqual([]);
+  });
+
+  it('subscribes to docs and to this user’s own memberships, and asks for a resync when needed', () => {
+    const m = mockClient([]);
+    const got: RemoteRow[] = [];
+    let resyncs = 0;
+    const off = new SupabaseRemote(m.client, A).subscribe((r) => got.push(r), () => resyncs++);
+    const ch = m.channels[0];
+    const docs = ch.listeners.find((l) => l.filter.table === 'docs')!;
+    const members = ch.listeners.find((l) => l.filter.table === 'list_members')!;
+    expect(members.filter.filter).toBe(`user_id=eq.${A}`);
+    docs.cb({ eventType: 'UPDATE', new: { ...docRow(1, pgTs(1)), updated_at: '7', list_id: undefined } });
+    expect(got).toHaveLength(1);
+    expect(got[0]).toMatchObject({ id: 't00001', updated_at: 7, list_id: null, deleted: false });
+    docs.cb({ eventType: 'DELETE', old: { id: 't00001' } });
+    expect(got).toHaveLength(1);
+    docs.cb({ eventType: 'UPDATE', new: { id: 't00002' } }); // payload without data (too large / unchanged toast)
+    expect(resyncs).toBe(1);
+    members.cb({ eventType: 'INSERT', new: { list_id: 'L', user_id: A } });
+    expect(resyncs).toBe(2);
+    ch.status!('SUBSCRIBED');
+    expect(resyncs).toBe(2); // the first join is covered by start()'s own sync
+    ch.status!('CHANNEL_ERROR');
+    ch.status!('SUBSCRIBED');
+    expect(resyncs).toBe(3); // a reconnect may have missed events
+    off();
+    expect(ch.removed).toBe(true);
+  });
+});
+
+describe('auth from the stored session', () => {
+  const memoryStorage = () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    });
+    return store;
+  };
+  const saved = { access_token: 'expired', refresh_token: 'r1', expires_at: 1, user: { id: A, email: 'a@test' } };
+
+  it('stays signed in offline when the access token expired and cannot be refreshed yet', async () => {
+    const store = memoryStorage();
+    setSyncConfig({ url: 'https://example.supabase.co/', anonKey: 'anon-key-for-tests' });
+    store.set('questlog-auth', JSON.stringify(saved));
+    auth.getSession.mockResolvedValue({ data: { session: null }, error: new AuthRetryableFetchError('Failed to fetch', 0) });
+    expect(await getUser()).toEqual({ id: A, email: 'a@test' });
+    // refresh token revoked / signed out: no session and no network error -> signed out
+    auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+    expect(await getUser()).toBeNull();
+    // a garbled stored session is not a user
+    store.set('questlog-auth', '{"user":{}}');
+    auth.getSession.mockResolvedValue({ data: { session: null }, error: new AuthRetryableFetchError('Failed to fetch', 0) });
+    expect(await getUser()).toBeNull();
+    auth.getSession.mockResolvedValue({ data: { session: { user: { id: B, email: null } } }, error: null });
+    expect(await getUser()).toEqual({ id: B, email: null });
+  });
+
+  it('the initial auth event falls back to the stored session; sign-out events do not', async () => {
+    const store = memoryStorage();
+    setSyncConfig({ url: 'https://example.supabase.co', anonKey: 'anon-key-for-tests' });
+    store.set('questlog-auth', JSON.stringify(saved));
+    let emit: (event: string, session: unknown) => void = () => {};
+    const unsubscribe = vi.fn();
+    auth.onAuthStateChange.mockImplementation((cb: typeof emit) => ((emit = cb), { data: { subscription: { unsubscribe } } }));
+    auth.getSession.mockResolvedValue({ data: { session: null }, error: new AuthRetryableFetchError('Failed to fetch', 0) });
+    const seen: (string | null)[] = [];
+    const off = onAuthChange((u) => seen.push(u?.id ?? null));
+    emit('INITIAL_SESSION', null);
+    await vi.waitFor(() => expect(seen).toEqual([A]));
+    emit('SIGNED_OUT', null);
+    await vi.waitFor(() => expect(seen).toEqual([A, null]));
+    emit('TOKEN_REFRESHED', { user: { id: A, email: 'a@test' } });
+    await vi.waitFor(() => expect(seen).toEqual([A, null, A]));
+    off();
+    expect(unsubscribe).toHaveBeenCalled();
+  });
+});
+
+describe('party helpers', () => {
+  it('normalizes typed codes and pasted invite links', () => {
+    expect(normalizeCode(' k7x-q2m ')).toBe('K7XQ2M');
+    expect(normalizeCode('https://me.github.io/TODOLIST/#join=K7XQ2M')).toBe('K7XQ2M');
+    expect(normalizeCode('HTTPS://ME.GITHUB.IO/TODOLIST/#JOIN=K7XQ2M')).toBe('K7XQ2M');
+    expect(inviteUrl('K7XQ2M')).toMatch(/#join=K7XQ2M$/);
+  });
+
+  it('turns any profile row into a sane party member', () => {
+    expect(toMember({ user_id: B, role: 'member', name: null, data: null })).toEqual({
+      userId: B, role: 'member', name: 'Adventurer', level: 1, appearance: undefined, classId: undefined, title: undefined,
+    });
+    expect(toMember({ user_id: A, role: 'owner', name: ' Ayla ', data: { level: 1e6 + 0.7, classId: 'mage', title: 'Slayer' } })).toMatchObject({
+      name: 'Ayla', level: 1e6, classId: 'mage', title: 'Slayer',
+    });
+    expect(toMember({ user_id: A, role: 'owner', name: 'x', data: { level: 'NaN' } }).level).toBe(1);
   });
 });

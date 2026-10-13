@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Counter, Hero, SkillId, Task } from '../core/types';
 import { Rng } from '../core/rng';
-import { canon, DAYS_KEPT, mergeCounter, mergeHero, newer, resolveHero, sameDoc, unionSorted } from './merge';
+import { canon, DAYS_KEPT, lineage, mergeCounter, mergeHero, newer, resolveHero, sameDoc, unionSorted } from './merge';
 
 const DEVICES = ['dev-a', 'dev-b', 'dev-c', 'dev-d'];
 const SKILLS: SkillId[] = ['lore', 'smithing', 'athletics'];
@@ -257,6 +257,33 @@ describe('resolveHero (lineage)', () => {
     const a = randomHero(rng, 500);
     const b = randomHero(rng, 500);
     expect(canon(resolveHero(a, b))).toBe(canon(mergeHero(a, b)));
+  });
+
+  it('is commutative and associative in whatever order copies meet, even with a missing createdAt', () => {
+    const rng = new Rng('lineage-laws');
+    const make = () => {
+      const h = randomHero(rng, rng.pick([100, 200, 200]));
+      if (rng.chance(0.3)) delete (h as Partial<Hero>).createdAt; // legacy / malformed save
+      return h;
+    };
+    for (let i = 0; i < 400; i++) {
+      const [a, b, c] = [make(), make(), make()];
+      expect(canon(resolveHero(a, b))).toBe(canon(resolveHero(b, a)));
+      expect(canon(resolveHero(resolveHero(a, b), c))).toBe(canon(resolveHero(a, resolveHero(b, c))));
+      expect(lineage(resolveHero(a, b))).toBe(Math.max(lineage(a), lineage(b)));
+    }
+  });
+
+  it('keeps the progress of every copy when createdAt is missing on all of them', () => {
+    const rng = new Rng('legacy');
+    const [a, b, c] = [randomHero(rng), randomHero(rng), randomHero(rng)].map((h, i) => {
+      const x = { ...h, xp: { [`dev${i}`]: 10 * (i + 1) } } as Partial<Hero>;
+      delete x.createdAt;
+      return x as Hero;
+    });
+    const all = resolveHero(resolveHero(a, b), c);
+    expect(all.xp).toEqual({ dev0: 10, dev1: 20, dev2: 30 });
+    expect(Number.isFinite(all.createdAt)).toBe(true);
   });
 
   it('lets the newest lineage replace an older one wholesale, even if the older was edited later', () => {
