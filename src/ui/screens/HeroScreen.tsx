@@ -12,7 +12,7 @@ import { describePotion, potionName } from '../../game/potions';
 import { itemPower, sellPrice } from '../../game/loot';
 import { achievementStatus, unlockedTitles } from '../../game/achievements';
 import { achievementCtx, streakDays } from '../../state/rewards';
-import { Bar, HeroPreview, PxImg, Ui, useMedia } from '../components/common';
+import { Bar, HeroPreview, PxImg, Sheet, Ui, useMedia } from '../components/common';
 import { ItemIcon, ItemSheet, PotionIcon } from '../components/loot';
 import { sfx } from '../../audio/sfx';
 
@@ -330,8 +330,7 @@ function BarberSheet({ onClose }: { onClose: () => void }) {
   const dyes = (target: string) => hero.owned.filter((o) => o.startsWith(`dye:${target}:`)).map((o) => o.split(':')[2]);
   const capeDyes = dyes('cape');
   return (
-    <div className="sheet-back" onClick={onClose}>
-      <div className="win sheet" onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={onClose}>
         <div className="win-title">Barber & Tailor</div>
         <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 0' }}>
           <HeroPreview app={app} look={previewLook} theme="tavern" w={64} h={48} scale={3} />
@@ -410,8 +409,7 @@ function BarberSheet({ onClose }: { onClose: () => void }) {
             Save
           </button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }
 

@@ -1427,3 +1427,77 @@ canvas.px {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* ---------- desktop robustness (review fixes) ---------- */
+@media (min-width: 900px) {
+  .main-col {
+    min-width: 0; /* let the task column shrink instead of pushing the page sideways */
+  }
+  .side {
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .stage-panel .panel-log {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .stage-panel .panel-log .log {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+  }
+}
+@media (min-width: 900px) and (max-width: 1179px) {
+  .side {
+    width: 210px;
+  }
+  .stage-panel {
+    width: 252px;
+    padding: 12px;
+  }
+}
+
+/* long names never break the chrome */
+.side-item > span:not(.count),
+.chip > span:not(.count) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.side-item > span:not(.count) {
+  flex: 1;
+}
+.chip > span:not(.count) {
+  max-width: 180px;
+}
+.banner-info > .win.banner-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.banner-info > div:last-child {
+  flex: none;
+}
+
+/* HUD: name ellipsizes, title yields first */
+.hud-name {
+  min-width: 0;
+}
+.hud-name .hname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hud-name .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 2;
+  min-width: 0;
+}
+.hud-stats {
+  flex: none;
+  max-width: 40%;
+}

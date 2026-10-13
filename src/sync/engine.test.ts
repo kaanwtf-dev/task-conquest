@@ -832,6 +832,36 @@ describe('review: hostile rows, lineage first contact, start over, leave races',
     expect(fromRow({ id: 'evil', kind: 'task', list_id: 'S', data: planted, updated_at: 1, deleted: false }, A)).toBeNull();
   });
 
+  it('rows the UI cannot render (unknown type/theme/skill/difficulty/repeat) are not applied', async () => {
+    const { mac, bo } = await party();
+    const list = mac.snap.lists.S;
+    const task = mac.snap.tasks.s1;
+    const bad: [string, Record<string, unknown>][] = [
+      ['type', { ...list, type: 'raid' }],
+      ['theme', { ...list, theme: 'moon' }],
+      ['skill', { ...list, skill: '__proto__' }],
+      ['difficulty', { ...task, difficulty: 9 }],
+      ['difficulty', { ...task, difficulty: '2' }],
+      ['repeat', { ...task, repeat: { kind: 'hourly' } }],
+      ['repeat', { ...task, repeat: { kind: 'days', days: 'Mon' } }],
+      ['repeat', { ...task, repeat: null }],
+    ];
+    let at = 6_000_000;
+    for (const [field, data] of bad) {
+      const kind = 'listId' in data ? 'task' : 'list';
+      const row: RemoteRow = { id: String(data.id), kind, list_id: 'S', data, updated_at: ++at, deleted: false };
+      expect(fromRow(row, A), field).toBeNull();
+      await bo.remote.push([row]);
+    }
+    await mac.engine.syncNow();
+    expect(mac.snap.lists.S).toEqual(list);
+    expect(mac.snap.tasks.s1).toEqual(task);
+    // well-formed edits still flow
+    await bo.remote.push([toRow('task', { ...task, repeat: { kind: 'days', days: [1, 3] }, difficulty: 4, updatedAt: ++at } as Task, B)]);
+    await mac.engine.syncNow();
+    expect(mac.snap.tasks.s1).toMatchObject({ difficulty: 4, repeat: { kind: 'days', days: [1, 3] } });
+  });
+
   it('nobody can squat another player’s personal ids (schema own_doc_id)', async () => {
     const { server, mac, bo } = await party();
     const squat = (id: string, kind: RemoteRow['kind'], list_id: string | null) =>

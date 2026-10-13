@@ -4,7 +4,7 @@ import { SKILLS } from '../../game/catalog';
 import { iconFor } from '../../pixel/iconGen';
 import { THEMES, type ThemeId } from '../../pixel/themes';
 import type { AnimMode, ListType, SkillId } from '../../core/types';
-import { PxImg, themeStyle } from '../components/common';
+import { PxImg, Sheet, themeStyle } from '../components/common';
 import { sfx, setSfxVolume, unlockAudio } from '../../audio/sfx';
 
 export function SettingsScreen() {
@@ -173,8 +173,7 @@ export function ListSheet({ onClose, editId }: { onClose: () => void; editId?: s
   const [icon, setIcon] = useState(existing?.icon ?? LIST_ICONS[2]);
   const [color, setColor] = useState(existing?.color ?? LIST_COLORS[0]);
   return (
-    <div className="sheet-back" onClick={onClose}>
-      <div className="win sheet" style={themeStyle(theme)} onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={onClose} style={themeStyle(theme)}>
         <div className="win-title">{existing ? 'Edit list' : 'New quest list'}</div>
         <form
           onSubmit={(e) => {
@@ -191,14 +190,14 @@ export function ListSheet({ onClose, editId }: { onClose: () => void; editId?: s
               }
               sfx.pop();
             } else {
-              s.addList({ name, type, theme, skill, icon, color });
+              s.setActiveList(s.addList({ name, type, theme, skill, icon, color }));
               sfx.loot();
             }
             onClose();
           }}
         >
           <Opt label="Name">
-            <input className="text-in" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Home chores" />
+            <input className="text-in" autoFocus={!existing} maxLength={40} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Home chores" />
           </Opt>
           <Opt label="Type">
             {(Object.keys(LIST_TYPE_INFO) as ListType[]).map((t) => (
@@ -265,7 +264,6 @@ export function ListSheet({ onClose, editId }: { onClose: () => void; editId?: s
             </div>
           </div>
         </form>
-      </div>
-    </div>
+    </Sheet>
   );
 }

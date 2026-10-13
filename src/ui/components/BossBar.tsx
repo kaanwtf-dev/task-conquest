@@ -5,7 +5,7 @@ import { bossFor, bossRankDef, bossReward } from '../../game/bosses';
 import { sum, heroLevel } from '../../game/progression';
 import { bossUrl } from '../../pixel/sprites/items';
 import { fx } from '../../state/fx';
-import { Bar, PxImg } from './common';
+import { Bar, PxImg, Sheet } from './common';
 import { RARITIES } from '../../game/loot';
 
 export default function BossBar() {
@@ -39,8 +39,7 @@ export default function BossBar() {
         </span>
       </button>
       {info && (
-        <div className="sheet-back" onClick={() => setInfo(false)}>
-          <div className="win sheet" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
+        <Sheet onClose={() => setInfo(false)} style={{ textAlign: 'center' }}>
             <PxImg src={bossUrl(boss.archetype, boss.hue)} size={120} style={{ margin: '0 auto', display: 'block' }} />
             <div className="win-title" style={{ marginTop: 8 }}>
               {rank ?? 'Boss'} #{boss.index}: {boss.name}
@@ -57,8 +56,7 @@ export default function BossBar() {
             <button className="btn" onClick={() => setInfo(false)}>
               To battle!
             </button>
-          </div>
-        </div>
+        </Sheet>
       )}
     </>
   );

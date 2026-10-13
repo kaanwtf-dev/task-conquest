@@ -6,7 +6,7 @@ import { STAT_INFO, computeStats } from '../../game/stats';
 import { itemIconUrl, potionIconUrl } from '../../pixel/sprites/items';
 import { equippedItems, useStore } from '../../state/store';
 import { heroGold } from '../../game/progression';
-import { PxImg, Ui } from './common';
+import { PxImg, Sheet, Ui } from './common';
 import { sfx } from '../../audio/sfx';
 
 export function rarityColor(r: number): string {
@@ -74,8 +74,7 @@ export function ItemSheet({ item: given, onClose, mode = 'owned', price, onBuy }
   const powerDiff = Math.round(cmp.power - before.power);
 
   return (
-    <div className="sheet-back" onClick={onClose}>
-      <div className="win sheet item-sheet" onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={onClose} className="item-sheet">
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <ItemIcon item={item} size={64} />
           <div style={{ minWidth: 0 }}>
@@ -200,7 +199,6 @@ export function ItemSheet({ item: given, onClose, mode = 'owned', price, onBuy }
             </>
           )}
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

@@ -1,7 +1,8 @@
 // Local-first sync engine: the store stays the source of truth on each device; the engine pulls remote
 // changes, merges them in (LWW per doc, CRDT for the hero) and pushes local edits it has not sent yet.
 // Dirty tracking never touches the store: a persisted map remembers the updatedAt last exchanged per doc.
-import type { Hero, Meta, Task } from '../core/types';
+import type { Difficulty, Hero, ListType, Meta, Repeat, SkillId, Task } from '../core/types';
+import type { ThemeId } from '../pixel/themes';
 import { canon, lineage, newer, resolveHero, sameDoc } from './merge';
 import { SyncOfflineError } from './types';
 import type { AdoptStrategy, DocKind, EngineStatus, KeyValue, LocalAdapter, LocalSnapshot, RemoteAdapter, RemoteRow } from './types';
@@ -46,15 +47,38 @@ export function toRow(kind: DocKind, doc: Meta, userId: string): RemoteRow {
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const isStr = (v: unknown): v is string => typeof v === 'string';
 
-/** Minimal shape checks so a malformed row (old client, bad actor in a shared list) never reaches the UI. */
+// Closed sets the UI looks tables up by. A shared doc outside them (a newer app version, a bad actor in a
+// party) would crash rendering on every launch, so it is not applied. Records, so that a new member of
+// one of these unions fails to compile until it is added here.
+const LIST_TYPES: Record<ListType, true> = { daily: true, weekly: true, quests: true, supply: true, custom: true };
+const THEMES: Record<ThemeId, true> = { tavern: true, forest: true, beach: true, dungeon: true, snow: true, desert: true, castle: true, volcano: true };
+const SKILLS: Record<SkillId, true> = {
+  athletics: true, hearthcraft: true, mercantile: true, lore: true, smithing: true,
+  alchemy: true, speech: true, restoration: true, artistry: true, wayfaring: true,
+};
+const DIFFICULTIES: Record<Difficulty, true> = { 0: true, 1: true, 2: true, 3: true, 4: true };
+const REPEATS: Record<Repeat['kind'], (r: Record<string, unknown>) => boolean> = {
+  none: () => true,
+  daily: () => true,
+  weekly: () => true,
+  monthly: () => true,
+  days: (r) => Array.isArray(r.days) && r.days.every((x) => Number.isInteger(x) && x >= 0 && x <= 6),
+  interval: (r) => typeof r.every === 'number' && Number.isFinite(r.every) && isStr(r.anchor),
+};
+const oneOf = (set: object, v: unknown): boolean => isStr(v) && Object.hasOwn(set, v);
+const validRepeat = (r: unknown): boolean => isObj(r) && oneOf(REPEATS, r.kind) && REPEATS[r.kind as Repeat['kind']](r);
+
+/** Shape checks so a malformed row (old or newer client, bad actor in a shared list) never reaches the UI. */
 function plausible(kind: DocKind, d: Record<string, unknown>): boolean {
   switch (kind) {
     case 'hero':
       return isStr(d.name) && isObj(d.appearance) && isStr(d.classId);
     case 'list':
-      return isStr(d.name);
+      return isStr(d.name) && oneOf(LIST_TYPES, d.type) && oneOf(THEMES, d.theme) && oneOf(SKILLS, d.skill);
     case 'task':
-      return isStr(d.listId) && isStr(d.title);
+      return (
+        isStr(d.listId) && isStr(d.title) && typeof d.difficulty === 'number' && Object.hasOwn(DIFFICULTIES, d.difficulty) && validRepeat(d.repeat)
+      );
     case 'item':
       return isStr(d.slot) && isStr(d.base);
     case 'potion':

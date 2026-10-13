@@ -23,13 +23,22 @@ export default function App() {
   const corner = useStore((s) => s.settings.cornerHero ?? 'big');
   const list = useStore((s) => (s.activeListId ? s.lists[s.activeListId] : undefined));
   const wide = useMedia('(min-width: 900px)');
+  const roomy = useMedia('(min-width: 1180px)');
   const [newList, setNewList] = useState(false);
 
   // desktop keyboard shortcuts: N or / = add quest, T = Today, 1-9 = lists, Esc closes sheets via click-away
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (e.metaKey || e.ctrlKey || e.altKey || el.closest('input, textarea, select, [contenteditable]')) return;
+      const sheet = document.querySelector<HTMLElement>('.sheet-back');
+      if (e.key === 'Escape') {
+        // Esc closes the open sheet, otherwise just leaves the focused input
+        if (sheet) sheet.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })), sheet.click();
+        else (document.activeElement as HTMLElement | null)?.blur?.();
+        return;
+      }
+      // shortcuts never act on the screen underneath an open sheet
+      if (sheet || e.metaKey || e.ctrlKey || e.altKey || el.closest('input, textarea, select, [contenteditable]')) return;
       const st = useStore.getState();
       if (!st.hero) return;
       if (e.key === 'n' || e.key === '/') {
@@ -40,7 +49,7 @@ export default function App() {
       else if (/^[1-9]$/.test(e.key)) {
         const l = visibleLists(st)[Number(e.key) - 1];
         if (l) st.setActiveList(l.id);
-      } else if (e.key === 'Escape') document.querySelector<HTMLElement>('.sheet-back')?.click();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -81,14 +90,14 @@ export default function App() {
         <aside className="stage-panel" style={themeStyle(theme)}>
           <Hud />
           <div className="win" style={{ padding: 0, overflow: 'hidden', lineHeight: 0 }}>
-            <HeroStage w={108} h={70} scale={3} heroX={8} monsterX={74} theme={theme} onTap={() => setTab('hero')} />
+            <HeroStage w={108} h={70} scale={roomy ? 3 : 2} heroX={8} monsterX={74} theme={theme} onTap={() => setTab('hero')} />
           </div>
-          <div className="win">
+          <div className="win panel-log">
             <div className="win-title" style={{ padding: '10px 12px 0' }}>
               Adventure log
             </div>
             <div className="log">
-              {log.slice(0, 12).map((l) => (
+              {log.slice(0, 40).map((l) => (
                 <div key={l.id} className={`lk-${l.kind}`}>
                   ▸ {l.text}
                 </div>

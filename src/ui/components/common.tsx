@@ -164,3 +164,35 @@ export function Bar({ value, max, kind, label }: { value: number; max: number; k
     </div>
   );
 }
+
+/**
+ * Modal sheet with a dimmed backdrop. Closes only when a press both starts and ends on the backdrop,
+ * so drag-selecting text inside an input and releasing outside doesn't discard edits.
+ */
+export function Sheet({ onClose, children, className, style }: { onClose: () => void; children: React.ReactNode; className?: string; style?: CSSProperties }) {
+  const downOnBack = useRef(false);
+  return (
+    <div
+      className="sheet-back"
+      onPointerDown={(e) => (downOnBack.current = e.target === e.currentTarget)}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && downOnBack.current) onClose();
+        downOnBack.current = false;
+      }}
+    >
+      <div className={`win sheet ${className ?? ''}`} style={style} role="dialog" aria-modal="true">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** 1,234 below 100k; 123.4K / 12.3M / 1.2B above, so huge numbers never crush the HUD. */
+export function compact(n: number): string {
+  if (!Number.isFinite(n)) return '∞';
+  const a = Math.abs(n);
+  if (a < 100_000) return Math.round(n).toLocaleString('en-US');
+  const units: [number, string][] = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
+  for (const [v, u] of units) if (a >= v) return `${(n / v).toFixed(a / v >= 100 ? 0 : 1)}${u}`;
+  return String(n);
+}

@@ -135,6 +135,8 @@ class FakeSource extends FakeNode {
 class FakeCtx {
   static last: FakeCtx | null = null;
   state = 'running';
+  allowResume = true; // false: like a browser refusing resume() outside a user gesture
+  resumeCalls = 0;
   sampleRate = 8000;
   destination = new FakeNode();
   gains: FakeGain[] = [];
@@ -147,6 +149,8 @@ class FakeCtx {
     return (Date.now() - this.t0) / 1000;
   }
   resume() {
+    this.resumeCalls++;
+    if (this.allowResume && this.state !== 'closed') this.state = 'running';
     return Promise.resolve();
   }
   createGain() {
@@ -182,11 +186,25 @@ function setVisible(v: boolean) {
   doc.visibilityState = v ? 'visible' : 'hidden';
   listeners.forEach((fn) => fn());
 }
+const winListeners = new Map<string, Set<() => void>>();
+const win = {
+  AudioContext: FakeCtx,
+  addEventListener: (type: string, fn: () => void) => {
+    if (!winListeners.has(type)) winListeners.set(type, new Set());
+    winListeners.get(type)!.add(fn);
+  },
+  removeEventListener: (type: string, fn: () => void) => winListeners.get(type)?.delete(fn),
+};
+const gesture = (type: string) => [...(winListeners.get(type) ?? [])].forEach((fn) => fn());
+const armed = () => [...winListeners.values()].reduce((n, set) => n + set.size, 0);
+const flush = async () => {
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+};
 
 describe('music with WebAudio', () => {
   beforeAll(() => {
     vi.useFakeTimers();
-    vi.stubGlobal('window', { AudioContext: FakeCtx });
+    vi.stubGlobal('window', win);
     vi.stubGlobal('document', doc);
   });
   afterAll(() => {
@@ -297,5 +315,69 @@ describe('music with WebAudio', () => {
     setVisible(false);
     setVisible(true);
     expect(currentTrack()).toBeNull();
+  });
+
+  it('clamps odd volumes: Infinity is full, NaN/undefined/negative mute', () => {
+    // the music bus (not the sfx master): the speaker-side gain the track faders feed into
+    const bus = () => ctx().gains.find((g) => g.out.includes(ctx().destination) && ctx().gains.some((f) => f.out.includes(g)))!;
+    const lastTarget = () => bus().gain.events.filter(([k]) => k === 'target').at(-1)?.[1];
+    playMusic('tavern');
+    setMusicVolume(Number.POSITIVE_INFINITY);
+    expect(lastTarget()).toBe(0.5);
+    expect(currentTrack()).toBe('tavern');
+    setMusicVolume(2);
+    expect(lastTarget()).toBe(0.5);
+    for (const v of [Number.NaN, undefined as unknown as number, -0.3, Number.NEGATIVE_INFINITY]) {
+      setMusicVolume(0.7);
+      expect(currentTrack()).toBe('tavern');
+      setMusicVolume(v);
+      expect(lastTarget()).toBe(0);
+      expect(currentTrack()).toBeNull();
+    }
+    stopMusic();
+  });
+
+  it('resumes a suspended context on the next gesture anywhere, then stops listening', async () => {
+    vi.advanceTimersByTime(2000);
+    const c = ctx();
+    c.state = 'suspended'; // e.g. created before the first tap, or iOS after a phone call
+    c.allowResume = false;
+    setMusicVolume(0.5);
+    playMusic('forest');
+    expect(currentTrack()).toBe('forest');
+    expect(armed()).toBeGreaterThan(0);
+    const perType = armed();
+    playMusic('beach'); // no duplicate listeners
+    expect(armed()).toBe(perType);
+
+    gesture('pointerdown'); // a gesture the browser does not count: stay armed
+    await flush();
+    expect(c.state).toBe('suspended');
+    expect(armed()).toBe(perType);
+
+    c.allowResume = true;
+    const calls = c.resumeCalls;
+    gesture('touchend');
+    await flush();
+    expect(c.resumeCalls).toBe(calls + 1);
+    expect(c.state).toBe('running');
+    expect(armed()).toBe(0);
+    gesture('click');
+    expect(c.resumeCalls).toBe(calls + 1);
+  });
+
+  it('re-arms after the page comes back with a suspended context', async () => {
+    const c = ctx();
+    setVisible(false);
+    c.state = 'interrupted';
+    c.allowResume = false;
+    setVisible(true);
+    expect(currentTrack()).toBe('beach');
+    expect(armed()).toBeGreaterThan(0);
+    c.allowResume = true;
+    gesture('keydown');
+    await flush();
+    expect(c.state).toBe('running');
+    expect(armed()).toBe(0);
   });
 });

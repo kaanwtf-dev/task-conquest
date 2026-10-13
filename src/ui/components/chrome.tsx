@@ -1,11 +1,13 @@
 // App chrome: HUD, mobile tab bar, list chips, desktop sidebar.
+import { useMemo } from 'react';
 import { useStore, visibleLists, listTasks, TODAY_ID, type Tab } from '../../state/store';
+import { todaySections, todayRemaining } from '../../state/today';
 import { heroGold, heroLevel, levelTitle } from '../../game/progression';
-import { streak, isDone, isActiveToday, todayKey } from '../../core/time';
+import { streak, isDone, isActiveToday } from '../../core/time';
 import { useHeroLook } from '../../game/look';
 import { streakDays } from '../../state/rewards';
 import { iconFor } from '../../pixel/iconGen';
-import { Bar, PxImg, Ui, portraitUrl, useNow } from './common';
+import { Bar, PxImg, Ui, compact, portraitUrl, useNow } from './common';
 import type { TaskList } from '../../core/types';
 import type { UiSprite } from '../../pixel/sprites/ui';
 import { sfx } from '../../audio/sfx';
@@ -27,7 +29,9 @@ export function Hud() {
       <div className="hud-mid">
         <div className="hud-name">
           <span className="lv">Lv{level}</span>
-          <span>{hero.name}</span>
+          <span className="hname" title={hero.name}>
+            {hero.name}
+          </span>
           <span className="title">{hero.title ?? levelTitle(level)}</span>
         </div>
         <Bar value={into} max={need} label={`${into}/${need} XP`} />
@@ -35,7 +39,7 @@ export function Hud() {
       <div className="hud-stats">
         <span className="stat">
           <Ui name="coin" size={18} />
-          {gold.toLocaleString()}
+          {compact(gold)}
         </span>
         <span className="stat" title="Daily streak">
           <Ui name="flame" size={18} />
@@ -94,25 +98,19 @@ function ChipItem({ l, active, onPick, className }: { l: TaskList; active: boole
   return (
     <button className={`${className} ${active ? 'active' : ''}`} style={{ ['--chip' as string]: l.color }} onClick={onPick}>
       <PxImg src={iconFor(l.name, l.icon)} size={className === 'chip' ? 24 : 26} />
-      <span>{l.name}</span>
+      <span title={l.name}>{l.name}</span>
       <span className="count">{c.done ? '✓' : c.label}</span>
     </button>
   );
 }
 
-/** Remaining today-relevant tasks across all non-supply lists. */
+/** Remaining today-relevant tasks across all non-supply lists (same rules as the Today view). */
 function useTodayCount(): number {
-  const s = useStore();
+  const lists = useStore((s) => s.lists);
+  const tasks = useStore((s) => s.tasks);
+  const cfg = useStore((s) => s.settings);
   const now = useNow();
-  const today = todayKey(now, s.settings);
-  const ok = new Set(visibleLists(s).filter((l) => l.type !== 'supply').map((l) => l.id));
-  return Object.values(s.tasks).filter(
-    (t) =>
-      !t.deleted &&
-      ok.has(t.listId) &&
-      !isDone(t, now, s.settings) &&
-      ((t.due && t.due <= today) || (!t.due && ['daily', 'days', 'interval'].includes(t.repeat.kind) && isActiveToday(t, now, s.settings))),
-  ).length;
+  return useMemo(() => todayRemaining(todaySections(lists, tasks, now, cfg)), [lists, tasks, cfg, now]);
 }
 
 function TodayItem({ className, active, onPick }: { className: string; active: boolean; onPick: () => void }) {

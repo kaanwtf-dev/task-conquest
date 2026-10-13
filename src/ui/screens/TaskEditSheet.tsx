@@ -5,7 +5,7 @@ import { iconFor, firstEmoji } from '../../pixel/iconGen';
 import { AISLES } from '../../pixel/keywords';
 import { todayKey } from '../../core/time';
 import type { Difficulty, Repeat, Task } from '../../core/types';
-import { PxImg, themeStyle } from '../components/common';
+import { PxImg, Sheet, themeStyle } from '../components/common';
 import { sfx } from '../../audio/sfx';
 
 const QUICK_ICONS = ['⭐', '🔥', '💼', '🏠', '🧹', '🛒', '📚', '🏋️', '💊', '🐶', '🎮', '🎁', '💰', '📞', '✈️', '🍳', '🧺', '🌱'];
@@ -62,11 +62,8 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
   };
 
   return (
-    <div className="sheet-back" onClick={onClose}>
+    <Sheet onClose={onClose} style={themeStyle(list.theme)}>
       <form
-        className="win sheet"
-        style={themeStyle(list.theme)}
-        onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
           save();
@@ -231,7 +228,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
           </div>
         </div>
       </form>
-    </div>
+    </Sheet>
   );
 }
 

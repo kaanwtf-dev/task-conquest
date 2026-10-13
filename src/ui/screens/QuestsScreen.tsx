@@ -21,6 +21,7 @@ import { markTap, haptic } from '../components/Effects';
 import { sfx, unlockAudio } from '../../audio/sfx';
 import type { Task, TaskList } from '../../core/types';
 import TaskEditSheet from './TaskEditSheet';
+import { todaySections } from '../../state/today';
 import BossBar from '../components/BossBar';
 import { ListSheet } from './OtherScreens';
 
@@ -45,7 +46,7 @@ export default function QuestsScreen() {
   const reset = msUntilReset(info.repeat, now, cfg);
 
   return (
-    <div className="scroll" style={themeStyle(list.theme)}>
+    <div className="scroll" key={list.id} style={themeStyle(list.theme)}>
       <BossBar />
       <SceneBanner theme={list.theme} height={wide ? 56 : 52} scale={wide ? 3 : 2}>
         <div className="banner-info">
@@ -80,7 +81,7 @@ export default function QuestsScreen() {
         <TaskView tasks={tasks} now={now} onEdit={setEditTask} />
       )}
       {editTask && <TaskEditSheet taskId={editTask} onClose={() => setEditTask(null)} />}
-      {editList && <ListSheet editId={list.id} onClose={() => setEditList(false)} />}
+      {editList && <ListSheet key={list.id} editId={list.id} onClose={() => setEditList(false)} />}
     </div>
   );
 }
@@ -90,28 +91,8 @@ export default function QuestsScreen() {
 function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wide: boolean; onEdit: (id: string) => void; editTask: string | null; closeEdit: () => void }) {
   const s = useStore();
   const cfg = s.settings;
-  const today = todayKey(now, cfg);
   const lists = visibleLists(s).filter((l) => l.type !== 'supply');
-  const listIds = new Set(lists.map((l) => l.id));
-  const all = Object.values(s.tasks).filter((t) => !t.deleted && listIds.has(t.listId));
-  const order = (a: Task, b: Task) => (s.lists[a.listId]?.order ?? 0) - (s.lists[b.listId]?.order ?? 0) || a.order - b.order;
-
-  // a due date on a repeating task marks its first occurrence; afterwards it's just routine
-  const oneOff = (t: Task) => t.repeat.kind === 'none';
-  const overdue = all.filter((t) => oneOff(t) && t.due && t.due < today && !isDone(t, now, cfg)).sort(order);
-  const dueToday = all.filter((t) => t.due === today && !isDone(t, now, cfg)).sort(order);
-  const routine = all
-    .filter(
-      (t) =>
-        t.due !== today &&
-        !(oneOff(t) && t.due) &&
-        ['daily', 'days', 'interval'].includes(t.repeat.kind) &&
-        isActiveToday(t, now, cfg) &&
-        !isDone(t, now, cfg),
-    )
-    .sort(order);
-  const week = all.filter((t) => !t.due && t.repeat.kind === 'weekly' && !isDone(t, now, cfg)).sort(order);
-  const doneToday = all.filter((t) => t.doneAt && todayKey(t.doneAt, cfg) === today && isDone(t, now, cfg)).sort(order);
+  const { overdue, dueToday, routine, week, doneToday } = todaySections(s.lists, s.tasks, now, cfg);
   const total = overdue.length + dueToday.length + routine.length + doneToday.length;
   const date = new Date(now).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 
@@ -229,7 +210,7 @@ function QuickAdd({ list, dueToday }: { list?: TaskList; dueToday?: boolean }) {
   );
 }
 
-let lastToggle = 0;
+let lastToggle = { t: 0, id: '', y: 0 };
 
 interface RowProps {
   task: Task;
@@ -260,6 +241,13 @@ function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps)
       style={style}
       {...(sortable ? { ...sortable.attributes, ...sortable.listeners, role: 'listitem', 'aria-roledescription': 'draggable quest' } : {})}
       onClick={() => onEdit(task.id)}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && e.target === e.currentTarget) {
+          e.preventDefault();
+          onEdit(task.id);
+        } else (sortable?.listeners as { onKeyDown?: (ev: React.KeyboardEvent) => void } | undefined)?.onKeyDown?.(e);
+      }}
     >
       <button
         className={`check ${done ? 'on' : ''}`}
@@ -269,9 +257,11 @@ function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps)
         onKeyDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
-          // rows reflow when a task completes; a quick second tap must not hit the next task
-          if (Date.now() - lastToggle < 380) return;
-          lastToggle = Date.now();
+          // rows reflow when a task completes; a quick second tap at the same spot must not hit the next task
+          const r0 = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          const now = Date.now();
+          if (now - lastToggle.t < 380 && lastToggle.id !== task.id && Math.abs(lastToggle.y - r0.top) < 12) return;
+          lastToggle = { t: now, id: task.id, y: r0.top };
           unlockAudio();
           const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
           markTap(r.left + r.width / 2 + 40, r.top);
@@ -321,7 +311,10 @@ function SortableTasks({ tasks, onEdit }: { tasks: Task[]; onEdit: (id: string) 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 260, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+      keyboardCodes: { start: ['Space'], cancel: ['Escape'], end: ['Space', 'Enter'] },
+    }),
   );
   const ids = tasks.map((t) => t.id);
   const onDragEnd = (e: DragEndEvent) => {

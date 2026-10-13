@@ -374,8 +374,34 @@ let volume = 0;
 let wanted: TrackId | null = null; // what the app asked for, kept while muted or hidden
 let resume: { id: TrackId; step: number } | null = null;
 let listening = false;
+let unlocking = false;
 
 const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
+const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'];
+
+/**
+ * A context made before the first tap starts suspended, and iOS suspends it again after interruptions:
+ * resume it on the next user gesture anywhere, not only on the taps that call unlockAudio().
+ */
+function resumeOnGesture(c: AudioContext) {
+  if (unlocking || c.state === 'running' || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+  unlocking = true;
+  const done = () => {
+    unlocking = false;
+    for (const g of GESTURES) window.removeEventListener(g, onGesture, true);
+  };
+  function onGesture() {
+    if (c.state === 'running' || c.state === 'closed') return done();
+    c.resume().then(
+      () => {
+        if (c.state === 'running') done();
+      },
+      () => undefined,
+    );
+  }
+  for (const g of GESTURES) window.addEventListener(g, onGesture, true);
+}
 
 function audio(): AudioContext | null {
   try {
@@ -480,6 +506,7 @@ function start(id: TrackId, fromStep = 0) {
     players.push(active);
     tick();
     startTimer();
+    resumeOnGesture(c);
   } catch {
     active = null;
   }
@@ -504,7 +531,8 @@ export function stopMusic() {
 
 /** 0..1; 0 stops the music, raising it again resumes the last requested tune. */
 export function setMusicVolume(v: number) {
-  volume = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
+  const n = Number(v);
+  volume = n > 0 ? Math.min(1, n) : 0; // NaN, undefined and negatives mute
   listen();
   if (ctx && bus) bus.gain.setTargetAtTime(volume * MASTER, ctx.currentTime, 0.05);
   if (volume <= 0) halt(STOP_FADE);
