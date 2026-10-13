@@ -7,7 +7,7 @@ export default function UpdateBanner() {
   const update = useAppUpdate((s) => s.update);
   if (!update) return null;
   return (
-    <div className="update-banner win">
+    <div className="update-banner win" role="status">
       <span>A new version of Questlog is ready.</span>
       <button className="btn small" onClick={update}>
         Update

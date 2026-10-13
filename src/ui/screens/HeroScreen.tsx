@@ -73,7 +73,7 @@ export default function HeroScreen() {
             ['log', 'Log'],
           ] as [Sub, string][]
         ).map(([k, label]) => (
-          <button key={k} className={`subtab ${sub === k ? 'active' : ''} ${k === 'feats' && claimable ? 'glow' : ''}`} onClick={() => (sfx.tick(), setSub(k))}>
+          <button key={k} className={`subtab ${sub === k ? 'active' : ''} ${k === 'feats' && claimable ? 'glow' : ''}`} aria-pressed={sub === k} onClick={() => (sfx.tick(), setSub(k))}>
             {label}
           </button>
         ))}
@@ -165,7 +165,7 @@ function BagTab() {
       </div>
       <div className="pantry" style={{ padding: '0 0 8px' }}>
         {(['all', ...SLOTS] as const).map((f) => (
-          <button key={f} className={`pill ${filter === f ? 'sel' : ''}`} onClick={() => setFilter(f)}>
+          <button key={f} className={`pill ${filter === f ? 'sel' : ''}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>
             {f === 'all' ? 'All' : SLOT_LABEL[f]}
           </button>
         ))}
@@ -290,13 +290,13 @@ function FeatsTab() {
       </div>
       <div className="section-label">Title</div>
       <div className="win pantry">
-        <button className={`pill ${!hero.title ? 'sel' : ''}`} onClick={() => s.setTitle(undefined)}>
+        <button className={`pill ${!hero.title ? 'sel' : ''}`} aria-pressed={!hero.title} onClick={() => s.setTitle(undefined)}>
           {levelTitle(level)} (level)
         </button>
         {titles
           .filter((t) => t !== levelTitle(level))
           .map((t) => (
-            <button key={t} className={`pill ${hero.title === t ? 'sel' : ''}`} onClick={() => (sfx.tick(), s.setTitle(t))}>
+            <button key={t} className={`pill ${hero.title === t ? 'sel' : ''}`} aria-pressed={hero.title === t} onClick={() => (sfx.tick(), s.setTitle(t))}>
               {t}
             </button>
           ))}
@@ -336,17 +336,17 @@ function BarberSheet({ onClose }: { onClose: () => void }) {
           <HeroPreview app={app} look={previewLook} theme="tavern" w={64} h={48} scale={3} />
         </div>
         <Row label="Name">
-          <input className="text-in" value={name} maxLength={16} onChange={(e) => setName(e.target.value)} />
+          <input className="text-in" aria-label="Hero name" value={name} maxLength={16} onChange={(e) => setName(e.target.value)} />
         </Row>
         <Row label="Skin">
           {race.skins.map((c, i) => (
-            <button key={c} className={`swatch ${app.skin === i ? 'sel' : ''}`} style={{ background: c }} onClick={() => setApp({ ...app, skin: i })} />
+            <button key={c} className={`swatch ${app.skin === i ? 'sel' : ''}`} aria-pressed={app.skin === i} aria-label={`Skin tone ${i + 1}`} style={{ background: c }} onClick={() => setApp({ ...app, skin: i })} />
           ))}
         </Row>
         {app.race !== 'lizardfolk' && (
           <Row label="Hair">
             {HAIR_STYLES.map((h) => (
-              <button key={h} className={`pill ${app.hair === h ? 'sel' : ''}`} onClick={() => setApp({ ...app, hair: h })}>
+              <button key={h} className={`pill ${app.hair === h ? 'sel' : ''}`} aria-pressed={app.hair === h} onClick={() => setApp({ ...app, hair: h })}>
                 {h}
               </button>
             ))}
@@ -354,13 +354,13 @@ function BarberSheet({ onClose }: { onClose: () => void }) {
         )}
         <Row label="Hair color">
           {[...HAIR_COLORS, ...dyes('hair')].map((c) => (
-            <button key={c} className={`swatch ${app.hairColor === c ? 'sel' : ''}`} style={{ background: c }} onClick={() => setApp({ ...app, hairColor: c })} />
+            <button key={c} className={`swatch ${app.hairColor === c ? 'sel' : ''}`} aria-pressed={app.hairColor === c} aria-label={`Hair color ${c}`} style={{ background: c }} onClick={() => setApp({ ...app, hairColor: c })} />
           ))}
         </Row>
         {app.race !== 'lizardfolk' && (
           <Row label="Beard">
             {(['none', 'short', 'long'] as BeardStyle[]).map((b) => (
-              <button key={b} className={`pill ${app.beard === b ? 'sel' : ''}`} onClick={() => setApp({ ...app, beard: b })}>
+              <button key={b} className={`pill ${app.beard === b ? 'sel' : ''}`} aria-pressed={app.beard === b} onClick={() => setApp({ ...app, beard: b })}>
                 {b}
               </button>
             ))}
@@ -368,26 +368,26 @@ function BarberSheet({ onClose }: { onClose: () => void }) {
         )}
         <Row label="Eyes">
           {EYE_COLORS.map((c) => (
-            <button key={c} className={`swatch ${app.eyes === c ? 'sel' : ''}`} style={{ background: c }} onClick={() => setApp({ ...app, eyes: c })} />
+            <button key={c} className={`swatch ${app.eyes === c ? 'sel' : ''}`} aria-pressed={app.eyes === c} aria-label={`Eye color ${c}`} style={{ background: c }} onClick={() => setApp({ ...app, eyes: c })} />
           ))}
         </Row>
         <Row label="Outfit">
           {[...OUTFIT_COLORS, ...dyes('outfit')].map((c) => (
-            <button key={c} className={`swatch ${app.outfit === c ? 'sel' : ''}`} style={{ background: c }} onClick={() => setApp({ ...app, outfit: c })} />
+            <button key={c} className={`swatch ${app.outfit === c ? 'sel' : ''}`} aria-pressed={app.outfit === c} aria-label={`Outfit color ${c}`} style={{ background: c }} onClick={() => setApp({ ...app, outfit: c })} />
           ))}
         </Row>
         <Row label="Pants">
           {['#4a3a2a', '#2a2a3a', '#3a4a6a', '#5a2a2a', '#2a4a2a', ...dyes('pants')].map((c) => (
-            <button key={c} className={`swatch ${app.pants === c ? 'sel' : ''}`} style={{ background: c }} onClick={() => setApp({ ...app, pants: c })} />
+            <button key={c} className={`swatch ${app.pants === c ? 'sel' : ''}`} aria-pressed={app.pants === c} aria-label={`Pants color ${c}`} style={{ background: c }} onClick={() => setApp({ ...app, pants: c })} />
           ))}
         </Row>
         {capeDyes.length > 0 && (
           <Row label="Cape dye">
-            <button className={`pill ${!capeDye ? 'sel' : ''}`} onClick={() => setCapeDye(undefined)}>
+            <button className={`pill ${!capeDye ? 'sel' : ''}`} aria-pressed={!capeDye} onClick={() => setCapeDye(undefined)}>
               None
             </button>
             {capeDyes.map((c) => (
-              <button key={c} className={`swatch ${capeDye === c ? 'sel' : ''}`} style={{ background: c }} onClick={() => setCapeDye(c)} />
+              <button key={c} className={`swatch ${capeDye === c ? 'sel' : ''}`} aria-pressed={capeDye === c} aria-label={`Cape dye ${c}`} style={{ background: c }} onClick={() => setCapeDye(c)} />
             ))}
           </Row>
         )}

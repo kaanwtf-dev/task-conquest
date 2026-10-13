@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useStore, visibleLists } from '../../state/store';
 import { DIFFICULTY, taskXp, heroLevel } from '../../game/progression';
 import { iconFor, firstEmoji } from '../../pixel/iconGen';
@@ -79,11 +79,11 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
         </Field>
 
         <Field label="Icon (auto, or pick / type any emoji)">
-          <button type="button" className={`pill ${!emojiText ? 'sel' : ''}`} onClick={() => setEmojiText('')}>
+          <button type="button" className={`pill ${!emojiText ? 'sel' : ''}`} aria-pressed={!emojiText} onClick={() => setEmojiText('')}>
             Auto
           </button>
           {QUICK_ICONS.map((e) => (
-            <button type="button" key={e} className={`pill ${emojiText === e ? 'sel' : ''}`} style={{ padding: 3 }} onClick={() => setEmojiText(e)} aria-label={e}>
+            <button type="button" key={e} className={`pill ${emojiText === e ? 'sel' : ''}`} aria-pressed={emojiText === e} style={{ padding: 3 }} onClick={() => setEmojiText(e)} aria-label={e}>
               <PxImg src={iconFor('', e)} size={26} />
             </button>
           ))}
@@ -99,14 +99,14 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
               {Object.entries(AISLES)
                 .sort((a, b) => a[1].order - b[1].order)
                 .map(([k, a]) => (
-                  <button type="button" key={k} className={`pill ${(draft.aisle ?? 'other') === k ? 'sel' : ''}`} onClick={() => patch({ aisle: k })}>
+                  <button type="button" key={k} className={`pill ${(draft.aisle ?? 'other') === k ? 'sel' : ''}`} aria-pressed={(draft.aisle ?? 'other') === k} onClick={() => patch({ aisle: k })}>
                     {a.name}
                   </button>
                 ))}
             </Field>
             <Field label="Staple (restock button re-adds it)">
               {[true, false].map((v) => (
-                <button type="button" key={String(v)} className={`pill ${!!draft.staple === v ? 'sel' : ''}`} onClick={() => patch({ staple: v })}>
+                <button type="button" key={String(v)} className={`pill ${!!draft.staple === v ? 'sel' : ''}`} aria-pressed={!!draft.staple === v} onClick={() => patch({ staple: v })}>
                   {v ? 'Staple ★' : 'No'}
                 </button>
               ))}
@@ -116,7 +116,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
           <>
             <Field label="Difficulty">
               {DIFFICULTY.map((d, i) => (
-                <button type="button" key={d.name} className={`pill ${draft.difficulty === i ? 'sel' : ''}`} onClick={() => patch({ difficulty: i as Difficulty })}>
+                <button type="button" key={d.name} className={`pill ${draft.difficulty === i ? 'sel' : ''}`} aria-pressed={draft.difficulty === i} onClick={() => patch({ difficulty: i as Difficulty })}>
                   {d.name} <span style={{ opacity: 0.7, fontSize: 13 }}>+{taskXp(level, i as Difficulty)}xp</span>
                 </button>
               ))}
@@ -132,7 +132,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
                   ['interval', 'Every N days'],
                 ] as [RepeatKind, string][]
               ).map(([k, label]) => (
-                <button type="button" key={k} className={`pill ${draft.repeat.kind === k ? 'sel' : ''}`} onClick={() => setRepeat(k)}>
+                <button type="button" key={k} className={`pill ${draft.repeat.kind === k ? 'sel' : ''}`} aria-pressed={draft.repeat.kind === k} onClick={() => setRepeat(k)}>
                   {label}
                 </button>
               ))}
@@ -145,7 +145,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
                       <button
                         type="button"
                         key={i}
-                        className={`pill ${on ? 'sel' : ''}`}
+                        className={`pill ${on ? 'sel' : ''}`} aria-pressed={on}
                         style={{ width: 38 }}
                         onClick={() => {
                           const days = on ? r.days.filter((d) => d !== i) : [...r.days, i].sort();
@@ -183,7 +183,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
               )}
             </Field>
             <Field label="Due date">
-              <input className="text-in" type="date" style={{ maxWidth: 200 }} value={draft.due ?? ''} onChange={(e) => patch({ due: e.target.value || undefined })} />
+              <input className="text-in" type="date" aria-label="Due date" style={{ maxWidth: 200 }} value={draft.due ?? ''} onChange={(e) => patch({ due: e.target.value || undefined })} />
               {draft.due && (
                 <button type="button" className="pill" onClick={() => patch({ due: undefined })}>
                   Clear
@@ -191,14 +191,14 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
               )}
             </Field>
             <Field label="Notes">
-              <textarea className="text-in" rows={3} value={draft.notes ?? ''} onChange={(e) => patch({ notes: e.target.value || undefined })} style={{ width: '100%', resize: 'vertical' }} />
+              <textarea className="text-in" rows={3} aria-label="Notes" value={draft.notes ?? ''} onChange={(e) => patch({ notes: e.target.value || undefined })} style={{ width: '100%', resize: 'vertical' }} />
             </Field>
           </>
         )}
 
         <Field label="List">
           {lists.map((l) => (
-            <button type="button" key={l.id} className={`pill ${draft.listId === l.id ? 'sel' : ''}`} onClick={() => patch({ listId: l.id })}>
+            <button type="button" key={l.id} className={`pill ${draft.listId === l.id ? 'sel' : ''}`} aria-pressed={draft.listId === l.id} onClick={() => patch({ listId: l.id })}>
               {l.name}
             </button>
           ))}
@@ -232,13 +232,17 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
   );
 }
 
+/** A labelled row of controls; the label names the group for screen readers (inputs also carry their own). */
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const id = useId();
   return (
     <div style={{ padding: '10px 0', borderBottom: '2px dashed rgba(255,255,255,.08)' }}>
-      <div className="pixel" style={{ fontSize: 8, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
+      <div id={id} className="pixel" style={{ fontSize: 8, color: 'var(--muted)', marginBottom: 8, lineHeight: 1.5 }}>
         {label}
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>{children}</div>
+      <div role="group" aria-labelledby={id} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+        {children}
+      </div>
     </div>
   );
 }

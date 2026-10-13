@@ -53,6 +53,8 @@ export class Stage {
   private blinkUntil = 0;
   private levelGlowUntil = 0;
   private alive = true;
+  /** Players who asked for less motion get a still idle scene (redrawn slowly, for theme or gear changes). */
+  private readonly still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   private coin = uiPix('coin').toCanvas(1);
   sound = true;
   anim: AnimMode = 'full';
@@ -145,7 +147,7 @@ export class Stage {
     cancelAnimationFrame(this.raf);
     clearTimeout(this.timer);
     if (fast || this.busy || this.floaters.length) this.raf = requestAnimationFrame(this.loop);
-    else this.timer = window.setTimeout(() => (this.raf = requestAnimationFrame(this.loop)), 110);
+    else this.timer = window.setTimeout(() => (this.raf = requestAnimationFrame(this.loop)), this.still ? 1000 : 110);
   }
 
   private speed() {
@@ -162,12 +164,12 @@ export class Stage {
     const { ctx, w, h } = this;
     const theme = THEME_BY_ID[this.theme] ?? THEME_BY_ID.forest;
     ctx.drawImage(sceneCanvas(this.theme, w, h, 3), 0, 0);
-    theme.animate?.(this.g, w, h, now);
+    if (!this.still) theme.animate?.(this.g, w, h, now);
     const ground = groundLine(this.theme, h);
 
     // idle animation
-    const bob = Math.floor(now / 520) % 2;
-    if (now > this.nextBlink) {
+    const bob = this.still ? 0 : Math.floor(now / 520) % 2;
+    if (!this.still && now > this.nextBlink) {
       this.blinkUntil = now + 130;
       this.nextBlink = now + 2500 + Math.random() * 3000;
     }

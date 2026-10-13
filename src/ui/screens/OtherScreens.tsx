@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useStore, heroStats, isForeignList, LIST_TYPE_INFO } from '../../state/store';
 import { SKILLS } from '../../game/catalog';
 import { iconFor } from '../../pixel/iconGen';
@@ -9,6 +9,7 @@ import { sfx, setSfxVolume, unlockAudio } from '../../audio/sfx';
 
 export function SettingsScreen() {
   const s = useStore();
+  const importInput = useRef<HTMLInputElement>(null);
   const cfg = s.settings;
   const set = s.updateSettings;
   return (
@@ -17,7 +18,7 @@ export function SettingsScreen() {
         <div className="win-title" style={{ marginBottom: 8 }}>Options</div>
         <Opt label="Battle animations">
           {(['full', 'quick', 'off'] as AnimMode[]).map((m) => (
-            <button key={m} className={`pill ${cfg.anim === m ? 'sel' : ''}`} onClick={() => (sfx.tick(), set({ anim: m }))}>
+            <button key={m} className={`pill ${cfg.anim === m ? 'sel' : ''}`} aria-pressed={cfg.anim === m} onClick={() => (sfx.tick(), set({ anim: m }))}>
               {m}
             </button>
           ))}
@@ -26,7 +27,7 @@ export function SettingsScreen() {
           {[0, 0.3, 0.6, 1].map((v) => (
             <button
               key={v}
-              className={`pill ${cfg.sfx === v ? 'sel' : ''}`}
+              className={`pill ${cfg.sfx === v ? 'sel' : ''}`} aria-pressed={cfg.sfx === v}
               onClick={() => {
                 set({ sfx: v });
                 setSfxVolume(v);
@@ -41,7 +42,7 @@ export function SettingsScreen() {
           {[0, 0.25, 0.5, 0.8].map((v) => (
             <button
               key={v}
-              className={`pill ${cfg.music === v ? 'sel' : ''}`}
+              className={`pill ${cfg.music === v ? 'sel' : ''}`} aria-pressed={cfg.music === v}
               onClick={() => {
                 unlockAudio();
                 set({ music: v });
@@ -53,35 +54,35 @@ export function SettingsScreen() {
         </Opt>
         <Opt label="Corner hero (phone)">
           {(['big', 'small', 'hidden'] as const).map((v) => (
-            <button key={v} className={`pill ${(cfg.cornerHero ?? 'big') === v ? 'sel' : ''}`} onClick={() => (sfx.tick(), set({ cornerHero: v }))}>
+            <button key={v} className={`pill ${(cfg.cornerHero ?? 'big') === v ? 'sel' : ''}`} aria-pressed={(cfg.cornerHero ?? 'big') === v} onClick={() => (sfx.tick(), set({ cornerHero: v }))}>
               {v}
             </button>
           ))}
         </Opt>
         <Opt label="Haptics">
           {[true, false].map((v) => (
-            <button key={String(v)} className={`pill ${cfg.haptics === v ? 'sel' : ''}`} onClick={() => set({ haptics: v })}>
+            <button key={String(v)} className={`pill ${cfg.haptics === v ? 'sel' : ''}`} aria-pressed={cfg.haptics === v} onClick={() => set({ haptics: v })}>
               {v ? 'on' : 'off'}
             </button>
           ))}
         </Opt>
         <Opt label="Task font">
           {(['pixel', 'clean'] as const).map((v) => (
-            <button key={v} className={`pill ${cfg.taskFont === v ? 'sel' : ''}`} onClick={() => set({ taskFont: v })}>
+            <button key={v} className={`pill ${cfg.taskFont === v ? 'sel' : ''}`} aria-pressed={cfg.taskFont === v} onClick={() => set({ taskFont: v })}>
               {v}
             </button>
           ))}
         </Opt>
         <Opt label="New day starts at">
           {[0, 3, 4, 5, 6].map((h) => (
-            <button key={h} className={`pill ${cfg.dayStartHour === h ? 'sel' : ''}`} onClick={() => set({ dayStartHour: h })}>
+            <button key={h} className={`pill ${cfg.dayStartHour === h ? 'sel' : ''}`} aria-pressed={cfg.dayStartHour === h} onClick={() => set({ dayStartHour: h })}>
               {h}:00
             </button>
           ))}
         </Opt>
         <Opt label="Week starts on">
           {[1, 0].map((d) => (
-            <button key={d} className={`pill ${cfg.weekStart === d ? 'sel' : ''}`} onClick={() => set({ weekStart: d })}>
+            <button key={d} className={`pill ${cfg.weekStart === d ? 'sel' : ''}`} aria-pressed={cfg.weekStart === d} onClick={() => set({ weekStart: d })}>
               {d === 1 ? 'Monday' : 'Sunday'}
             </button>
           ))}
@@ -92,9 +93,12 @@ export function SettingsScreen() {
         <button className="btn small" onClick={() => exportBackup(s.exportData())}>
           Export save
         </button>
-        <label className="btn ghost small" style={{ cursor: 'pointer' }}>
+        {/* a real button (a label around a hidden input can't be reached with the keyboard) */}
+        <button className="btn ghost small" onClick={() => importInput.current?.click()}>
           Import save
-          <input
+        </button>
+        <input
+            ref={importInput}
             type="file"
             accept="application/json,.json"
             style={{ display: 'none' }}
@@ -107,7 +111,6 @@ export function SettingsScreen() {
               alert(ok ? 'Backup restored!' : 'That file is not a Questlog backup.');
             }}
           />
-        </label>
         <div className="muted small" style={{ width: '100%' }}>
           A JSON file with your hero, lists and loot. Cloud sync lives in the Party tab.
         </div>
@@ -206,7 +209,7 @@ export function ListSheet({ onClose, editId }: { onClose: () => void; editId?: s
           </Opt>
           <Opt label="Type">
             {(Object.keys(LIST_TYPE_INFO) as ListType[]).map((t) => (
-              <button type="button" key={t} className={`pill ${type === t ? 'sel' : ''}`} onClick={() => setType(t)}>
+              <button type="button" key={t} className={`pill ${type === t ? 'sel' : ''}`} aria-pressed={type === t} onClick={() => setType(t)}>
                 {LIST_TYPE_INFO[t].label}
               </button>
             ))}
@@ -214,21 +217,21 @@ export function ListSheet({ onClose, editId }: { onClose: () => void; editId?: s
           </Opt>
           <Opt label="Icon">
             {LIST_ICONS.map((i) => (
-              <button type="button" key={i} className={`pill ${icon === i ? 'sel' : ''}`} onClick={() => setIcon(i)} style={{ padding: 3 }}>
+              <button type="button" key={i} className={`pill ${icon === i ? 'sel' : ''}`} aria-pressed={icon === i} aria-label={`Icon ${i}`} onClick={() => setIcon(i)} style={{ padding: 3 }}>
                 <PxImg src={iconFor('', i)} size={28} />
               </button>
             ))}
           </Opt>
           <Opt label="Color">
             {LIST_COLORS.map((c) => (
-              <button type="button" key={c} className={`swatch ${color === c ? 'sel' : ''}`} style={{ background: c }} onClick={() => setColor(c)} />
+              <button type="button" key={c} className={`swatch ${color === c ? 'sel' : ''}`} aria-pressed={color === c} aria-label={`Color ${c}`} style={{ background: c }} onClick={() => setColor(c)} />
             ))}
           </Opt>
           <Opt label="Zone theme">
             {THEMES.map((t) => {
               const locked = level < t.unlockLevel && !owned.includes(`theme:${t.id}`);
               return (
-                <button type="button" key={t.id} disabled={locked} className={`pill ${theme === t.id ? 'sel' : ''}`} onClick={() => setTheme(t.id)}>
+                <button type="button" key={t.id} disabled={locked} className={`pill ${theme === t.id ? 'sel' : ''}`} aria-pressed={theme === t.id} onClick={() => setTheme(t.id)}>
                   {t.name}
                   {locked ? ` 🔒${t.unlockLevel}` : ''}
                 </button>
@@ -237,7 +240,7 @@ export function ListSheet({ onClose, editId }: { onClose: () => void; editId?: s
           </Opt>
           <Opt label="Trains skill">
             {SKILLS.map((k) => (
-              <button type="button" key={k.id} className={`pill ${skill === k.id ? 'sel' : ''}`} onClick={() => setSkill(k.id)}>
+              <button type="button" key={k.id} className={`pill ${skill === k.id ? 'sel' : ''}`} aria-pressed={skill === k.id} onClick={() => setSkill(k.id)}>
                 {k.name}
               </button>
             ))}

@@ -44,10 +44,10 @@ function SetupCard() {
           <li>Copy the Project URL and the anon public key from Project Settings → API into the boxes below.</li>
         </ol>
         <Field label="Project URL">
-          <input className="text-in" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://xxxx.supabase.co" autoCapitalize="off" autoCorrect="off" />
+          <input className="text-in" aria-label="Project URL" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://xxxx.supabase.co" autoCapitalize="off" autoCorrect="off" />
         </Field>
         <Field label="Anon public key">
-          <input className="text-in" value={key} onChange={(e) => setKey(e.target.value)} placeholder="eyJhbGciOi…" autoCapitalize="off" autoCorrect="off" />
+          <input className="text-in" aria-label="Anon public key" value={key} onChange={(e) => setKey(e.target.value)} placeholder="eyJhbGciOi…" autoCapitalize="off" autoCorrect="off" />
         </Field>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
           <button
@@ -97,10 +97,10 @@ function AuthCard() {
           }}
         >
           <Field label="Email">
-            <input className="text-in" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input className="text-in" type="email" aria-label="Email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>
           <Field label="Password">
-            <input className="text-in" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <input className="text-in" type="password" aria-label="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
           {msg && <p style={{ fontSize: 15 }}>{msg}</p>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12, flexWrap: 'wrap' }}>

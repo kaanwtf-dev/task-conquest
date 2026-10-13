@@ -267,7 +267,8 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
     <>
       <button
         className={`check ${done ? 'on' : ''}`}
-        aria-label={done ? 'Mark not done' : 'Complete'}
+        aria-label={done ? `Mark ${task.title} not done` : `Complete ${task.title}`}
+        data-check={task.id}
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
@@ -283,7 +284,11 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
           markTap(r.left + r.width / 2 + 40, r.top);
           if (sfxOn) (done ? sfx.uncheck : sfx.check)();
           if (haptics) haptic();
+          const byKeyboard = e.detail === 0;
           toggle(task.id);
+          // the row moves to another section (remounts): keep keyboard focus on the same task
+          if (byKeyboard)
+            requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-check="${window.CSS.escape(task.id)}"]`)?.focus());
         }}
       >
         {done && <Ui name="check" size={22} />}
@@ -301,7 +306,12 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
               </>
             )}
             {task.qty && <span>×{task.qty}</span>}
-            {task.due && <span className={task.due < todayKey(Date.now(), useStore.getState().settings) && !done ? 'overdue' : ''}>Due {task.due}</span>}
+            {task.due &&
+              (task.due < todayKey(Date.now(), useStore.getState().settings) && !done ? (
+                <span className="overdue">Overdue {task.due}</span>
+              ) : (
+                <span>Due {task.due}</span>
+              ))}
             {task.notes && <span>✎</span>}
             {inactive && <span>Not today</span>}
           </div>
@@ -474,6 +484,15 @@ const PantryChip = memo(function PantryChip({ task, onEdit }: { task: Task; onEd
         e.preventDefault();
         onEdit(task.id);
       }}
+      onKeyDown={(e) => {
+        // keyboard: Shift+Enter edits (a plain Enter adds the item back, like a tap)
+        if (e.key === 'Enter' && e.shiftKey) {
+          e.preventDefault();
+          onEdit(task.id);
+        }
+      }}
+      aria-label={`Add ${task.title} back${task.staple ? ' (staple)' : ''}`}
+      aria-keyshortcuts="Shift+Enter"
       onClick={() => {
         if (held.current) return;
         sfx.pop();

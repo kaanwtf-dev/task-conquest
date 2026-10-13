@@ -128,7 +128,7 @@ export default function Effects() {
           {f.text}
         </div>
       ))}
-      <div className="toast-wrap">
+      <div className="toast-wrap" role="status" aria-live="polite">
         {banners.map((b) => (
           <div key={b.id} className="win toast">
             <div className="toast-row">

@@ -158,7 +158,7 @@ export const THEMES: ThemeDef[] = [
     id: 'beach',
     name: 'Beach',
     unlockLevel: 1,
-    ui: { winTop: '#1a8aa0', winBot: '#0c4a5e', border: '#fff0c8', accent: '#ffd860', text: '#f4feff', muted: '#a8e0e8', page: '#082a36', page2: '#0c3442' },
+    ui: { winTop: '#126878', winBot: '#0c4a5e', border: '#fff0c8', accent: '#ffd860', text: '#f4feff', muted: '#a8e0e8', page: '#082a36', page2: '#0c3442' },
     monsters: ['crab', 'slime', 'snake', 'bat', 'frog'],
     paint(g, w, h, rng) {
       const seaY = Math.round(h * 0.45);
@@ -260,7 +260,7 @@ export const THEMES: ThemeDef[] = [
     id: 'desert',
     name: 'Desert',
     unlockLevel: 10,
-    ui: { winTop: '#c07a3a', winBot: '#6e3e18', border: '#fff0c0', accent: '#ffe060', text: '#fff8e8', muted: '#f0d0a0', page: '#2a1608', page2: '#341c0c' },
+    ui: { winTop: '#8a5020', winBot: '#6e3e18', border: '#fff0c0', accent: '#ffe060', text: '#fff8e8', muted: '#f0d0a0', page: '#2a1608', page2: '#341c0c' },
     monsters: ['scorpion', 'snake', 'skeleton', 'beetle', 'golem'],
     paint(g, w, h, rng) {
       const groundY = Math.round(h * 0.68);

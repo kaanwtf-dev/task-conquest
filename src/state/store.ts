@@ -29,7 +29,8 @@ export type Tab = 'quests' | 'hero' | 'shop' | 'party' | 'settings';
 export const TODAY_ID = '__today';
 
 export const DEFAULT_SETTINGS: Settings = {
-  anim: 'full',
+  // players who asked their device for less motion start with battle animations off (they can turn them on)
+  anim: typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'off' : 'full',
   sfx: 0.6,
   music: 0,
   haptics: true,

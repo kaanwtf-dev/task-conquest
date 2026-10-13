@@ -70,6 +70,7 @@ export function TabBar() {
         <button
           key={t.id}
           className={`tab ${tab === t.id ? 'active' : ''}`}
+          aria-current={tab === t.id ? 'page' : undefined}
           onClick={() => {
             sfx.tick();
             setTab(t.id);
@@ -77,7 +78,7 @@ export function TabBar() {
         >
           <Ui name={t.icon} size={26} />
           {t.label}
-          {flags[t.id as keyof typeof flags] && <span className="tab-dot" aria-label="needs your attention" />}
+          {flags[t.id as keyof typeof flags] && <span className="tab-dot" role="img" aria-label="needs your attention" />}
         </button>
       ))}
     </nav>
@@ -101,7 +102,7 @@ function useListCounts(l: TaskList) {
 function ChipItem({ l, active, onPick, className }: { l: TaskList; active: boolean; onPick: () => void; className: string }) {
   const c = useListCounts(l);
   return (
-    <button className={`${className} ${active ? 'active' : ''}`} style={{ ['--chip' as string]: l.color }} onClick={onPick}>
+    <button className={`${className} ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} style={{ ['--chip' as string]: l.color }} onClick={onPick}>
       <PxImg src={iconFor(l.name, l.icon)} size={className === 'chip' ? 24 : 26} />
       <span title={l.name}>{l.name}</span>
       <span className="count">{c.done ? '✓' : c.label}</span>
@@ -121,7 +122,7 @@ function useTodayCount(): number {
 function TodayItem({ className, active, onPick }: { className: string; active: boolean; onPick: () => void }) {
   const n = useTodayCount();
   return (
-    <button className={`${className} ${active ? 'active' : ''}`} style={{ ['--chip' as string]: '#a02a3a' }} onClick={onPick}>
+    <button className={`${className} ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} style={{ ['--chip' as string]: '#a02a3a' }} onClick={onPick}>
       <PxImg src={iconFor('', '⭐')} size={className === 'chip' ? 24 : 26} />
       <span>Today</span>
       <span className="count">{n === 0 ? '✓' : n}</span>
@@ -178,9 +179,9 @@ export function Sidebar({ onNew }: { onNew: () => void }) {
       <div className="side-head">Adventure</div>
       <div className="side-nav">
         {TABS.filter((t) => t.id !== 'quests').map((t) => (
-          <button key={t.id} className={`side-item ${s.tab === t.id ? 'active' : ''}`} onClick={() => (sfx.tick(), s.setTab(t.id))}>
+          <button key={t.id} className={`side-item ${s.tab === t.id ? 'active' : ''}`} aria-current={s.tab === t.id ? 'page' : undefined} onClick={() => (sfx.tick(), s.setTab(t.id))}>
             <Ui name={t.icon} size={24} /> {t.label}
-            {flags[t.id as keyof typeof flags] && <span className="tab-dot" aria-label="needs your attention" />}
+            {flags[t.id as keyof typeof flags] && <span className="tab-dot" role="img" aria-label="needs your attention" />}
           </button>
         ))}
       </div>

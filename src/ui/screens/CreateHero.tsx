@@ -60,7 +60,7 @@ export default function CreateHero() {
       <Section title="Race">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
           {RACES.map((r) => (
-            <button key={r.id} className={`opt ${app.race === r.id ? 'sel' : ''}`} onClick={() => pickRace(r.id)}>
+            <button key={r.id} className={`opt ${app.race === r.id ? 'sel' : ''}`} aria-pressed={app.race === r.id} onClick={() => pickRace(r.id)}>
               <PxImg src={raceThumbs[r.id]} size={64} style={{ margin: '-6px auto -8px', display: 'block' }} />
               <span>{r.name}</span>
             </button>
@@ -71,7 +71,7 @@ export default function CreateHero() {
       <Section title="Class">
         <div className="class-grid">
           {CLASSES.map((c) => (
-            <button key={c.id} className={`opt ${classId === c.id ? 'sel' : ''}`} onClick={() => (sfx.tick(), setClassId(c.id))}>
+            <button key={c.id} className={`opt ${classId === c.id ? 'sel' : ''}`} aria-pressed={classId === c.id} onClick={() => (sfx.tick(), setClassId(c.id))}>
               <PxImg src={spriteUrl(`wicon:${c.weapon}`, () => weaponPix(c.weapon, c.look.weapon?.mat ?? MATERIALS.iron))} size={40} style={{ margin: '0 auto', display: 'block' }} />
               <span>{c.name}</span>
             </button>
@@ -90,7 +90,7 @@ export default function CreateHero() {
           <Row label="Hair">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {HAIR_STYLES.map((h) => (
-                <button key={h} className={`pill ${app.hair === h ? 'sel' : ''}`} onClick={() => patch({ hair: h })}>
+                <button key={h} className={`pill ${app.hair === h ? 'sel' : ''}`} aria-pressed={app.hair === h} onClick={() => patch({ hair: h })}>
                   {h}
                 </button>
               ))}
@@ -105,7 +105,7 @@ export default function CreateHero() {
         {app.race !== 'lizardfolk' && (
           <Row label="Beard">
             {(['none', 'short', 'long'] as BeardStyle[]).map((b) => (
-              <button key={b} className={`pill ${app.beard === b ? 'sel' : ''}`} onClick={() => patch({ beard: b })}>
+              <button key={b} className={`pill ${app.beard === b ? 'sel' : ''}`} aria-pressed={app.beard === b} onClick={() => patch({ beard: b })}>
                 {b}
               </button>
             ))}
@@ -192,5 +192,5 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 function Swatch({ color, on, onClick }: { color: string; on: boolean; onClick: () => void }) {
-  return <button className={`swatch ${on ? 'sel' : ''}`} style={{ background: color }} onClick={onClick} aria-label={color} />;
+  return <button className={`swatch ${on ? 'sel' : ''}`} aria-pressed={on} style={{ background: color }} onClick={onClick} aria-label={color} />;
 }

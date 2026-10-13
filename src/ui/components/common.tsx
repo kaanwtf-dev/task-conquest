@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { THEME_BY_ID, sceneCanvas, Painter, type ThemeId } from '../../pixel/themes';
 import { heroPix, type Appearance, type GearLook, RACE_BY_ID } from '../../pixel/sprites/hero';
 import { Pix, spriteUrl } from '../../pixel/pix';
@@ -193,6 +193,41 @@ export function Bar({ value, max, kind, label }: { value: number; max: number; k
  */
 export function Sheet({ onClose, children, className, style }: { onClose: () => void; children: React.ReactNode; className?: string; style?: CSSProperties }) {
   const downOnBack = useRef(false);
+  const box = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // named after its title; focus moves in (unless a field autofocused already) and stays in while open
+    const title = el.querySelector('.win-title');
+    if (title) {
+      title.id ||= titleId;
+      el.setAttribute('aria-labelledby', title.id);
+    }
+    if (!el.contains(document.activeElement)) el.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const all = el.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea, select, [tabindex]:not([tabindex="-1"])');
+      const items = [...all].filter((x) => x.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const at = document.activeElement;
+      if (e.shiftKey && (at === first || at === el || !el.contains(at))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (at === last || !el.contains(at))) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (opener?.isConnected) opener.focus({ preventScroll: true }); // back to what opened it
+    };
+  }, [titleId]);
   return (
     <div
       className="sheet-back"
@@ -202,7 +237,7 @@ export function Sheet({ onClose, children, className, style }: { onClose: () => 
         downOnBack.current = false;
       }}
     >
-      <div className={`win sheet ${className ?? ''}`} style={style} role="dialog" aria-modal="true">
+      <div ref={box} className={`win sheet ${className ?? ''}`} style={style} role="dialog" aria-modal="true" tabIndex={-1}>
         {children}
       </div>
     </div>
