@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { Rng } from '../core/rng';
 import type { Hero } from '../core/types';
 import { ACHIEVEMENTS, achievementStatus, claimRewards, formatCount, seriesValue, unlockedTitles, type AchievementCtx } from './achievements';
-import { levelTitle, skillXpToNext } from './progression';
+import { SKILLS } from './catalog';
+import { heroSkill, levelTitle, skillXpToNext } from './progression';
 
 function hero(patch: Partial<Hero> = {}): Hero {
   return {
@@ -120,6 +122,14 @@ describe('titles', () => {
     for (let l = 1; l <= 300; l += 10) expect(all.has(levelTitle(l))).toBe(false);
   });
 
+  it('stay unique at absurd tiers too', () => {
+    for (const a of ACHIEVEMENTS) {
+      if (a.maxTier) continue;
+      for (const t of [1e3, 1e6, 1e9]) expect(a.title(t), `${a.id} ${t}`).not.toBe(a.title(t + 1));
+    }
+    expect(def('streak').title(1e6 + 8)).toBe('Unbroken for 1,000,001 Years');
+  });
+
   it('are hand-written first, then generated from the threshold', () => {
     expect(def('slayer').title(1)).toBe('Pest Control');
     expect(def('slayer').title(9)).toBe('Slayer of 5,000');
@@ -179,6 +189,26 @@ describe('status + claiming', () => {
     expect(s.polymath.value).toBe(2);
   });
 
+  it('polymath agrees with heroSkill at the level-10 boundary', () => {
+    const need = skillXpFor(10);
+    for (const xp of [0, 1, need - 1, need, need + 1, need * 7.3, 123456]) {
+      const h = hero({ skillXp: { lore: { a: xp / 2, b: xp / 2 } } });
+      expect(status(h).polymath.value, `${xp}`).toBe(heroSkill(h, 'lore').level >= 10 ? 1 : 0);
+    }
+  });
+
+  it('polymath never hangs or crashes on huge or corrupt skill XP', { timeout: 2000 }, () => {
+    const bad = [NaN, Infinity, -Infinity, 1e300, -5, 'x', null, undefined] as unknown as number[];
+    const skillXp = Object.fromEntries(SKILLS.map((s, k) => [s.id, { a: bad[k % bad.length], b: 1 }]));
+    const s = status(hero({ skillXp })).polymath;
+    // 1e300 and +Infinity (twice) count as maxed skills; everything unreadable counts as nothing
+    expect(s.value).toBe(3);
+    // strings never coerce (sum() would concatenate '0x' + 5000 into a hex literal)
+    expect(status(hero({ skillXp: { lore: { a: 'x' as unknown as number, b: 5000 } } })).polymath.value).toBe(0);
+    expect(status(hero({ skillXp: undefined as unknown as Hero['skillXp'] })).polymath.value).toBe(0);
+    expect(status(hero({ skillXp: { lore: { a: 1e15 } } })).polymath.value).toBe(1);
+  });
+
   it('polymath maxes out with every skill at 10', () => {
     const skillXp = Object.fromEntries(
       ['athletics', 'hearthcraft', 'mercantile', 'lore', 'smithing', 'alchemy', 'speech', 'restoration', 'artistry', 'wayfaring'].map((id) => [id, { a: skillXpFor(10) }]),
@@ -220,6 +250,60 @@ describe('status + claiming', () => {
     expect(r.gold).toBe(achievementStatus(h, ctx).reduce((g, s) => g + s.pendingGold, 0));
     expect(r.gold).toBe(def('slayer').reward(1) + def('bosses').reward(1));
     expect(r.newTitles).toEqual(['Pest Control', 'Giant Toppler']);
+  });
+
+  it('claim -> apply -> claim is empty for any hero (seeded fuzz)', () => {
+    const rng = new Rng('achievement-fuzz');
+    const metric = () => (rng.chance(0.2) ? 0 : Math.floor(10 ** (rng.float() * (rng.chance(0.1) ? 15 : 6))));
+    for (let n = 0; n < 300; n++) {
+      const claimed = Object.fromEntries(ACHIEVEMENTS.filter(() => rng.chance(0.4)).map((a) => [a.id, rng.int(0, 30)]));
+      const h = hero({
+        kills: { a: metric() },
+        tasksDone: { a: metric(), b: metric() },
+        itemsFound: { a: metric() },
+        bossesSlain: { a: metric() },
+        gold: { a: metric(), b: metric() },
+        potionsUsed: { a: metric() },
+        questsCleared: { a: metric() },
+        achievements: claimed,
+      });
+      const c = { bestStreak: metric(), level: 1 + metric() };
+      const r = claimRewards(h, c);
+      expect(Number.isSafeInteger(r.gold), `#${n}`).toBe(true);
+      const pending = achievementStatus(h, c).reduce((g, s) => g + s.pendingGold, 0);
+      expect(r.gold, `#${n}`).toBeGreaterThanOrEqual(Math.min(Number.MAX_SAFE_INTEGER, pending)); // payouts clamp at MAX_SAFE_INTEGER
+      for (const [id, t] of Object.entries(r.tiers)) expect(t, `#${n} ${id}`).toBeGreaterThan(claimed[id] ?? 0);
+      const after = hero({ ...h, achievements: { ...h.achievements, ...r.tiers }, gold: { ...h.gold, c: r.gold } });
+      expect(claimRewards(after, c), `#${n}`).toEqual({ gold: 0, tiers: {}, newTitles: [] });
+      for (const s of achievementStatus(after, c)) {
+        expect(s.claimable, `#${n} ${s.id}`).toBe(0);
+        expect(s.pendingGold, `#${n} ${s.id}`).toBe(0);
+      }
+    }
+  });
+
+  it('tierFor never decreases as the metric grows', () => {
+    const rng = new Rng('tier-monotone');
+    for (const a of ACHIEVEMENTS) {
+      const values = Array.from({ length: 400 }, () => Math.floor(10 ** (rng.float() * 15))).sort((x, y) => x - y);
+      let prev = 0;
+      for (const v of values) {
+        const t = a.tierFor(v);
+        expect(t, `${a.id} @ ${v}`).toBeGreaterThanOrEqual(prev);
+        expect(Number.isSafeInteger(t)).toBe(true);
+        if (t > 0) expect(a.threshold(t), `${a.id} @ ${v}`).toBeLessThanOrEqual(v);
+        prev = t;
+      }
+    }
+  });
+
+  it('tiers claimed on another device (ahead of local progress) pay nothing and keep their titles', () => {
+    const h = hero({ kills: { a: 30 }, achievements: { slayer: 9 } });
+    const s = status(h).slayer;
+    expect(s.tierReached).toBe(2);
+    expect([s.claimable, s.pendingGold]).toEqual([0, 0]);
+    expect(s.titles).toHaveLength(9);
+    expect(claimRewards(h, ctx).tiers.slayer).toBeUndefined();
   });
 
   it('never pays again when progress drops below what was claimed', () => {

@@ -1,7 +1,7 @@
 // Infinite achievement tracks: tier thresholds forever, gold per tier and unlockable titles. All pure.
 import type { Hero } from '../core/types';
 import { SKILLS } from './catalog';
-import { heroSkill, levelTitle, sum } from './progression';
+import { levelTitle, skillXpToNext, sum } from './progression';
 
 const MAX = Number.MAX_SAFE_INTEGER;
 const count = (n: number) => (Number.isFinite(n) ? Math.min(MAX, Math.max(0, Math.floor(n))) : 0);
@@ -83,7 +83,7 @@ const streakLadder: Ladder = {
     const v = count(value);
     return v >= 365 ? STREAK_DAYS.length - 1 + Math.floor(v / 365) : STREAK_DAYS.filter((d) => d <= v).length;
   },
-  label: (t) => formatCount(tierOf(t) - STREAK_DAYS.length + 1), // years
+  label: (t) => groups(tierOf(t) - STREAK_DAYS.length + 1), // years, exact so titles never repeat
 };
 
 /** 1, 2, ... max, then capped. */
@@ -95,6 +95,13 @@ const cappedLadder = (max: number): Ladder => ({
 });
 
 // ---------------------------------------------------------------- tracks
+
+/**
+ * Skill XP at which heroSkill(...).level reaches POLYMATH_LEVEL. Comparing against it gives the same answer as
+ * heroSkill without its O(level) walk, which takes ~0.1 s at huge XP and never ends on a corrupt (NaN) counter.
+ */
+const POLYMATH_LEVEL = 10;
+const POLYMATH_XP = Array.from({ length: POLYMATH_LEVEL - 1 }, (_, k) => skillXpToNext(k + 1)).reduce((a, b) => a + b, 0);
 
 export interface AchievementDef {
   id: string; // stored in hero.achievements; never rename
@@ -255,7 +262,7 @@ const DEFS = [
     id: 'polymath',
     name: 'Polymath',
     icon: '🎓',
-    description: 'Raise different skills to level 10.',
+    description: `Raise different skills to level ${POLYMATH_LEVEL}.`,
     ladder: cappedLadder(SKILLS.length),
     gold: 50,
     titles: [
@@ -263,7 +270,11 @@ const DEFS = [
       'Many-Handed', 'Sage of Seven Arts', 'Eightfold Adept', 'Ninefold Master', 'Master of All Trades',
     ],
     generated: (n) => `Master of ${n} Skills`,
-    value: (h) => (h.skillXp ? SKILLS.filter((s) => heroSkill(h, s.id).level >= 10).length : 0),
+    value: (h) =>
+      SKILLS.filter((s) => {
+        const xp: unknown = sum(h.skillXp?.[s.id]); // a corrupt counter can sum to a string
+        return typeof xp === 'number' && xp >= POLYMATH_XP;
+      }).length,
   }),
 ];
 

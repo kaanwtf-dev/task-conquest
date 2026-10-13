@@ -68,12 +68,18 @@ language sql stable security definer set search_path = '' as $$
       or exists (select 1 from public.list_members m where m.list_id = p_list_id);
 $$;
 
--- personal ids namespaced as '<kind>:<user id>[:...]' (the app's hero/item/potion ids) must be the caller's own
+-- The app's personal ids are namespaced '<kind>:<user id>[:...]'. An id in such a namespace must match
+-- the row's kind and belong to the caller: user ids are visible to other players, so a squatted
+-- 'hero:<id>' or 'item:<id>:...' row (of another kind, or a task in the squatter's own list) would
+-- otherwise block that player's sync for good.
 create or replace function public.own_doc_id(p_kind text, p_id text) returns boolean
 language sql stable set search_path = '' as $$
-  select not starts_with(p_id, p_kind || ':')
-      or p_id = p_kind || ':' || auth.uid()::text
-      or starts_with(p_id, p_kind || ':' || auth.uid()::text || ':');
+  select case
+    when starts_with(p_id, 'hero:') or starts_with(p_id, 'item:') or starts_with(p_id, 'potion:') then
+      p_kind in ('hero', 'item', 'potion')
+      and (p_id = p_kind || ':' || auth.uid()::text or starts_with(p_id, p_kind || ':' || auth.uid()::text || ':'))
+    else true
+  end;
 $$;
 
 -- ---------------------------------------------------------------- triggers
@@ -129,10 +135,12 @@ create policy "docs: read" on public.docs for select to authenticated using (
 
 drop policy if exists "docs: insert" on public.docs;
 create policy "docs: insert" on public.docs for insert to authenticated with check (
-  (list_id is null and owner = (select auth.uid()) and public.own_doc_id(kind, id))
-  or (list_id is not null and public.is_member(list_id))
-  -- a brand-new list, before its owner membership exists (added by docs_after_insert_list)
-  or (kind = 'list' and id = list_id and owner = (select auth.uid()) and not public.list_taken(id))
+  public.own_doc_id(kind, id) and (
+    (list_id is null and owner = (select auth.uid()))
+    or (list_id is not null and public.is_member(list_id))
+    -- a brand-new list, before its owner membership exists (added by docs_after_insert_list)
+    or (kind = 'list' and id = list_id and owner = (select auth.uid()) and not public.list_taken(id))
+  )
 );
 
 drop policy if exists "docs: update" on public.docs;
@@ -159,8 +167,8 @@ create policy "profiles: update own" on public.profiles for update to authentica
   using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 -- invites: no policies; only the functions below touch them
 
-revoke all on public.docs, public.list_members, public.invites, public.profiles from anon;
-revoke all on public.invites from authenticated;
+-- Supabase grants ALL (incl. TRUNCATE, which ignores row-level security) on new tables by default
+revoke all on public.docs, public.list_members, public.invites, public.profiles from anon, authenticated;
 grant select, insert, update on public.docs to authenticated;
 grant select, delete on public.list_members to authenticated;
 grant select, insert, update on public.profiles to authenticated;

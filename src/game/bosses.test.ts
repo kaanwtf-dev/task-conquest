@@ -58,10 +58,20 @@ describe('boss ladder', () => {
   it('gives every boss a unique name across a full lap of the name space and beyond', () => {
     const n = BOSS_NAME_CYCLE + 2000;
     const seen = new Set<string>();
-    for (let i = 1; i <= n; i++) seen.add(bossName(i));
+    // crude in British English, or reads as such inside compounds ("Big Knob...", "Mother Shag...")
+    const crude = /knob|shag|wank|fart|piss|butt|boob|dick|cock|tit(?!an)/i;
+    const flagged: string[] = [];
+    for (let i = 1; i <= n; i++) {
+      const name = bossName(i);
+      seen.add(name);
+      if (crude.test(name)) flagged.push(name);
+    }
     expect(seen.size).toBe(n);
+    expect(flagged.slice(0, 5)).toEqual([]);
     // later laps carry a generation numeral
     expect(bossFor(BOSS_NAME_CYCLE * 3 + 5).name).toMatch(/ [IVXLCDM]+$/);
+    expect(bossName(BOSS_NAME_CYCLE + 1)).toBe('Mother Mossbelly II');
+    expect(bossName(BOSS_NAME_CYCLE * 4000 + 1)).toBe('Mother Mossbelly 4001'); // plain digits past 3999
     for (const i of [1, 77, 4242]) expect(bossName(i)).toBe(bossFor(i).name);
   });
 
@@ -125,6 +135,15 @@ describe('boss ladder', () => {
     expect(bossFor(1e6).maxHp).toBeLessThan(1e9);
     expect(bossFor(-5).index).toBe(1);
   });
+
+  it('names and titles stay readable at index 1e6 and beyond', () => {
+    for (const i of [1e6, 1e6 + 1, 1e9 + 7, Number.MAX_SAFE_INTEGER]) {
+      const b = bossFor(i);
+      expect(b.name, `${i}`).toMatch(/^[A-Z][A-Za-z' -]+( [IVXLCDM]+| \d+)?$/);
+      expect(b.title, `${i}`).toMatch(/^[A-Z][A-Za-z]+ of the [A-Z][A-Za-z ]+$/);
+      expect(b.name.length + b.title.length, `${i}`).toBeLessThan(100);
+    }
+  });
 });
 
 describe('damageForTask', () => {
@@ -147,6 +166,34 @@ describe('damageForTask', () => {
     expect(hit({ crit: true })).toBeCloseTo(hit() * 2, -1);
     expect(hit({ bossPct: 100 })).toBeCloseTo(hit() * 2, -1);
     expect(hit({ level: 200 })).toBeGreaterThan(hit({ level: 20 }));
+  });
+
+  it('a level-appropriate kit hits for exactly the base formula', () => {
+    for (const level of [1, 7, 60, 999]) {
+      for (const d of [1, 2, 4] as Difficulty[]) {
+        const want = Math.round((10 + 3 * level) * [0.5, 1, 1.6, 2.5, 4][d]);
+        expect(damageForTask({ difficulty: d, power: expectedPower(level), level, bossPct: 0, crit: false }), `${level}/${d}`).toBe(want);
+      }
+    }
+  });
+
+  it('never drops when power, level or boss% go up', () => {
+    let prev = 0;
+    for (let power = 0; power <= 5000; power += 37) {
+      const d = damageForTask({ difficulty: 2, power, level: 40, bossPct: 0, crit: false });
+      expect(d).toBeGreaterThanOrEqual(prev);
+      prev = d;
+    }
+    prev = 0;
+    for (let level = 1; level <= 2000; level += 13) {
+      const d = damageForTask({ difficulty: 2, power: expectedPower(level), level, bossPct: 25, crit: false });
+      expect(d).toBeGreaterThanOrEqual(prev);
+      prev = d;
+    }
+    // fractional inputs from buffs/soft caps are fine
+    expect(damageForTask({ difficulty: 2, power: 12.5, level: 3.9, bossPct: 10.3, crit: false })).toBe(
+      damageForTask({ difficulty: 2, power: 12.5, level: 3, bossPct: 10.3, crit: false }),
+    );
   });
 
   it('is always >= 1 and finite', () => {
@@ -235,5 +282,14 @@ describe('bossReward + bossProgress', () => {
     expect(over.hp).toBe(0);
     expect(over.dealt).toBe(over.boss.maxHp);
     expect(bossProgress({ bossIndex: 2, bossDamage: {} }).dealt).toBe(0);
+  });
+
+  it('progress survives corrupt saves', () => {
+    for (const bossDamage of [{ a: NaN }, { a: -50 }, { a: 5, b: 'x' as unknown as number }, undefined as unknown as Record<string, number>]) {
+      const p = bossProgress({ bossIndex: NaN, bossDamage });
+      expect(p.boss.index).toBe(1);
+      expect(p.dealt).toBe(0);
+      expect(p.hp).toBe(p.boss.maxHp);
+    }
   });
 });

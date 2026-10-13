@@ -146,8 +146,8 @@ const CORE_ARCHETYPES = ['slime', 'goblin', 'wolf', 'bat', 'skeleton', 'mushroom
 // Name stems themed per archetype; every stem is unique so compound names never collide.
 const STEMS: [string, string[]][] = [
   ['slime', ['Goo', 'Ooze', 'Gloop', 'Slop', 'Bog', 'Mire']],
-  ['goblin', ['Snag', 'Grub', 'Knob', 'Wart', 'Grot', 'Scrap']],
-  ['wolf', ['Howl', 'Grim', 'Moon', 'Shag', 'Snarl', 'Prowl']],
+  ['goblin', ['Snag', 'Grub', 'Sneak', 'Wart', 'Grot', 'Scrap']],
+  ['wolf', ['Howl', 'Grim', 'Moon', 'Ruff', 'Snarl', 'Prowl']],
   ['bat', ['Flap', 'Dusk', 'Squeak', 'Night', 'Shriek', 'Vesper']],
   ['skeleton', ['Rattle', 'Marrow', 'Clatter', 'Grave', 'Crypt', 'Rib']],
   ['mushroom', ['Moss', 'Spore', 'Mildew', 'Truffle', 'Morel', 'Puff']],
