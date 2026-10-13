@@ -46,6 +46,7 @@ export class Stage {
   private battle: { job: KillJob; t0: number; mon: HTMLCanvasElement; flash: HTMLCanvasElement; pix: Pix; exploded: boolean; sounded: Set<string> } | null = null;
   private particles: Particle[] = [];
   private floaters: Floater[] = [];
+  private pops: { chest: HTMLCanvasElement; open: HTMLCanvasElement; icon?: HTMLCanvasElement; t0: number; delay: number }[] = [];
   private raf = 0;
   private timer = 0;
   private nextBlink = 0;
@@ -103,6 +104,15 @@ export class Stage {
     this.schedule(true);
   }
 
+  /** Loot chest pops out of the last slain monster, opens, and the item floats up. */
+  loot(chest: HTMLCanvasElement, open: HTMLCanvasElement, icon?: HTMLCanvasElement) {
+    if (this.anim === 'off') return;
+    const delay = this.battle || this.queue.length ? (BATTLE_MS - 300) / this.speed() : 0;
+    this.pops.push({ chest, open, icon, t0: performance.now(), delay });
+    if (this.pops.length > 3) this.pops.shift();
+    this.schedule(true);
+  }
+
   levelUp() {
     this.levelGlowUntil = performance.now() + 1600;
     this.floaters.push({ text: 'LEVEL UP!', color: '#ffd860', x: this.heroX + 20, y: 6, t0: performance.now(), dur: 1600 });
@@ -115,11 +125,12 @@ export class Stage {
     this.battle = null;
     this.queue = [];
     this.particles = [];
+    this.pops = [];
     return true;
   }
 
   get busy() {
-    return !!this.battle || this.queue.length > 0 || this.particles.length > 0;
+    return !!this.battle || this.queue.length > 0 || this.particles.length > 0 || this.pops.length > 0;
   }
 
   destroy() {
@@ -263,6 +274,22 @@ export class Stage {
       if (p.size > 1) ctx.drawImage(this.coin, Math.round(p.x), Math.round(p.y), 5, 5);
       else this.g.p(p.x, p.y, p.c);
       return p.life > 0;
+    });
+
+    // loot chests
+    this.pops = this.pops.filter((p) => {
+      const k = (now - p.t0 - p.delay) * (this.anim === 'quick' ? 2 : 1);
+      if (k < 0) return true;
+      if (k > 1300) return false;
+      const x = this.monsterX + 2;
+      const bounce = k < 200 ? Math.round(Math.sin((k / 200) * Math.PI) * 6) : 0;
+      const y = ground - 14 - bounce;
+      ctx.drawImage(k < 450 ? p.chest : p.open, x, y);
+      if (p.icon && k >= 450) {
+        const rise = Math.min(14, (k - 450) / 25);
+        if (Math.floor(k / 80) % 2 || k > 700) ctx.drawImage(p.icon, x, y - 4 - rise);
+      }
+      return true;
     });
 
     // floating text

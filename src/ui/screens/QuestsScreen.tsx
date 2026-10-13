@@ -21,6 +21,7 @@ import { markTap, haptic } from '../components/Effects';
 import { sfx, unlockAudio } from '../../audio/sfx';
 import type { Task, TaskList } from '../../core/types';
 import TaskEditSheet from './TaskEditSheet';
+import BossBar from '../components/BossBar';
 import { ListSheet } from './OtherScreens';
 
 export default function QuestsScreen() {
@@ -43,6 +44,7 @@ export default function QuestsScreen() {
 
   return (
     <div className="scroll" style={themeStyle(list.theme)}>
+      <BossBar />
       <SceneBanner theme={list.theme} height={wide ? 56 : 52} scale={wide ? 3 : 2}>
         <div className="banner-info">
           <div className="win banner-title">
@@ -116,6 +118,7 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
 
   return (
     <div className="scroll" style={themeStyle('castle')}>
+      <BossBar />
       <SceneBanner theme="castle" height={wide ? 56 : 52} scale={wide ? 3 : 2}>
         <div className="banner-info">
           <div className="win banner-title">
@@ -183,6 +186,7 @@ function QuickAdd({ list, dueToday }: { list?: TaskList; dueToday?: boolean }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={supply ? 'Add item… (remembers everything)' : dueToday ? `Add a quest for today → ${list.name}` : 'Add a quest…'}
+          data-quickadd
           enterKeyHint="done"
           aria-label="New item"
         />
@@ -220,6 +224,7 @@ function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps)
   const haptics = useStore((s) => s.settings.haptics);
   const sfxOn = useStore((s) => s.settings.sfx > 0);
   const listName = useStore((s) => (showList ? s.lists[task.listId]?.name : undefined));
+  const shared = useStore((s) => !!s.lists[task.listId]?.shared);
   const d = DIFFICULTY[task.difficulty];
   const rl = repeatLabel(task.repeat);
   const style = sortable
@@ -256,9 +261,10 @@ function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps)
       <PxImg className="ticon" src={iconFor(task.title, task.icon)} size={32} />
       <div className="tmain">
         <div className="ttitle">{task.title}</div>
-        {(rl || task.due || inactive || task.qty || listName || task.notes || task.doneBy) && (
+        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy)) && (
           <div className="tmeta">
             {listName && <span className="tlist">{listName}</span>}
+            {shared && done && task.doneBy && <span className="tlist">✓ {task.doneBy}</span>}
             {rl && (
               <>
                 <Ui name="repeat" size={12} /> {rl}

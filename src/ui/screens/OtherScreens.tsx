@@ -1,91 +1,11 @@
 import { useState } from 'react';
 import { useStore, heroStats, LIST_TYPE_INFO } from '../../state/store';
-import { heroGold, heroSkill, levelTitle } from '../../game/progression';
-import { SKILLS, CLASS_BY_ID } from '../../game/catalog';
-import { RACE_BY_ID } from '../../pixel/sprites/hero';
-import { useHeroLook } from '../../game/look';
-import { streak } from '../../core/time';
+import { SKILLS } from '../../game/catalog';
 import { iconFor } from '../../pixel/iconGen';
 import { THEMES, type ThemeId } from '../../pixel/themes';
 import type { AnimMode, ListType, SkillId } from '../../core/types';
-import { Bar, HeroPreview, PxImg, Ui, themeStyle, useMedia } from '../components/common';
-import { sfx } from '../../audio/sfx';
-import { setSfxVolume } from '../../audio/sfx';
-
-export function HeroScreen() {
-  const hero = useStore((s) => s.hero)!;
-  const log = useStore((s) => s.log);
-  const cfg = useStore((s) => s.settings);
-  const wide = useMedia('(min-width: 900px)');
-  const st = heroStats(hero);
-  const look = useHeroLook();
-  return (
-    <div className="scroll">
-      <div className="win" style={{ overflow: 'hidden' }}>
-        <HeroPreview app={hero.appearance} look={look} theme="tavern" w={wide ? 120 : 92} h={56} scale={wide ? 4 : 4} />
-        <div style={{ padding: 12 }}>
-          <div className="win-title">
-            {hero.name} · Lv{st.level} {levelTitle(st.level)}
-          </div>
-          <div style={{ fontSize: 15, marginTop: 6, color: 'var(--muted)' }}>
-            {RACE_BY_ID[hero.appearance.race].name} {CLASS_BY_ID[hero.classId].name} · ✦ {RACE_BY_ID[hero.appearance.race].perk}
-          </div>
-          <div style={{ marginTop: 10 }}>
-            <Bar value={st.into} max={st.need} label={`${st.into}/${st.need} XP`} />
-          </div>
-        </div>
-      </div>
-
-      <div className="section-label">Equipment</div>
-      <div className="win" style={{ padding: 12 }}>
-        <div className="slots">
-          {['Weapon', 'Head', 'Body', 'Offhand', 'Cape', 'Trinket'].map((slot, i) => (
-            <div key={slot} className={`slot ${i === 0 ? 'filled' : ''}`}>
-              {i === 0 ? <Ui name="sword" size={26} /> : <span style={{ opacity: 0.4 }}>—</span>}
-              {slot}
-            </div>
-          ))}
-        </div>
-        <div style={{ fontSize: 14, color: 'var(--muted)', marginTop: 10 }}>Loot drops, inventory & the blacksmith arrive in the next build.</div>
-      </div>
-
-      <div className="section-label">Stats</div>
-      <div className="win" style={{ padding: '6px 12px' }}>
-        <div className="kv">Gold <b>{heroGold(hero).toLocaleString()}</b></div>
-        <div className="kv">Monsters slain <b>{st.kills}</b></div>
-        <div className="kv">Quests completed <b>{st.tasks}</b></div>
-        <div className="kv">Daily streak <b>{streak(hero.activeDays, Date.now(), cfg)} days</b></div>
-      </div>
-
-      <div className="section-label">Skills · level up by doing</div>
-      <div className="win" style={{ padding: '6px 12px' }}>
-        {SKILLS.map((sk) => {
-          const s = heroSkill(hero, sk.id);
-          return (
-            <div key={sk.id} className="skill">
-              <PxImg src={iconFor(sk.name, sk.emoji)} size={28} />
-              <div>
-                <div className="sname">{sk.name}</div>
-                <Bar value={s.into} max={s.need} />
-              </div>
-              <div className="slv">{s.level}</div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="section-label">Adventure log</div>
-      <div className="win log">
-        {log.length === 0 && <div className="empty">Your legend is unwritten.</div>}
-        {log.slice(0, 30).map((l) => (
-          <div key={l.id} className={`lk-${l.kind}`}>
-            ▸ {l.text}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+import { PxImg, themeStyle } from '../components/common';
+import { sfx, setSfxVolume } from '../../audio/sfx';
 
 export function SettingsScreen() {
   const s = useStore();
@@ -153,6 +73,31 @@ export function SettingsScreen() {
           ))}
         </Opt>
       </div>
+      <div className="section-label">Backup</div>
+      <div className="win" style={{ padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button className="btn small" onClick={() => exportBackup(s.exportData())}>
+          Export save
+        </button>
+        <label className="btn ghost small" style={{ cursor: 'pointer' }}>
+          Import save
+          <input
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              if (!confirm('Replace everything on this device with this backup?')) return;
+              const ok = s.importData(await f.text());
+              alert(ok ? 'Backup restored!' : 'That file is not a Questlog backup.');
+            }}
+          />
+        </label>
+        <div className="muted small" style={{ width: '100%' }}>
+          A JSON file with your hero, lists and loot. Cloud sync lives in the Party tab.
+        </div>
+      </div>
       <div className="section-label">Danger zone</div>
       <div className="win" style={{ padding: 12 }}>
         <button
@@ -168,6 +113,26 @@ export function SettingsScreen() {
   );
 }
 
+async function exportBackup(json: string) {
+  const name = `questlog-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const file = new File([json], name, { type: 'application/json' });
+  const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+  if (nav.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'Questlog backup' });
+      return;
+    } catch {
+      // user cancelled or share failed: fall back to a download
+    }
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 function Opt({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ padding: '10px 0', borderBottom: '2px dashed rgba(255,255,255,.08)' }}>
@@ -175,17 +140,6 @@ function Opt({ label, children }: { label: string; children: React.ReactNode }) 
         {label}
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{children}</div>
-    </div>
-  );
-}
-
-export function ComingSoon({ title, text }: { title: string; text: string }) {
-  return (
-    <div className="scroll">
-      <div className="win" style={{ padding: 16 }}>
-        <div className="win-title">{title}</div>
-        <div style={{ marginTop: 10, fontSize: 16, lineHeight: 1.4 }}>{text}</div>
-      </div>
     </div>
   );
 }

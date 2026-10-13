@@ -4,6 +4,8 @@ import { useStore } from '../../state/store';
 import { fx } from '../../state/fx';
 import { useHeroLook } from '../../game/look';
 import type { ThemeId } from '../../pixel/themes';
+import { chestPix, itemIconPix, potionIconPix } from '../../pixel/sprites/items';
+import { materialOf } from '../../game/loot';
 
 interface Props {
   w: number;
@@ -32,6 +34,15 @@ export default function HeroStage({ w, h, scale, heroX, monsterX, theme, classNa
     const off = fx.on((e) => {
       if (e.type === 'kill') st.kill({ monster: e.monster, xp: e.xp, gold: e.gold, crit: e.crit, theme: e.theme as ThemeId });
       if (e.type === 'levelUp') st.levelUp();
+      if (e.type === 'loot' && !e.soldFor) {
+        const rarity = e.item?.rarity ?? 0;
+        const icon = e.item
+          ? itemIconPix({ slot: e.item.slot, base: e.item.base, palette: materialOf(e.item).palette }).toCanvas(1)
+          : e.potion
+            ? potionIconPix(e.potion.potion, e.potion.tier).toCanvas(1)
+            : undefined;
+        st.loot(chestPix(rarity, false).toCanvas(1), chestPix(rarity, true).toCanvas(1), icon);
+      }
     });
     return () => {
       off();

@@ -5,10 +5,12 @@ import App from './App';
 import { useStore } from './state/store';
 import { fx } from './state/fx';
 import { setSfxVolume } from './audio/sfx';
+import { initSync } from './state/sync';
 
 const SpriteLab = lazy(() => import('./dev/SpriteLab'));
 
 setSfxVolume(useStore.getState().settings.sfx);
+initSync();
 
 if (import.meta.env.DEV) Object.assign(window, { __ql: { store: useStore, fx } });
 

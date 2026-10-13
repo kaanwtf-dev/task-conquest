@@ -13,7 +13,7 @@ import { itemDisplayName, sellPrice, starterItems, upgradeCost } from '../game/l
 import { makeBuff, potionName, potionStackId } from '../game/potions';
 import { applyBuffs, computeStats } from '../game/stats';
 import { claimRewards } from '../game/achievements';
-import type { ShopOffer } from '../game/shop';
+import { BAG_MAX, BAG_STEP, dyeKey, themeKey, type ShopOffer } from '../game/shop';
 import { fx } from './fx';
 import { bagCount, bestStreak, inc, questChestRewards, streakDays, taskRewards, type RewardOutcome } from './rewards';
 
@@ -304,7 +304,7 @@ export const useStore = create<State>()(
             const all = Object.values(get().tasks).filter((x) => x.listId === list.id && !x.deleted && isActiveToday(x, t, cfg));
             if (all.length >= 2 && all.every((x) => isDone(x, t, cfg))) {
               const st = get();
-              apply(questChestRewards({ hero: st.hero!, items: st.items, list, dev: st.deviceId, now: t, seed: hashStr(`chest:${list.id}:${pk}`) }));
+              apply(questChestRewards({ hero: st.hero!, items: st.items, list, dev: st.deviceId, now: t, seed: hashStr(`chest:${list.id}:${pk}:${t}:${st.deviceId}`) }));
             }
           }
         },
@@ -470,14 +470,14 @@ export const useStore = create<State>()(
               break;
             }
             case 'bag':
-              set({ hero: { ...h, bagSize: h.bagSize + 6, updatedAt: t } });
+              set({ hero: { ...h, bagSize: Math.min(BAG_MAX, h.bagSize + BAG_STEP), updatedAt: t } });
               break;
             case 'theme':
-              set({ hero: { ...h, owned: [...h.owned, `theme:${offer.theme}`], updatedAt: t } });
+              set({ hero: { ...h, owned: [...new Set([...h.owned, themeKey(offer.theme!)])], updatedAt: t } });
               break;
             case 'dye': {
               const d = offer.dye!;
-              const owned = [...h.owned, `dye:${d.target}:${d.color}`];
+              const owned = [...new Set([...h.owned, dyeKey(d.target, d.color)])];
               const appearance = d.target === 'cape' ? h.appearance : { ...h.appearance, [d.target === 'hair' ? 'hairColor' : d.target]: d.color };
               set({ hero: { ...h, owned, appearance, capeDye: d.target === 'cape' ? d.color : h.capeDye, updatedAt: t } });
               break;

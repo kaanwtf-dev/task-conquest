@@ -1,12 +1,15 @@
-import { useState } from 'react';
-import { useStore } from './state/store';
+import { useEffect, useState } from 'react';
+import { useStore, visibleLists, TODAY_ID } from './state/store';
 import { Hud, ListChips, Sidebar, TabBar } from './ui/components/chrome';
 import { useMedia, themeStyle } from './ui/components/common';
 import Effects from './ui/components/Effects';
 import HeroStage from './ui/stage/HeroStage';
 import CreateHero from './ui/screens/CreateHero';
 import QuestsScreen from './ui/screens/QuestsScreen';
-import { ComingSoon, HeroScreen, ListSheet, SettingsScreen } from './ui/screens/OtherScreens';
+import { ListSheet, SettingsScreen } from './ui/screens/OtherScreens';
+import HeroScreen from './ui/screens/HeroScreen';
+import ShopScreen from './ui/screens/ShopScreen';
+import PartyScreen from './ui/screens/PartyScreen';
 
 export default function App() {
   const hero = useStore((s) => s.hero);
@@ -18,6 +21,27 @@ export default function App() {
   const list = useStore((s) => (s.activeListId ? s.lists[s.activeListId] : undefined));
   const wide = useMedia('(min-width: 900px)');
   const [newList, setNewList] = useState(false);
+
+  // desktop keyboard shortcuts: N or / = add quest, T = Today, 1-9 = lists, Esc closes sheets via click-away
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement;
+      if (e.metaKey || e.ctrlKey || e.altKey || el.closest('input, textarea, select, [contenteditable]')) return;
+      const st = useStore.getState();
+      if (!st.hero) return;
+      if (e.key === 'n' || e.key === '/') {
+        e.preventDefault();
+        if (st.tab !== 'quests') st.setTab('quests');
+        setTimeout(() => document.querySelector<HTMLInputElement>('input[data-quickadd]')?.focus(), 0);
+      } else if (e.key === 't') st.setActiveList(TODAY_ID);
+      else if (/^[1-9]$/.test(e.key)) {
+        const l = visibleLists(st)[Number(e.key) - 1];
+        if (l) st.setActiveList(l.id);
+      } else if (e.key === 'Escape') document.querySelector<HTMLElement>('.sheet-back')?.click();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   if (!hero) return <CreateHero />;
   const theme = list?.theme ?? 'forest';
@@ -31,12 +55,8 @@ export default function App() {
         {tab === 'quests' && <QuestsScreen />}
         {tab === 'hero' && <HeroScreen />}
         {tab === 'settings' && <SettingsScreen />}
-        {tab === 'shop' && (
-          <ComingSoon title="Merchant" text="Potions, weapons, armor dyes, bag upgrades and zone unlocks — all bought with gold from slain tasks. Coming in the next build." />
-        )}
-        {tab === 'party' && (
-          <ComingSoon title="Party" text="Shared lists with friends & family: invite with a code, see each other's heroes, and watch tasks get slain in real time. Coming in the next build." />
-        )}
+        {tab === 'shop' && <ShopScreen />}
+        {tab === 'party' && <PartyScreen />}
       </div>
       {wide ? (
         <aside className="stage-panel" style={themeStyle(theme)}>
