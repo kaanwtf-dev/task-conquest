@@ -222,10 +222,11 @@ function SheetBody({ onClose, children, className, style }: { onClose: () => voi
   const downOnBack = useRef(false);
   const box = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  // what opened the sheet, read while rendering: by the time effects run an autoFocus field inside has focus
+  const [opener] = useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null));
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     // named after its title; focus moves in (unless a field autofocused already) and stays in while open
     const title = el.querySelector('.win-title');
     if (title) {
@@ -254,7 +255,7 @@ function SheetBody({ onClose, children, className, style }: { onClose: () => voi
       document.removeEventListener('keydown', onKey);
       if (opener?.isConnected) opener.focus({ preventScroll: true }); // back to what opened it
     };
-  }, [titleId]);
+  }, [titleId, opener]);
   return (
     <div
       className="sheet-back"
