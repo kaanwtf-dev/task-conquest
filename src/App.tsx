@@ -10,6 +10,7 @@ import { setSfxVolume } from './audio/sfx';
 import HeroStage from './ui/stage/HeroStage';
 import { FloatingHero, HeroBar } from './ui/components/HeroWindow';
 import CreateHero from './ui/screens/CreateHero';
+import Intro from './ui/screens/Intro';
 import QuestsScreen from './ui/screens/QuestsScreen';
 import { ListSheet, SettingsScreen } from './ui/screens/OtherScreens';
 import HeroScreen from './ui/screens/HeroScreen';
@@ -22,6 +23,7 @@ export default function App() {
   const log = useStore((s) => s.log);
   const font = useStore((s) => s.settings.taskFont);
   const corner = useStore((s) => s.settings.cornerHero ?? 'big');
+  const introSeen = useStore((s) => !!s.settings.introSeen);
   const list = useStore((s) => (s.activeListId ? s.lists[s.activeListId] : undefined));
   const wide = useMedia('(min-width: 900px)');
   const roomy = useMedia('(min-width: 1180px)');
@@ -68,7 +70,14 @@ export default function App() {
     else stopMusic();
   }, [music, musicTheme, !!hero]);
 
-  if (!hero) return <CreateHero />;
+  // new players see the walkthrough before making a hero; existing ones once, over the app
+  if (!hero)
+    return (
+      <>
+        <CreateHero />
+        {!introSeen && <Intro />}
+      </>
+    );
   const theme = list?.theme ?? 'forest';
 
   return (
@@ -114,6 +123,7 @@ export default function App() {
       <Effects />
       <UpdateBanner />
       <UndoBar />
+      {!introSeen && <Intro />}
       {newList && <ListSheet onClose={() => setNewList(false)} />}
     </div>
   );

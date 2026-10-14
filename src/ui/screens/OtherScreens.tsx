@@ -99,6 +99,11 @@ export function SettingsScreen() {
             </button>
           ))}
         </Opt>
+        <Opt label="New here?">
+          <button className="pill" onClick={() => (sfx.tick(), set({ introSeen: false }))}>
+            show the intro again
+          </button>
+        </Opt>
       </div>
       <div className="section-label">Backup</div>
       <div className="win" style={{ padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
