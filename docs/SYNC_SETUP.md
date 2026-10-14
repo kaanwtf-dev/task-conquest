@@ -45,16 +45,18 @@ You need two values from Supabase. Click **Connect** at the top of the project d
 
 Then connect the app in one of two ways.
 
+> **Forking this repository?** Its `.env.production` points at the original owner's project, and a site built with a cloud in it doesn't offer Option A. Put your own values in that file (Option B), or delete it to use Option A.
+
 **Option A: type the values into the app, on each device.**
-Open the **Party** tab, then **Connect a cloud**. Paste the URL and the key, then tap **Connect**.
+Only for a site built without a cloud (no `.env.production` values or secrets). Open the **Party** tab, then **Connect a cloud**. Paste the URL and the key, then tap **Connect**.
 
 **Option B: build the values into your published site.**
 Everyone who opens your site is then connected automatically. This is the easiest way to share lists with friends.
 
-1. In your GitHub repository, go to **Settings → Secrets and variables → Actions**.
-2. Click **New repository secret** and add `VITE_SUPABASE_URL` with the Project URL.
-3. Add a second secret, `VITE_SUPABASE_ANON_KEY`, with the anon public key.
-4. Redeploy: on the **Actions** tab, re-run the deploy workflow, or push any commit.
+1. Put both values in the file `.env.production` at the root of the repository (`VITE_SUPABASE_URL=…` and `VITE_SUPABASE_ANON_KEY=…`). This repository's file already points at its own project; replace the values to use another one.
+2. Push to `main`; the site redeploys with them.
+
+Repository secrets with the same names (**Settings → Secrets and variables → Actions**) override the file, if you prefer not to keep the values in the repository; set both or neither. Either way the anon key ends up in the published app, which is how Supabase is designed to work.
 
 ## 5. Use it
 
@@ -66,7 +68,7 @@ Everyone who opens your site is then connected automatically. This is the easies
 - **Share a list:**
   1. In the Party tab, find the list and tap **Share**, then **Send link**. You can also read out the 6-letter code.
   2. Your friend opens the link, or types the code under **Join a party list**.
-  3. Friends need their own account on the **same Supabase project**. Either they use your site (Option B), or they enter your URL and key (Option A).
+  3. Friends need their own account on the **same Supabase project**. With a built-in cloud (Option B) they just open your site; otherwise they enter your URL and key (Option A).
 - **What everyone sees:** checks appear for everyone within a second or two. Whoever completes a quest gets the XP and gold.
 - **Leave a list:** tap **Leave party list** in the Party tab, or **Leave** in the list's **⋯** menu. The list disappears from your devices, and the others keep it. This also works offline: the server is told once you are back online.
 - **Delete vs. leave:** only the owner can delete a party list, and deleting it removes it for everyone. **Start over** (Options) and **Import save** never delete lists you joined. Start over leaves them, and an import keeps them as they are. When you import a backup of a list you share, it is merged with what the party did since, so nobody's items are lost.
@@ -79,11 +81,11 @@ Everyone who opens your site is then connected automatically. This is the easies
 | Message or problem | Fix |
 | --- | --- |
 | *Wrong email or password* | Check both. Passwords are case-sensitive. |
-| *The Project URL looks wrong* | Tap **Change cloud project** and paste the URL again, exactly like `https://abcdefgh.supabase.co`. |
+| *The Project URL looks wrong* | Built-in cloud: fix `VITE_SUPABASE_URL` in `.env.production` (or the secret) and push. Otherwise tap **Change cloud project** and paste the URL again, exactly like `https://abcdefgh.supabase.co`. |
 | *Confirm your email first* | Open the confirmation email, or switch **Confirm email** off (step 3). |
 | *This list is not in the cloud yet* | The list was just created. Wait a few seconds and try again. |
 | *That invite code does not exist* | Check the code. Codes never use 0, O, 1, I or L. |
-| Status says **Sync error** | Run `schema.sql` again (step 2), then check the URL and key in the Party tab (**Change cloud project**). |
+| Status says **Sync error** | Run `schema.sql` again (step 2), then check the URL and key: in `.env.production` for a built-in cloud, otherwise in the Party tab (**Change cloud project**). |
 | Nothing syncs after a quiet week | Free projects pause when idle. Open the Supabase dashboard and click **Restore project**. |
 | Changes only appear after ~30 seconds | Realtime is off. Under **Database → Publications → supabase_realtime**, the tables `docs` and `list_members` should be on (`schema.sql` turns them on). Sync still works without realtime, just more slowly. |
 

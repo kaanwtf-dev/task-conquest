@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { isForeignList, useStore, visibleLists } from '../../state/store';
 import { useSync, joinByCode, resolveConflict, resolveAccountSwitch, restartSync, signOutHere, syncNow } from '../../state/sync';
-import { getSyncConfig, setSyncConfig, signIn, signUp } from '../../sync/supabase';
+import { cloudIsBuiltIn, getSyncConfig, setSyncConfig, signIn, signUp } from '../../sync/supabase';
 import { createInvite, listParty } from '../../sync/party';
 import { iconFor } from '../../pixel/iconGen';
 import { heroPix, type Appearance } from '../../pixel/sprites/hero';
 import { spriteUrl } from '../../pixel/pix';
 import { CLASS_BY_ID } from '../../game/catalog';
 import type { ClassId, TaskList } from '../../core/types';
-import { PxImg, themeStyle } from '../components/common';
+import { PxImg, Sheet, themeStyle } from '../components/common';
 import { Field } from './TaskEditSheet';
 import { sfx } from '../../audio/sfx';
 
@@ -117,18 +117,20 @@ function AuthCard() {
             </button>
           </div>
         </form>
-        <button
-          className="btn ghost small"
-          style={{ marginTop: 12 }}
-          onClick={() => {
-            if (confirm('Disconnect this cloud project from the app?')) {
-              setSyncConfig(null);
-              restartSync();
-            }
-          }}
-        >
-          Change cloud project
-        </button>
+        {!cloudIsBuiltIn() && (
+          <button
+            className="btn ghost small"
+            style={{ marginTop: 12 }}
+            onClick={() => {
+              if (confirm('Disconnect this cloud project from the app?')) {
+                setSyncConfig(null);
+                restartSync();
+              }
+            }}
+          >
+            Change cloud project
+          </button>
+        )}
       </div>
     </>
   );
@@ -366,29 +368,25 @@ function ConflictSheet() {
       {err}
     </p>
   );
-  if (c.kind === 'account')
-    return (
-      <div className="sheet-back">
-        <div className="win sheet">
-          <div className="win-title">Different account</div>
-          <p style={{ fontSize: 16, lineHeight: 1.4 }}>
-            This device was last synced with another account. Its hero and lists ({hero?.name ?? 'no hero'}) belong to that account.
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <button className="btn" disabled={busy} onClick={choose(() => resolveAccountSwitch('fresh'))}>
-              Start fresh with this account
-            </button>
-            <button className="btn ghost" disabled={busy} onClick={choose(() => resolveAccountSwitch('bring'))}>
-              Bring this device's data into this account
-            </button>
-          </div>
-          {errLine}
+  const inner =
+    c.kind === 'account' ? (
+      <>
+        <div className="win-title">Different account</div>
+        <p style={{ fontSize: 16, lineHeight: 1.4 }}>
+          This device was last synced with another account. Its hero and lists ({hero?.name ?? 'no hero'}) belong to that account.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button className="btn" disabled={busy} onClick={choose(() => resolveAccountSwitch('fresh'))}>
+            Start fresh with this account
+          </button>
+          <button className="btn ghost" disabled={busy} onClick={choose(() => resolveAccountSwitch('bring'))}>
+            Bring this device's data into this account
+          </button>
         </div>
-      </div>
-    );
-  return (
-    <div className="sheet-back">
-      <div className="win sheet">
+        {errLine}
+      </>
+    ) : (
+      <>
         <div className="win-title">Two heroes found</div>
         <p style={{ fontSize: 16, lineHeight: 1.4 }}>
           The cloud already has <b>{c.cloudName}</b> (Lv{c.cloudLevel}). This device has <b>{hero?.name}</b>. What should happen?
@@ -405,7 +403,8 @@ function ConflictSheet() {
           </button>
         </div>
         {errLine}
-      </div>
-    </div>
-  );
+      </>
+    );
+  // a full sheet (dialog semantics, focus kept inside), but one that can't be dismissed: a choice is required
+  return <Sheet onClose={() => undefined}>{inner}</Sheet>;
 }

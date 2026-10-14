@@ -6,6 +6,8 @@ It is an installable web app (PWA) that works offline:
 - **iPhone:** open the site in Safari, then Share → **Add to Home Screen**.
 - **Mac:** open it in Safari, then File → **Add to Dock**.
 
+> **Re-adding the app (iPhone):** a home-screen app keeps its own storage, so removing its icon deletes the hero and lists on that phone. First sign in on the **Party** tab and let it sync (or use Options → **Export save**), then remove the icon, add it again from Safari, and sign in.
+
 ## What's inside
 
 **To-do lists (the main thing)**
@@ -47,7 +49,7 @@ It is an installable web app (PWA) that works offline:
 
 ## Hosting it (GitHub Pages)
 
-The workflow in `.github/workflows/deploy.yml` builds and publishes the app on every push to `main`. One-time setup: repository **Settings → Pages → Source: GitHub Actions**. To bake sync settings into the build, add the repository secrets `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; otherwise you can paste them into the app's Party tab.
+The workflow in `.github/workflows/deploy.yml` builds and publishes the app on every push to `main`. One-time setup: repository **Settings → Pages → Source: GitHub Actions**. The cloud (Supabase) settings are built in from `.env.production`, so everyone who opens the site is connected without entering anything; repository secrets `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (set both) override them. **Forks:** that file points at this repository owner's project; put your own values in it, or delete it so players can enter a cloud in the Party tab.
 
 ## Development
 

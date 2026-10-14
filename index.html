@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- opaque: with "black-translucent", iOS 26+ home-screen apps get a layout viewport one status bar too
+         short, so the tab bar floated above a dark band (WebKit bug 301994). iOS reads this when the app is
+         added to the Home Screen, so existing installs need to be re-added. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="Questlog" />
     <meta name="theme-color" content="#120c1c" />
     <meta name="description" content="A pixel-art RPG to-do list: finish tasks, slay monsters, earn XP, gold and loot." />

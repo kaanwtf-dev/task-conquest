@@ -7,10 +7,12 @@ import { fx } from './state/fx';
 import { setSfxVolume } from './audio/sfx';
 import { registerPWA, requestPersistentStorage } from './pwa';
 import { useAppUpdate } from './ui/components/UpdateBanner';
+import { trackKeyboard } from './ui/keyboard';
 
 const SpriteLab = lazy(() => import('./dev/SpriteLab'));
 
 setSfxVolume(useStore.getState().settings.sfx);
+trackKeyboard();
 // the sync stack (Supabase client) loads in its own chunk so first paint stays light
 void import('./state/sync').then((m) => m.initSync());
 registerPWA(

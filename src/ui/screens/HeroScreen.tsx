@@ -394,7 +394,7 @@ function BarberSheet({ onClose }: { onClose: () => void }) {
         <div className="muted small" style={{ marginTop: 8 }}>
           More dyes in the shop.
         </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+        <div className="sheet-actions" style={{ justifyContent: 'flex-end' }}>
           <button className="btn ghost" onClick={onClose}>
             Cancel
           </button>

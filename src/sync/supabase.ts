@@ -35,6 +35,9 @@ function envConfig(): SyncConfig | null {
   return url && anonKey ? { url: cleanUrl(url), anonKey } : null;
 }
 
+/** True when the published site has its cloud built in (nothing for players to enter or change). */
+export const cloudIsBuiltIn = (): boolean => envConfig() !== null;
+
 /** Build-time env (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY) wins; otherwise what the user entered. */
 export function getSyncConfig(): SyncConfig | null {
   const env = envConfig();
@@ -72,12 +75,17 @@ export function getClient(): SupabaseClient | null {
     }
     cached = null;
     try {
-      cached = {
-        key,
-        client: createClient(cfg.url, cfg.anonKey, {
-          auth: { persistSession: true, autoRefreshToken: true, storageKey: AUTH_STORAGE_KEY },
-        }),
-      };
+      const client = createClient(cfg.url, cfg.anonKey, {
+        auth: { persistSession: true, autoRefreshToken: true, storageKey: AUTH_STORAGE_KEY },
+      });
+      // supabase-js 2.57 never hands the signed-in user's token to Realtime: change events were then
+      // authorized as anon, and the row-level security rules blanked every one ("Error 401").
+      // (deferred: calling into the client inside this callback can deadlock on the auth lock)
+      client.auth.onAuthStateChange((_event, session) => {
+        const token = session?.access_token;
+        if (token) setTimeout(() => void client.realtime?.setAuth?.(token), 0);
+      });
+      cached = { key, client };
     } catch {
       return null; // malformed URL (a typo): treated as not set up instead of throwing on every launch
     }
@@ -87,7 +95,14 @@ export function getClient(): SupabaseClient | null {
 
 function need(): SupabaseClient {
   const c = getClient();
-  if (!c) throw new Error(getSyncConfig() ? 'The Project URL looks wrong. Fix it under Change cloud project.' : 'Cloud sync is not set up yet.');
+  if (!c)
+    throw new Error(
+      !getSyncConfig()
+        ? 'Cloud sync is not set up yet.'
+        : cloudIsBuiltIn()
+          ? "This site's cloud address is wrong; whoever runs the site needs to fix it."
+          : 'The Project URL looks wrong. Fix it under Change cloud project.',
+    );
   return c;
 }
 
@@ -323,6 +338,8 @@ export class SupabaseRemote implements RemoteAdapter {
 
   subscribe(onRow: (row: RemoteRow) => void, onResync?: () => void): () => void {
     let opened = false;
+    // join with the user's token, not the anon key (see getClient); it also reaches channels already joined
+    void this.client.realtime?.setAuth?.();
     const ch = this.client
       .channel(`questlog-${this.userId}-${++channelSeq}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'docs' }, (p) => {

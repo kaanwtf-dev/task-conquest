@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { THEME_BY_ID, sceneCanvas, Painter, type ThemeId } from '../../pixel/themes';
 import { heroPix, type Appearance, type GearLook, RACE_BY_ID } from '../../pixel/sprites/hero';
 import { Pix, spriteUrl } from '../../pixel/pix';
@@ -187,18 +188,45 @@ export function Bar({ value, max, kind, label }: { value: number; max: number; k
   );
 }
 
+/** The zone colors themeStyle() sets; a sheet rendered elsewhere carries them along. */
+const THEME_VARS = ['--winTop', '--winBot', '--border', '--accent', '--text', '--muted', '--page', '--page2'];
+
+/** Renders `children` on document.body (outside every scroll area), wearing the zone colors of where it was opened. */
+export function BodyPortal({ children }: { children: (zone: CSSProperties | undefined) => React.ReactNode }) {
+  const anchor = useRef<HTMLSpanElement>(null);
+  const [zone, setZone] = useState<CSSProperties>();
+  useLayoutEffect(() => {
+    if (!anchor.current) return;
+    const cs = getComputedStyle(anchor.current);
+    setZone(Object.fromEntries(THEME_VARS.map((v) => [v, cs.getPropertyValue(v).trim()]).filter(([, x]) => x)) as CSSProperties);
+  }, []);
+  return (
+    <>
+      <span ref={anchor} hidden />
+      {createPortal(children(zone), document.body)}
+    </>
+  );
+}
+
 /**
  * Modal sheet with a dimmed backdrop. Closes only when a press both starts and ends on the backdrop,
  * so drag-selecting text inside an input and releasing outside doesn't discard edits.
+ * Rendered on document.body: inside a scrolling list, iPhone Safari clipped it to that list and drew the
+ * tab bar over its buttons.
  */
 export function Sheet({ onClose, children, className, style }: { onClose: () => void; children: React.ReactNode; className?: string; style?: CSSProperties }) {
+  return <BodyPortal>{(zone) => <SheetBody onClose={onClose} className={className} style={{ ...zone, ...style }}>{children}</SheetBody>}</BodyPortal>;
+}
+
+function SheetBody({ onClose, children, className, style }: { onClose: () => void; children: React.ReactNode; className?: string; style?: CSSProperties }) {
   const downOnBack = useRef(false);
   const box = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  // what opened the sheet, read while rendering: by the time effects run an autoFocus field inside has focus
+  const [opener] = useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null));
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     // named after its title; focus moves in (unless a field autofocused already) and stays in while open
     const title = el.querySelector('.win-title');
     if (title) {
@@ -227,7 +255,7 @@ export function Sheet({ onClose, children, className, style }: { onClose: () => 
       document.removeEventListener('keydown', onKey);
       if (opener?.isConnected) opener.focus({ preventScroll: true }); // back to what opened it
     };
-  }, [titleId]);
+  }, [titleId, opener]);
   return (
     <div
       className="sheet-back"

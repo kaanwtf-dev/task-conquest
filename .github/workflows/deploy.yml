@@ -34,13 +34,23 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Build
-        run: npm run build
+        # The cloud settings come from .env.production; repository secrets of the same name override
+        # them. An unset secret is an empty string, which would blank the file's values, so only
+        # non-empty ones are exported.
+        run: |
+          if [ -n "$SECRET_SUPABASE_URL" ] && [ -n "$SECRET_SUPABASE_ANON_KEY" ]; then
+            export VITE_SUPABASE_URL="$SECRET_SUPABASE_URL" VITE_SUPABASE_ANON_KEY="$SECRET_SUPABASE_ANON_KEY"
+          elif [ -n "$SECRET_SUPABASE_URL$SECRET_SUPABASE_ANON_KEY" ]; then
+            # one without the other would pair one project's URL with another project's key
+            echo "::error::Set both VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY secrets, or neither."
+            exit 1
+          fi
+          npm run build
         env:
           # The site's real path: "/<repo>" for project pages, "" for <user>.github.io or a custom domain.
           BASE_PATH: ${{ steps.pages.outputs.base_path }}/
-          # Optional: bakes sync settings into the build (empty when the secrets are not set).
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SECRET_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SECRET_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

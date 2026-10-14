@@ -204,7 +204,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
           ))}
         </Field>
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 16 }}>
+        <div className="sheet-actions">
           <button
             type="button"
             className="btn ghost"
