@@ -180,7 +180,6 @@ canvas.px {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   padding: 10px max(12px, var(--safe-r)) calc(var(--tabbar-h) + var(--safe-bot) + 130px) max(12px, var(--safe-l));
 }
 
