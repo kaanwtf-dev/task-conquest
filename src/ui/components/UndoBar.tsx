@@ -42,7 +42,8 @@ export default function UndoBar() {
       {offer && (
         <div key={offer.key} className="undo-bar win">
           <span>{offer.text}</span>
-          <button className="btn small" onClick={() => run(offer)}>
+          {/* no focus change on press: closing the keyboard would move the bar out from under the finger */}
+          <button className="btn small" onMouseDown={(e) => e.preventDefault()} onClick={() => run(offer)}>
             Undo
           </button>
         </div>

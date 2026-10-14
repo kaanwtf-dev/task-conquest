@@ -161,28 +161,33 @@ export default function Effects() {
         ))}
       </div>
       <div className="notes-wrap" role="status" aria-live="polite">
-        {notes.length > 1 && (
-          <div className="toast-more">
-            <span>+{notes.length - 1} more</span>
-            <button className="btn small" onClick={() => setNotes([])}>
-              Clear all ({notes.length})
-            </button>
-          </div>
-        )}
         {notes.slice(-1).map((b) => (
           // tap it to clear it; the next one (if any) takes its place
           <div key={b.id} className="win toast note" onClick={() => dismiss(b.id)}>
             <BannerRow b={b}>
-              <button
-                className="toast-x"
-                aria-label={`Dismiss ${b.big}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dismiss(b.id);
-                }}
-              >
-                ✕
-              </button>
+              <div className="note-side">
+                <button
+                  className="toast-x"
+                  aria-label={`Dismiss ${b.big}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dismiss(b.id);
+                  }}
+                >
+                  ✕
+                </button>
+                {notes.length > 1 && (
+                  <button
+                    className="note-all"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setNotes([]);
+                    }}
+                  >
+                    Clear all ({notes.length})
+                  </button>
+                )}
+              </div>
             </BannerRow>
           </div>
         ))}

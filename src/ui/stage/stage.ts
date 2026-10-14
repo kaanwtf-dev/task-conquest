@@ -28,6 +28,8 @@ interface Particle {
 
 interface Floater {
   text: string;
+  /** shown instead when `text` is wider than the stage (the small hero window) */
+  short?: string;
   color: string;
   x: number;
   y: number;
@@ -120,7 +122,7 @@ export class Stage {
 
   levelUp() {
     this.levelGlowUntil = performance.now() + 1600;
-    this.floaters.push({ text: 'LEVEL UP!', color: '#ffd860', x: this.heroX + 20, y: 6, t0: performance.now(), dur: 1600 });
+    this.floaters.push({ text: 'LEVEL UP!', short: 'LV UP!', color: '#ffd860', x: this.heroX + 20, y: 6, t0: performance.now(), dur: 1600 });
     this.schedule(true);
   }
 
@@ -259,7 +261,7 @@ export class Stage {
       if (t >= 520 && !b.exploded) {
         b.exploded = true;
         this.explode(b.pix, mx, monY, b.job.gold);
-        this.floaters.push({ text: `+${b.job.xp} XP`, color: '#5fcde4', x: mx + 10, y: monY - 2, t0: now, dur: 900 / Math.min(2, this.speed()) });
+        this.floaters.push({ text: `+${b.job.xp} XP`, short: `+${b.job.xp}`, color: '#5fcde4', x: mx + 10, y: monY - 2, t0: now, dur: 900 / Math.min(2, this.speed()) });
         if (b.job.crit) this.floaters.push({ text: 'CRIT!', color: '#ff5a5a', x: mx + 10, y: monY - 12, t0: now, dur: 900 });
         once('coin', () => sfx.coin());
       }
@@ -317,12 +319,13 @@ export class Stage {
       const k = (now - f.t0) / f.dur;
       if (k >= 1) return false;
       const y = Math.max(8, Math.round(f.y - k * 12));
-      const half = ctx.measureText(f.text).width / 2;
+      const text = f.short && ctx.measureText(f.text).width > w - 2 ? f.short : f.text;
+      const half = ctx.measureText(text).width / 2;
       const x = Math.round(Math.min(w - half - 1, Math.max(half + 1, f.x)));
       ctx.fillStyle = '#140c1c';
-      ctx.fillText(f.text, x + 1, y + 1);
+      ctx.fillText(text, x + 1, y + 1);
       ctx.fillStyle = f.color;
-      ctx.fillText(f.text, x, y);
+      ctx.fillText(text, x, y);
       return true;
     });
 

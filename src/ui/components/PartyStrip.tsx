@@ -10,6 +10,9 @@ import type { PartyMember } from '../../sync/party';
 import { partyRoster } from '../partyRoster';
 import { PxImg } from './common';
 
+/** How often an open shared list checks who is in its party. */
+const REFRESH_MS = 60_000;
+
 /** A member's hero sprite, or null when their published look can't be drawn (it never takes the screen down). */
 export function memberSprite(m: Pick<PartyMember, 'userId' | 'appearance' | 'classId'>): string | null {
   if (!m.appearance) return null;
@@ -41,8 +44,10 @@ function useParty(list: TaskList): { members: PartyMember[] | null; me: string |
         .then((m) => partyRoster.set(list.id, m), () => undefined) // offline: keep what we had, retry on wake
         .finally(() => (loading = false));
     };
-    // back from the background, refocused or back online: a partner may have joined, or the first try failed
+    // back from the background, refocused or back online: a partner may have joined, or the first try failed.
+    // While the list stays on screen it checks once a minute too (an invite is usually accepted meanwhile)
     const wake = () => document.visibilityState === 'visible' && load();
+    const tick = window.setInterval(wake, REFRESH_MS);
     const unsubRoster = partyRoster.subscribe(show);
     window.addEventListener('focus', wake);
     window.addEventListener('online', wake);
@@ -67,6 +72,7 @@ function useParty(list: TaskList): { members: PartyMember[] | null; me: string |
     });
     return () => {
       alive = false;
+      clearInterval(tick);
       unsubRoster();
       unsubSync?.();
       window.removeEventListener('focus', wake);

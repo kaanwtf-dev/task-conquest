@@ -2,8 +2,8 @@
 // Kept free of the sync code so the app shell can read it without loading that bundle.
 import type { PartyMember } from '../sync/party';
 
-/** A roster older than this is fetched again when the app comes back to the foreground. */
-export const ROSTER_FRESH_MS = 60_000;
+/** A roster this recent is reused as is (flipping between lists, the Party tab having just loaded it). */
+export const ROSTER_FRESH_MS = 10_000;
 
 const entries = new Map<string, { at: number; members: PartyMember[] }>();
 const listeners = new Set<() => void>();

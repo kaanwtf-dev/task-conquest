@@ -13,7 +13,7 @@ describe('party news', () => {
 
   it('announces what others did to tasks this device already had', () => {
     const before = { hero, lists, tasks: { t1: task('t1', 'S') } };
-    const news = partyNews(before, { tasks: { ...before.tasks, t1: task('t1', 'S', { doneFor: 'once', doneBy: 'Bo', timesDone: 1, updatedAt: 9 }) } });
+    const news = partyNews(before, { tasks: { ...before.tasks, t1: task('t1', 'S', { doneFor: 'once', doneBy: 'Bo', timesDone: 1, doneAt: 9, updatedAt: 9 }) } });
     expect(news).toHaveLength(1);
     expect(news[0].text).toBe('Bo completed "t1" in S');
     expect(news[0].log).toBeTruthy();
@@ -21,9 +21,15 @@ describe('party news', () => {
 
   it('a grocery put back in the pantry without buying it is not a completion', () => {
     // Bo bought it last week; someone just took it off the list again, unbought
-    const before = { hero, lists, tasks: { t1: task('t1', 'S', { doneBy: 'Bo', timesDone: 1 }) } };
-    const back = task('t1', 'S', { doneFor: 'once', doneBy: 'Bo', timesDone: 1, updatedAt: 9 });
+    const before = { hero, lists, tasks: { t1: task('t1', 'S', { doneBy: 'Bo', timesDone: 1, doneAt: 5 }) } };
+    const back = task('t1', 'S', { doneFor: 'once', doneBy: 'Bo', timesDone: 1, doneAt: 5, updatedAt: 9 });
     expect(partyNews(before, { tasks: { t1: back } })).toEqual([]);
+  });
+
+  it('a purchase is news even when this device counted more purchases than the buyer had seen', () => {
+    const before = { hero, lists, tasks: { t1: task('t1', 'S', { doneBy: 'Ayla', timesDone: 3, doneAt: 5 }) } };
+    const bought = task('t1', 'S', { doneFor: 'once', doneBy: 'Bo', timesDone: 3, doneAt: 8, updatedAt: 9 });
+    expect(partyNews(before, { tasks: { t1: bought } }).map((n) => n.text)).toEqual(['Bo completed "t1" in S']);
   });
 
   it('tasks never seen here: a completion is not news, a new open task in a known list is (toast only)', () => {
@@ -44,9 +50,9 @@ describe('party news', () => {
     const before = { hero, lists, tasks: { t1: task('t1', 'S'), p1: task('p1', 'P'), t2: task('t2', 'S') } };
     const news = partyNews(before, {
       tasks: {
-        t1: task('t1', 'S', { doneFor: 'once', doneBy: 'Ayla', timesDone: 1 }),
-        p1: task('p1', 'P', { doneFor: 'once', doneBy: 'Bo', timesDone: 1 }),
-        t2: task('t2', 'S', { doneFor: 'once', doneBy: 'Bo', timesDone: 1, deleted: true }),
+        t1: task('t1', 'S', { doneFor: 'once', doneBy: 'Ayla', timesDone: 1, doneAt: 9 }),
+        p1: task('p1', 'P', { doneFor: 'once', doneBy: 'Bo', timesDone: 1, doneAt: 9 }),
+        t2: task('t2', 'S', { doneFor: 'once', doneBy: 'Bo', timesDone: 1, doneAt: 9, deleted: true }),
       },
     });
     expect(news).toEqual([]);

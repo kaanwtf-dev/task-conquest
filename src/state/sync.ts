@@ -120,8 +120,8 @@ export function partyNews(before: Pick<State, 'hero' | 'lists' | 'tasks'>, patch
     // a list this device didn't have yet (joined here or on another device) arrives whole: not news
     if (!list?.shared || t.deleted || !before.lists[t.listId]) continue;
     // a task this device never saw is new to us, not news: only a change we watched happen is. A real
-    // completion always counts up timesDone; a grocery put back in the pantry unbought does not
-    const completed = prev && t.doneFor && prev.doneFor !== t.doneFor && (t.timesDone ?? 0) > (prev.timesDone ?? 0);
+    // completion stamps a new doneAt; a grocery put back in the pantry unbought keeps its old one
+    const completed = prev && t.doneFor && prev.doneFor !== t.doneFor && t.doneAt !== undefined && t.doneAt !== prev.doneAt;
     if (completed && t.doneBy && t.doneBy !== me)
       out.push({ id: `p-${t.id}-${t.updatedAt}`, text: `${t.doneBy} completed "${t.title}" in ${list.name}`, log: `${t.doneBy} completed "${t.title}" (${list.name})` });
     else if (!prev && !t.doneFor && t.createdBy && t.createdBy !== me) out.push({ id: `a-${t.id}`, text: `${t.createdBy} added "${t.title}" to ${list.name}` });

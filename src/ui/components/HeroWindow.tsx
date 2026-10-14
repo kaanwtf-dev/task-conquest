@@ -9,6 +9,8 @@ import { themeStyle, useMedia } from './common';
 import { sfx } from '../../audio/sfx';
 
 const MARGIN = 10;
+/** Landscape phones: the window is drawn at 0.6 (see .corner-hero in global.css). */
+const SHORT_SCREEN = '(max-height: 500px) and (max-width: 899px)';
 /** Pointer travel (px) before a press becomes a drag instead of a tap. */
 const DRAG_START = 6;
 
@@ -27,21 +29,27 @@ export function FloatingHero({ theme, small }: { theme: ThemeId; small: boolean 
   const [maxLift, setMaxLift] = useState(0);
   const suppressClick = useRef(false);
 
+  const lift = Math.min(saved.lift, maxLift || saved.lift);
+  const liftNow = useRef(lift);
+  liftNow.current = lift;
+
   // how high the window may go: up to just under the HUD
   useLayoutEffect(() => {
     const measure = () => {
       const el = box.current;
       if (!el) return;
       const hud = document.querySelector('.hud')?.getBoundingClientRect().bottom ?? 0;
+      // from the layout box, not the drawn one: right after a rotation the scale is still animating. Landscape
+      // phones draw it at 0.6 about its bottom edge, so its visible top sits lower than the layout top
+      const scale = matchMedia(SHORT_SCREEN).matches ? 0.6 : 1;
+      const top = el.offsetTop + el.offsetHeight * (1 - scale);
       // its top edge with no lift, minus the space up to the HUD
-      setMaxLift(Math.max(0, el.getBoundingClientRect().top + saved.lift - hud - MARGIN));
+      setMaxLift(Math.max(0, Math.round(top + liftNow.current - hud - MARGIN)));
     };
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, [saved.lift, saved.tucked, small]);
-
-  const lift = Math.min(saved.lift, maxLift || saved.lift);
 
   useEffect(() => {
     // a tap right after a drag must not poke the hero
@@ -58,8 +66,9 @@ export function FloatingHero({ theme, small }: { theme: ThemeId; small: boolean 
   }, []);
 
   const onDown = (e: React.PointerEvent) => {
-    // one finger drives the window; a second one landing mid-drag is ignored
-    if (drag.current || !e.isPrimary) return;
+    // one finger drives the window; a second one landing mid-drag is ignored. (The mouse keeps one pointer id,
+    // so a new press with it replaces a press whose release happened outside the window.)
+    if (!e.isPrimary || (drag.current && drag.current.id !== e.pointerId)) return;
     // a touch drag never ends in a click, so only the press that just ended may swallow one
     suppressClick.current = false;
     const r = box.current!.getBoundingClientRect();
@@ -68,6 +77,12 @@ export function FloatingHero({ theme, small }: { theme: ThemeId; small: boolean 
   const onMove = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
+    if (e.pointerType === 'mouse' && e.buttons === 0) {
+      // the button went up outside the window: that press is over, a hover must not drag it
+      drag.current = null;
+      setLive(null);
+      return;
+    }
     const dx = e.clientX - d.x0;
     const dy = e.clientY - d.y0;
     if (!d.at && Math.hypot(dx, dy) < DRAG_START) return;
@@ -150,7 +165,7 @@ export function FloatingHero({ theme, small }: { theme: ThemeId; small: boolean 
 /** Full-width hero strip under the HUD; drawn at half size on landscape phones, which are short on height. */
 export function HeroBar({ theme }: { theme: ThemeId }) {
   const wrap = useRef<HTMLDivElement>(null);
-  const short = useMedia('(max-height: 500px) and (max-width: 899px)');
+  const short = useMedia(SHORT_SCREEN);
   const scale = short ? 1 : 2;
   const [cw, setCw] = useState(360);
   useEffect(() => {
