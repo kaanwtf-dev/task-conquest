@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { isForeignList, useStore, visibleLists } from '../../state/store';
 import { useSync, joinByCode, resolveConflict, resolveAccountSwitch, restartSync, signOutHere, syncNow } from '../../state/sync';
-import { getSyncConfig, setSyncConfig, signIn, signUp } from '../../sync/supabase';
+import { cloudIsBuiltIn, getSyncConfig, setSyncConfig, signIn, signUp } from '../../sync/supabase';
 import { createInvite, listParty } from '../../sync/party';
 import { iconFor } from '../../pixel/iconGen';
 import { heroPix, type Appearance } from '../../pixel/sprites/hero';
@@ -117,18 +117,20 @@ function AuthCard() {
             </button>
           </div>
         </form>
-        <button
-          className="btn ghost small"
-          style={{ marginTop: 12 }}
-          onClick={() => {
-            if (confirm('Disconnect this cloud project from the app?')) {
-              setSyncConfig(null);
-              restartSync();
-            }
-          }}
-        >
-          Change cloud project
-        </button>
+        {!cloudIsBuiltIn() && (
+          <button
+            className="btn ghost small"
+            style={{ marginTop: 12 }}
+            onClick={() => {
+              if (confirm('Disconnect this cloud project from the app?')) {
+                setSyncConfig(null);
+                restartSync();
+              }
+            }}
+          >
+            Change cloud project
+          </button>
+        )}
       </div>
     </>
   );

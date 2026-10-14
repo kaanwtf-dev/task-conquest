@@ -35,6 +35,9 @@ function envConfig(): SyncConfig | null {
   return url && anonKey ? { url: cleanUrl(url), anonKey } : null;
 }
 
+/** True when the published site has its cloud built in (nothing for players to enter or change). */
+export const cloudIsBuiltIn = (): boolean => envConfig() !== null;
+
 /** Build-time env (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY) wins; otherwise what the user entered. */
 export function getSyncConfig(): SyncConfig | null {
   const env = envConfig();

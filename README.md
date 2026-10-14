@@ -47,7 +47,7 @@ It is an installable web app (PWA) that works offline:
 
 ## Hosting it (GitHub Pages)
 
-The workflow in `.github/workflows/deploy.yml` builds and publishes the app on every push to `main`. One-time setup: repository **Settings → Pages → Source: GitHub Actions**. To bake sync settings into the build, add the repository secrets `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; otherwise you can paste them into the app's Party tab.
+The workflow in `.github/workflows/deploy.yml` builds and publishes the app on every push to `main`. One-time setup: repository **Settings → Pages → Source: GitHub Actions**. The cloud (Supabase) settings are built in from `.env.production`, so everyone who opens the site is connected without entering anything; repository secrets `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` override them.
 
 ## Development
 

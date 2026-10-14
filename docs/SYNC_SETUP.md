@@ -51,10 +51,10 @@ Open the **Party** tab, then **Connect a cloud**. Paste the URL and the key, the
 **Option B: build the values into your published site.**
 Everyone who opens your site is then connected automatically. This is the easiest way to share lists with friends.
 
-1. In your GitHub repository, go to **Settings → Secrets and variables → Actions**.
-2. Click **New repository secret** and add `VITE_SUPABASE_URL` with the Project URL.
-3. Add a second secret, `VITE_SUPABASE_ANON_KEY`, with the anon public key.
-4. Redeploy: on the **Actions** tab, re-run the deploy workflow, or push any commit.
+1. Put both values in the file `.env.production` at the root of the repository (`VITE_SUPABASE_URL=…` and `VITE_SUPABASE_ANON_KEY=…`). This repository's file already points at its own project; replace the values to use another one.
+2. Push to `main`; the site redeploys with them.
+
+Repository secrets with the same names (**Settings → Secrets and variables → Actions**) override the file, if you prefer not to keep the values in the repository. Either way the anon key ends up in the published app, which is how Supabase is designed to work.
 
 ## 5. Use it
 
