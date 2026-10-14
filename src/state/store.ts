@@ -127,6 +127,11 @@ export interface State {
   addTask(listId: string, title: string, extra?: Partial<Task>): string | null;
   updateTask(id: string, patch: Partial<Task>): void;
   deleteTask(id: string): void;
+  /**
+   * Supply lists: take an item off the shopping list without buying it (no reward). An item never bought is
+   * forgotten outright (an accidental add); one bought before goes back to the pantry. Returns how to undo it.
+   */
+  unlistItem(id: string): { forgot: boolean; undo: () => void } | null;
   toggleTask(id: string): void;
   restockStaples(listId: string): number;
   reorderTasks(orderedIds: string[]): void;
@@ -341,6 +346,28 @@ export const useStore = create<State>()(
 
         deleteTask(id) {
           get().updateTask(id, { deleted: true });
+        },
+
+        unlistItem(id) {
+          const task = get().tasks[id];
+          const list = task && get().lists[task.listId];
+          if (!task || task.deleted || task.doneFor || list?.type !== 'supply') return null;
+          const forgot = task.timesDone === 0 && !task.staple;
+          get().updateTask(id, forgot ? { deleted: true } : { doneFor: periodKey(task.repeat, now(), get().settings) });
+          const undo = () => {
+            const cur = get().tasks[id];
+            if (!cur) return;
+            if (!forgot) {
+              if (!cur.deleted && cur.doneFor) get().updateTask(id, { doneFor: null });
+              return;
+            }
+            // re-adding the same name since then made a new item: bringing this one back would duplicate it
+            const clash = Object.values(get().tasks).some(
+              (t) => t.id !== id && t.listId === cur.listId && !t.deleted && t.title.toLowerCase() === cur.title.toLowerCase(),
+            );
+            if (cur.deleted && !clash) get().updateTask(id, { deleted: false });
+          };
+          return { forgot, undo };
         },
 
         toggleTask(id) {

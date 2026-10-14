@@ -86,6 +86,44 @@ describe('store: completing tasks', () => {
     expect(sum(st().hero!.kills)).toBe(k1 + 1);
   });
 
+  it('takes a grocery off the list without buying it, and can undo that', () => {
+    const g = listOf('supply');
+    const hero0 = JSON.stringify(st().hero);
+    // never bought: an accidental add is forgotten outright
+    const typo = st().addTask(g.id, 'Mlik')!;
+    const gone = st().unlistItem(typo)!;
+    expect(gone.forgot).toBe(true);
+    expect(st().tasks[typo].deleted).toBe(true);
+    gone.undo();
+    expect(st().tasks[typo].deleted).toBeFalsy();
+    expect(st().tasks[typo].doneFor).toBeFalsy();
+    // bought before: back to the pantry, remembered, no reward and no purchase counted
+    const coffee = listTasks(st(), g.id).find((t) => t.title === 'Coffee')!; // a staple on the list
+    const back = st().unlistItem(coffee.id)!;
+    expect(back.forgot).toBe(false);
+    expect(st().tasks[coffee.id].deleted).toBeFalsy();
+    expect(st().tasks[coffee.id].doneFor).toBeTruthy();
+    expect(st().tasks[coffee.id].timesDone).toBe(coffee.timesDone);
+    expect(JSON.stringify(st().hero)).toBe(hero0);
+    expect(st().unlistItem(coffee.id)).toBeNull(); // already off the list
+    back.undo();
+    expect(st().tasks[coffee.id].doneFor).toBeNull();
+    // only supply lists
+    const q = st().addTask(listOf('quests').id, 'a quest')!;
+    expect(st().unlistItem(q)).toBeNull();
+  });
+
+  it('undoing a forgotten grocery never duplicates one added again since', () => {
+    const g = listOf('supply');
+    const typo = st().addTask(g.id, 'Kale')!;
+    const gone = st().unlistItem(typo)!;
+    const again = st().addTask(g.id, 'kale')!;
+    expect(again).not.toBe(typo);
+    gone.undo();
+    expect(st().tasks[typo].deleted).toBe(true);
+    expect(listTasks(st(), g.id).filter((t) => t.title.toLowerCase() === 'kale')).toHaveLength(1);
+  });
+
   it('chips at the boss and eventually defeats it', () => {
     const side = listOf('quests');
     const maxHp = bossFor(1).maxHp;

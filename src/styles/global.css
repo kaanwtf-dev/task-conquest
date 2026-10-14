@@ -1664,3 +1664,83 @@ canvas.px {
   flex: none;
   max-width: 40%;
 }
+
+/* ---------- undo bar ---------- */
+.undo-wrap {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--tabbar-h) + var(--safe-bot) + 14px);
+  z-index: 75; /* over the hero window, under sheets */
+  width: min(92vw, 420px);
+  pointer-events: none;
+}
+.undo-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 12px;
+  font-size: 15px;
+  pointer-events: auto;
+  animation: toastIn 0.2s steps(4);
+}
+.undo-bar span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- swipe a grocery off the list ---------- */
+.swipe {
+  position: relative;
+  border-radius: 5px;
+  overflow: hidden;
+  touch-action: pan-y; /* vertical scrolling stays native; sideways moves are the swipe */
+}
+.swipe + .swipe {
+  border-top: 2px dashed rgba(255, 255, 255, 0.1);
+}
+.swipe-under {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 8px;
+  background: #6b1f2a;
+  color: #ffd9d9;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+.swipe-under.go {
+  background: #a3283a;
+  color: #fff;
+}
+.swipe-under.keep {
+  background: #4a3d1a; /* back to the pantry: not destructive, so not red */
+  color: #ffe6a8;
+}
+.swipe-under.keep.go {
+  background: #8a6a1e;
+  color: #fff;
+}
+.swipe-under.from-right {
+  justify-content: flex-end;
+}
+.swipe-row {
+  position: relative;
+}
+.swipe-row.moving {
+  background: color-mix(in srgb, var(--winTop) 35%, var(--winBot));
+}
+.swipe-row.settling {
+  transition: transform 0.16s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .swipe-row.settling {
+    transition: none;
+  }
+}

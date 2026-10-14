@@ -7,6 +7,7 @@ import { todayKey } from '../../core/time';
 import type { Difficulty, Repeat, Task } from '../../core/types';
 import { PxImg, Sheet, themeStyle } from '../components/common';
 import { sfx } from '../../audio/sfx';
+import { takeOffList } from '../groceries';
 
 const QUICK_ICONS = ['⭐', '🔥', '💼', '🏠', '🧹', '🛒', '📚', '🏋️', '💊', '🐶', '🎮', '🎁', '💰', '📞', '✈️', '🍳', '🧺', '🌱'];
 const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -205,19 +206,33 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
         </Field>
 
         <div className="sheet-actions">
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => {
-              if (confirm(supply ? `Forget "${task.title}" completely?` : `Delete "${task.title}"?`)) {
-                s.deleteTask(task.id);
-                sfx.uncheck();
+          {supply && !task.doneFor ? (
+            // on the shopping list: take it off without buying it (undo-able, so no confirm)
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => {
                 onClose();
-              }
-            }}
-          >
-            {supply ? 'Forget' : 'Delete'}
-          </button>
+                takeOffList(task);
+              }}
+            >
+              Remove
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => {
+                if (confirm(supply ? `Forget "${task.title}" completely?` : `Delete "${task.title}"?`)) {
+                  s.deleteTask(task.id);
+                  sfx.uncheck();
+                  onClose();
+                }
+              }}
+            >
+              {supply ? 'Forget' : 'Delete'}
+            </button>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="btn ghost" onClick={onClose}>
               Cancel
