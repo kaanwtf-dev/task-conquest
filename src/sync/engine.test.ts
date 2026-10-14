@@ -11,11 +11,12 @@ import type { RemoteRow } from './types';
 
 // getClient() builds its client through createClient: hand it a stub auth (no network in tests)
 const auth = vi.hoisted(() => ({ getSession: vi.fn(), onAuthStateChange: vi.fn(), stopAutoRefresh: vi.fn(), signOut: vi.fn() }));
+const realtime = vi.hoisted(() => ({ setAuth: vi.fn() }));
 vi.mock('@supabase/supabase-js', async (importOriginal) => {
   const real = await importOriginal<typeof import('@supabase/supabase-js')>();
   const createClient = vi.fn((url: string, key: string) => {
     real.createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }); // real URL validation
-    return { auth, removeAllChannels: vi.fn() };
+    return { auth, realtime, removeAllChannels: vi.fn() };
   });
   return { ...real, createClient };
 });
@@ -1017,6 +1018,23 @@ describe('SupabaseRemote realtime and session edge cases', () => {
     expect(resyncs).toBe(3); // a reconnect may have missed events
     off();
     expect(ch.removed).toBe(true);
+  });
+});
+
+describe('realtime authorization', () => {
+  it("hands the signed-in user's token to Realtime (else change events arrive blanked by RLS)", async () => {
+    const mem = new Map<string, string>();
+    vi.stubGlobal('localStorage', { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) });
+    auth.onAuthStateChange.mockClear();
+    realtime.setAuth.mockClear();
+    setSyncConfig({ url: 'https://realtime-token.supabase.co', anonKey: 'anon-key-for-tests' });
+    expect(getClient()).not.toBeNull();
+    const onChange = auth.onAuthStateChange.mock.calls[0][0] as (event: string, session: unknown) => void;
+    onChange('SIGNED_IN', { access_token: 'user-jwt' });
+    onChange('TOKEN_REFRESHED', { access_token: 'user-jwt-2' });
+    onChange('SIGNED_OUT', null);
+    await vi.waitFor(() => expect(realtime.setAuth.mock.calls).toEqual([['user-jwt'], ['user-jwt-2']]));
+    setSyncConfig(null);
   });
 });
 

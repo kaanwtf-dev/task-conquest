@@ -75,12 +75,17 @@ export function getClient(): SupabaseClient | null {
     }
     cached = null;
     try {
-      cached = {
-        key,
-        client: createClient(cfg.url, cfg.anonKey, {
-          auth: { persistSession: true, autoRefreshToken: true, storageKey: AUTH_STORAGE_KEY },
-        }),
-      };
+      const client = createClient(cfg.url, cfg.anonKey, {
+        auth: { persistSession: true, autoRefreshToken: true, storageKey: AUTH_STORAGE_KEY },
+      });
+      // supabase-js 2.57 never hands the signed-in user's token to Realtime: change events were then
+      // authorized as anon, and the row-level security rules blanked every one ("Error 401").
+      // (deferred: calling into the client inside this callback can deadlock on the auth lock)
+      client.auth.onAuthStateChange((_event, session) => {
+        const token = session?.access_token;
+        if (token) setTimeout(() => void client.realtime?.setAuth?.(token), 0);
+      });
+      cached = { key, client };
     } catch {
       return null; // malformed URL (a typo): treated as not set up instead of throwing on every launch
     }
@@ -326,6 +331,8 @@ export class SupabaseRemote implements RemoteAdapter {
 
   subscribe(onRow: (row: RemoteRow) => void, onResync?: () => void): () => void {
     let opened = false;
+    // join with the user's token, not the anon key (see getClient); it also reaches channels already joined
+    void this.client.realtime?.setAuth?.();
     const ch = this.client
       .channel(`questlog-${this.userId}-${++channelSeq}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'docs' }, (p) => {
