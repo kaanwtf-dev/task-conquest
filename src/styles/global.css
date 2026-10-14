@@ -38,6 +38,8 @@ body,
 #root {
   margin: 0;
   height: 100%;
+  /* only the app's own scrollers scroll; the page itself never drags */
+  overflow: hidden;
   background: var(--page);
   color: var(--text);
   font-family: var(--font-body);
@@ -1052,6 +1054,8 @@ canvas.px {
 .sheet-back {
   position: fixed;
   inset: 0;
+  /* lifted above the iPhone keyboard (src/ui/keyboard.ts) */
+  padding-bottom: var(--kb, 0px);
   background: rgba(8, 6, 18, 0.7);
   z-index: 80;
   display: flex;
@@ -1061,7 +1065,7 @@ canvas.px {
 .sheet {
   width: min(560px, 100%);
   max-height: 88vh;
-  max-height: 88dvh;
+  max-height: calc(88dvh - var(--kb, 0px));
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 16px max(14px, var(--safe-r)) calc(var(--safe-bot) + 18px) max(14px, var(--safe-l));
@@ -1081,7 +1085,8 @@ canvas.px {
   justify-content: space-between;
   align-items: center;
   margin: 16px calc(-1 * max(14px, var(--safe-r))) 0 calc(-1 * max(14px, var(--safe-l)));
-  padding: 12px max(14px, var(--safe-r)) calc(14px + var(--safe-bot)) max(14px, var(--safe-l));
+  /* the keyboard covers the home indicator: no inset to keep clear while it is up */
+  padding: 12px max(14px, var(--safe-r)) calc(14px + max(0px, var(--safe-bot) - var(--kb, 0px))) max(14px, var(--safe-l));
   background: var(--winBot);
   border-top: 2px solid rgba(0, 0, 0, 0.35);
   box-shadow: 0 -6px 10px rgba(0, 0, 0, 0.25);
