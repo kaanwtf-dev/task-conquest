@@ -50,15 +50,23 @@ interface Banner {
   color?: string;
 }
 
+/** Pop-ups kept on screen at once, and remembered behind them (cleared in one go). */
+const SHOWN = 3;
+const KEEP = 40;
+
 export default function Effects() {
   const [floats, setFloats] = useState<Floating[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
+  const dismiss = (id: string) => setBanners((bs) => bs.filter((x) => x.id !== id));
 
   useEffect(() => {
     const addBanner = (b: Omit<Banner, 'id'>, ms: number) => {
       const id = uid();
-      setBanners((bs) => [...bs.slice(-2), { ...b, id }]);
-      setTimeout(() => setBanners((bs) => bs.filter((x) => x.id !== id)), ms);
+      // by default they stay, like notifications, until tapped away; a long run of them keeps the newest
+      if (useStore.getState().settings.popups === 'auto') {
+        setBanners((bs) => [...bs.slice(-2), { ...b, id }]);
+        setTimeout(() => setBanners((bs) => bs.filter((x) => x.id !== id)), ms);
+      } else setBanners((bs) => [...bs.slice(-(KEEP - 1)), { ...b, id }]);
     };
     return fx.on((e) => {
       const { settings } = useStore.getState();
@@ -129,21 +137,43 @@ export default function Effects() {
         </div>
       ))}
       <div className="toast-wrap" role="status" aria-live="polite">
-        {banners.map((b) => (
-          <div key={b.id} className="win toast">
-            <div className="toast-row">
-              {b.icon && <img className="px" src={b.icon} width={40} height={40} alt="" />}
-              <div>
-                <div className="big">{b.big}</div>
-                {b.small && (
-                  <div className="small" style={b.color ? { color: b.color } : undefined}>
-                    {b.small}
-                  </div>
-                )}
+        {/* newest on top; older ones fold into a count */}
+        {banners
+          .slice(-SHOWN)
+          .reverse()
+          .map((b) => (
+            <div key={b.id} className="win toast" onClick={() => dismiss(b.id)}>
+              <div className="toast-row">
+                {b.icon && <img className="px" src={b.icon} width={40} height={40} alt="" />}
+                <div className="toast-text">
+                  <div className="big">{b.big}</div>
+                  {b.small && (
+                    <div className="small" style={b.color ? { color: b.color } : undefined}>
+                      {b.small}
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="toast-x"
+                  aria-label={`Dismiss ${b.big}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dismiss(b.id);
+                  }}
+                >
+                  ✕
+                </button>
               </div>
             </div>
+          ))}
+        {banners.length > 1 && (
+          <div className="toast-more">
+            {banners.length > SHOWN && <span>+{banners.length - SHOWN} more</span>}
+            <button className="btn small" onClick={() => setBanners([])}>
+              Clear all ({banners.length})
+            </button>
           </div>
-        ))}
+        )}
       </div>
     </>
   );

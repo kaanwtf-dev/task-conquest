@@ -198,6 +198,8 @@ export interface Settings {
   heroDock?: HeroDock;
   /** The welcome walkthrough was seen (or skipped). */
   introSeen?: boolean;
+  /** Reward pop-ups stay until cleared (default), or hide by themselves after a few seconds. */
+  popups?: 'stay' | 'auto';
 }
 
 export interface HeroDock {

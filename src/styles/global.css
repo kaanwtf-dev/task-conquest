@@ -870,12 +870,43 @@ canvas.px {
   pointer-events: none;
 }
 .toast {
-  pointer-events: none;
-  padding: 10px 14px;
+  pointer-events: auto; /* they stay until tapped away */
+  padding: 8px 6px 8px 12px;
   text-align: center;
   animation: toastIn 0.25s steps(5);
   cursor: pointer;
   width: 100%;
+}
+.toast-text {
+  flex: 1;
+  min-width: 0;
+}
+.toast-x {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.toast-more {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 14px;
+}
+.toast-more span {
+  background: rgba(8, 6, 20, 0.85);
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
 }
 .toast .big {
   font-family: var(--font-pixel);
@@ -1742,5 +1773,75 @@ canvas.px {
 @media (prefers-reduced-motion: reduce) {
   .swipe-row.settling {
     transition: none;
+  }
+}
+
+/* ---------- party heroes under a shared list's banner ---------- */
+.party-strip {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px 8px;
+  margin-top: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.party-strip::-webkit-scrollbar {
+  display: none;
+}
+.pmember {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 72px;
+  text-align: center;
+}
+.pmember-sprite {
+  height: 48px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: pbob 1.4s steps(2) infinite;
+}
+@keyframes pbob {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+.pmember-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 1.2;
+}
+.pmember-lv {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--accent);
+  margin-top: 2px;
+}
+.pmember-invite {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.pmember-invite .pmember-sprite {
+  width: 40px;
+  height: 40px;
+  margin: 4px 0;
+  align-items: center;
+  border: 2px dashed currentColor;
+  border-radius: 6px;
+  font-size: 22px;
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pmember-sprite {
+    animation: none;
   }
 }

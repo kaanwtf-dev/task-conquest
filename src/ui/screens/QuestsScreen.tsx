@@ -24,6 +24,7 @@ import type { Task, TaskList } from '../../core/types';
 import TaskEditSheet from './TaskEditSheet';
 import { todaySections } from '../../state/today';
 import BossBar from '../components/BossBar';
+import PartyStrip from '../components/PartyStrip';
 import { ListSheet } from './OtherScreens';
 import { takeOffList } from '../groceries';
 
@@ -77,6 +78,7 @@ export default function QuestsScreen() {
           </div>
         </div>
       </SceneBanner>
+      {list.shared && <PartyStrip list={list} />}
 
       <QuickAdd list={list} />
 

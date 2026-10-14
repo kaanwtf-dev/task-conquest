@@ -64,6 +64,13 @@ export function SettingsScreen() {
             </button>
           )}
         </Opt>
+        <Opt label="Pop-ups (level up, loot…)">
+          {(['stay', 'auto'] as const).map((v) => (
+            <button key={v} className={`pill ${(cfg.popups ?? 'stay') === v ? 'sel' : ''}`} aria-pressed={(cfg.popups ?? 'stay') === v} onClick={() => (sfx.tick(), set({ popups: v }))}>
+              {v === 'stay' ? 'stay until cleared' : 'hide by themselves'}
+            </button>
+          ))}
+        </Opt>
         <Opt label="Haptics">
           {[true, false].map((v) => (
             <button key={String(v)} className={`pill ${cfg.haptics === v ? 'sel' : ''}`} aria-pressed={cfg.haptics === v} onClick={() => set({ haptics: v })}>
