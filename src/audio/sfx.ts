@@ -126,6 +126,30 @@ export const sfx = {
   pop() {
     tone(N(14), 0, 0.05, 'triangle', 0.18, N(26));
   },
+  /** Someone poked the hero: one of a few silly noises. */
+  poke() {
+    const pick = Math.floor(Math.random() * 5);
+    if (pick === 0) {
+      // boing
+      tone(180, 0, 0.16, 'triangle', 0.24, 720);
+      tone(720, 0.15, 0.22, 'triangle', 0.2, 240);
+    } else if (pick === 1) {
+      // squeak squeak
+      tone(1500, 0, 0.06, 'square', 0.07, 2300);
+      tone(1900, 0.08, 0.07, 'square', 0.07, 2800);
+    } else if (pick === 2) {
+      // "hup!"
+      noise(0, 0.04, 0.12, 1800);
+      tone(N(5), 0.02, 0.1, 'square', 0.14, N(12));
+    } else if (pick === 3) {
+      // blorp
+      tone(320, 0, 0.12, 'sawtooth', 0.1, 90);
+      tone(150, 0.11, 0.14, 'square', 0.1, 60);
+    } else {
+      // giggle
+      [0, 1, 2, 3, 4].forEach((i) => tone(N(i % 2 ? 26 : 30), i * 0.065, 0.05, 'square', 0.09));
+    }
+  },
 };
 
 export type SfxName = keyof typeof sfx;

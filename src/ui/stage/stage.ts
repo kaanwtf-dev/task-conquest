@@ -33,6 +33,8 @@ interface Floater {
   y: number;
   t0: number;
   dur: number;
+  /** a poke quip: never counts as an animation to skip */
+  quip?: boolean;
 }
 
 const RANGED = new Set(['bow', 'staff', 'wand']);
@@ -52,6 +54,7 @@ export class Stage {
   private nextBlink = 0;
   private blinkUntil = 0;
   private levelGlowUntil = 0;
+  private pokeT0 = -Infinity;
   private alive = true;
   /** Players who asked for less motion get a still idle scene (redrawn slowly, for theme or gear changes). */
   private readonly still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -122,8 +125,17 @@ export class Stage {
   }
 
   /** Tap to skip: finish all pending battles instantly. */
+  /** Poked while idle: a little hop and a speech bubble. */
+  poke(line: string) {
+    const now = performance.now();
+    this.pokeT0 = now;
+    this.floaters = this.floaters.filter((f) => !f.quip);
+    this.floaters.push({ text: line, color: '#ffffff', x: this.heroX + 20, y: 9, t0: now, dur: 1100, quip: true });
+    this.schedule(true);
+  }
+
   skip() {
-    if (!this.busy && !this.floaters.length) return false;
+    if (!this.busy && !this.floaters.some((f) => !f.quip)) return false;
     this.battle = null;
     this.queue = [];
     this.particles = [];
@@ -260,7 +272,10 @@ export class Stage {
       ctx.fillStyle = 'rgba(255,240,140,0.35)';
       ctx.fillRect(this.heroX + 10, heroY + 6, 20, 32);
     }
-    ctx.drawImage(this.frame(pose, pose === 'idle' ? bob : 0, blink && pose === 'idle'), Math.round(this.heroX + heroDx), heroY + (pose === 'idle' ? 0 : 0));
+    // poked: a quick hop
+    const pk = (now - this.pokeT0) / 420;
+    const hop = pose === 'idle' && pk >= 0 && pk < 1 && !this.still ? Math.round(Math.sin(pk * Math.PI) * 6) : 0;
+    ctx.drawImage(this.frame(pose, pose === 'idle' ? bob : 0, blink && pose === 'idle'), Math.round(this.heroX + heroDx), heroY - hop);
 
     // particles
     const dt = 1 / 60;

@@ -52,12 +52,17 @@ export function SettingsScreen() {
             </button>
           ))}
         </Opt>
-        <Opt label="Corner hero (phone)">
-          {(['big', 'small', 'hidden'] as const).map((v) => (
+        <Opt label="Hero window (phone): drag it anywhere, or off an edge to tuck it away">
+          {(['big', 'small', 'bar', 'hidden'] as const).map((v) => (
             <button key={v} className={`pill ${(cfg.cornerHero ?? 'big') === v ? 'sel' : ''}`} aria-pressed={(cfg.cornerHero ?? 'big') === v} onClick={() => (sfx.tick(), set({ cornerHero: v }))}>
-              {v}
+              {v === 'bar' ? 'top bar' : v}
             </button>
           ))}
+          {cfg.heroDock && (cfg.heroDock.tucked || cfg.heroDock.lift > 0 || cfg.heroDock.side === 'left') && (
+            <button className="pill" onClick={() => (sfx.tick(), set({ heroDock: undefined }))}>
+              reset position
+            </button>
+          )}
         </Opt>
         <Opt label="Haptics">
           {[true, false].map((v) => (

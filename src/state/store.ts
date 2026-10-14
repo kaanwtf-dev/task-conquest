@@ -38,6 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
   weekStart: 1,
   taskFont: 'pixel',
   cornerHero: 'big',
+  introSeen: false,
 };
 
 /** Fields added after v1; also used to upgrade older saves. */
