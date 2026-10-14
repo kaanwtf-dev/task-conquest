@@ -1133,4 +1133,12 @@ describe('party helpers', () => {
     });
     expect(toMember({ user_id: A, role: 'owner', name: 'x', data: { level: 'NaN' } }).level).toBe(1);
   });
+
+  it('keeps only hero looks this app can draw (a bad profile must not crash the list screen)', () => {
+    const look = { race: 'elf', skin: 0, hair: 'long', hairColor: '#e8c070', eyes: '#2a8a5a', beard: 'none', outfit: '#8a4ac0', pants: '#2a2a3a' };
+    const member = (appearance: unknown) => toMember({ user_id: A, role: 'member', name: 'x', data: { appearance } }).appearance;
+    expect(member(look)).toEqual(look);
+    for (const bad of [{}, { ...look, skin: -1 }, { ...look, skin: 1.5 }, { ...look, race: 'dragon' }, { ...look, race: 'constructor' }, { ...look, hair: 'afro' }, { ...look, eyes: 'blue' }, { ...look, pants: undefined }, 'elf', null])
+      expect(member(bad)).toBeUndefined();
+  });
 });

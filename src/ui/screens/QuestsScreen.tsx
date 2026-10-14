@@ -547,8 +547,12 @@ function SwipeAway({ task, children }: { task: Task; children: React.ReactNode }
       onKeyDown={(e) => {
         if ((e.key !== 'Delete' && e.key !== 'Backspace') || e.metaKey || e.ctrlKey || e.altKey) return;
         e.preventDefault();
-        // keep keyboard focus in the list: on the next item, else the one before
-        const sib = (wrap.current?.nextElementSibling ?? wrap.current?.previousElementSibling)?.querySelector<HTMLElement>('.task');
+        // a held key repeats: one press takes off one item, never the whole aisle
+        if (e.repeat) return;
+        // keep keyboard focus in the list: on the next item (in any aisle), else the one before
+        const rows = [...(wrap.current?.closest('.tasks')?.querySelectorAll<HTMLElement>('.swipe .task') ?? [])];
+        const at = rows.findIndex((r) => wrap.current?.contains(r));
+        const sib = rows[at + 1] ?? rows[at - 1];
         if (takeOffList(task)) requestAnimationFrame(() => sib?.isConnected && sib.focus());
       }}
     >

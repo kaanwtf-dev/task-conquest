@@ -48,25 +48,41 @@ interface Banner {
   small?: string;
   icon?: string;
   color?: string;
+  /** the same pop-up again right away shows once, with a count */
+  count?: number;
 }
+type BannerIn = Omit<Banner, 'id' | 'count'>;
 
-/** Pop-ups kept on screen at once, and remembered behind them (cleared in one go). */
-const SHOWN = 3;
+/** Reward pop-ups kept behind the one on screen until cleared. */
 const KEEP = 40;
+const same = (a: BannerIn | undefined, b: BannerIn) => !!a && a.big === b.big && a.small === b.small && a.icon === b.icon;
 
 export default function Effects() {
   const [floats, setFloats] = useState<Floating[]>([]);
-  const [banners, setBanners] = useState<Banner[]>([]);
-  const dismiss = (id: string) => setBanners((bs) => bs.filter((x) => x.id !== id));
+  // brief pop-ups at the top (messages, and rewards when set to hide by themselves): taps go through them
+  const [brief, setBrief] = useState<Banner[]>([]);
+  // reward pop-ups that stay until cleared, one at a time above the tab bar, newest first
+  const [notes, setNotes] = useState<Banner[]>([]);
+  const dismiss = (id: string) => setNotes((ns) => ns.filter((x) => x.id !== id));
 
   useEffect(() => {
-    const addBanner = (b: Omit<Banner, 'id'>, ms: number) => {
+    const addBanner = (b: BannerIn, ms: number, reward = true) => {
       const id = uid();
-      // by default they stay, like notifications, until tapped away; a long run of them keeps the newest
-      if (useStore.getState().settings.popups === 'auto') {
-        setBanners((bs) => [...bs.slice(-2), { ...b, id }]);
-        setTimeout(() => setBanners((bs) => bs.filter((x) => x.id !== id)), ms);
-      } else setBanners((bs) => [...bs.slice(-(KEEP - 1)), { ...b, id }]);
+      if (reward && useStore.getState().settings.popups !== 'auto') {
+        setNotes((ns) => {
+          const top = ns[ns.length - 1];
+          if (same(top, b)) return [...ns.slice(0, -1), { ...top, count: (top.count ?? 1) + 1 }];
+          return [...ns.slice(-(KEEP - 1)), { ...b, id }];
+        });
+        return;
+      }
+      setBrief((bs) => {
+        const top = bs[bs.length - 1];
+        // tapping Buy three times on a full bag says so once (x3), not three times
+        if (same(top, b)) return [...bs.slice(0, -1), { ...b, id, count: (top.count ?? 1) + 1 }];
+        return [...bs.slice(-2), { ...b, id }];
+      });
+      setTimeout(() => setBrief((bs) => bs.filter((x) => x.id !== id)), ms);
     };
     return fx.on((e) => {
       const { settings } = useStore.getState();
@@ -125,7 +141,8 @@ export default function Effects() {
         addBanner({ big: 'ACHIEVEMENT!', small: `${e.name} — tier ${e.tier}. Claim it on the Hero page.` }, 2600);
       }
       if (e.type === 'party') addBanner({ big: 'PARTY', small: e.text }, 2600);
-      if (e.type === 'toast') addBanner({ big: e.text, small: e.small, icon: e.icon }, 2200);
+      // messages ("Not enough gold!", "Purchased", "Ready offline") always hide by themselves
+      if (e.type === 'toast') addBanner({ big: e.text, small: e.small, icon: e.icon }, 2200, false);
     });
   }, []);
 
@@ -137,44 +154,59 @@ export default function Effects() {
         </div>
       ))}
       <div className="toast-wrap" role="status" aria-live="polite">
-        {/* newest on top; older ones fold into a count */}
-        {banners
-          .slice(-SHOWN)
-          .reverse()
-          .map((b) => (
-            <div key={b.id} className="win toast" onClick={() => dismiss(b.id)}>
-              <div className="toast-row">
-                {b.icon && <img className="px" src={b.icon} width={40} height={40} alt="" />}
-                <div className="toast-text">
-                  <div className="big">{b.big}</div>
-                  {b.small && (
-                    <div className="small" style={b.color ? { color: b.color } : undefined}>
-                      {b.small}
-                    </div>
-                  )}
-                </div>
-                <button
-                  className="toast-x"
-                  aria-label={`Dismiss ${b.big}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    dismiss(b.id);
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-          ))}
-        {banners.length > 1 && (
+        {brief.map((b) => (
+          <div key={b.id} className="win toast">
+            <BannerRow b={b} />
+          </div>
+        ))}
+      </div>
+      <div className="notes-wrap" role="status" aria-live="polite">
+        {notes.length > 1 && (
           <div className="toast-more">
-            {banners.length > SHOWN && <span>+{banners.length - SHOWN} more</span>}
-            <button className="btn small" onClick={() => setBanners([])}>
-              Clear all ({banners.length})
+            <span>+{notes.length - 1} more</span>
+            <button className="btn small" onClick={() => setNotes([])}>
+              Clear all ({notes.length})
             </button>
           </div>
         )}
+        {notes.slice(-1).map((b) => (
+          // tap it to clear it; the next one (if any) takes its place
+          <div key={b.id} className="win toast note" onClick={() => dismiss(b.id)}>
+            <BannerRow b={b}>
+              <button
+                className="toast-x"
+                aria-label={`Dismiss ${b.big}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismiss(b.id);
+                }}
+              >
+                ✕
+              </button>
+            </BannerRow>
+          </div>
+        ))}
       </div>
     </>
+  );
+}
+
+function BannerRow({ b, children }: { b: Banner; children?: React.ReactNode }) {
+  return (
+    <div className="toast-row">
+      {b.icon && <img className="px" src={b.icon} width={40} height={40} alt="" />}
+      <div className="toast-text">
+        <div className="big">
+          {b.big}
+          {(b.count ?? 1) > 1 && <span className="toast-count"> ×{b.count}</span>}
+        </div>
+        {b.small && (
+          <div className="small" style={b.color ? { color: b.color } : undefined}>
+            {b.small}
+          </div>
+        )}
+      </div>
+      {children}
+    </div>
   );
 }

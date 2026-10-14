@@ -7,45 +7,71 @@ import { heroPix } from '../../pixel/sprites/hero';
 import { spriteUrl } from '../../pixel/pix';
 import type { TaskList } from '../../core/types';
 import type { PartyMember } from '../../sync/party';
+import { partyRoster } from '../partyRoster';
 import { PxImg } from './common';
 
-/** Rosters change rarely: reuse one for a minute so flipping between lists doesn't refetch or flicker. */
-const FRESH_MS = 60_000;
-const cache = new Map<string, { at: number; members: PartyMember[] }>();
+/** A member's hero sprite, or null when their published look can't be drawn (it never takes the screen down). */
+export function memberSprite(m: Pick<PartyMember, 'userId' | 'appearance' | 'classId'>): string | null {
+  if (!m.appearance) return null;
+  try {
+    return spriteUrl(`member:${m.userId}:${JSON.stringify(m.appearance)}:${m.classId}`, () =>
+      heroPix(m.appearance!, CLASS_BY_ID[m.classId ?? 'knight']?.look ?? {}),
+    );
+  } catch {
+    return null;
+  }
+}
 
-/** The party of a shared list, once this device is signed in; null while unknown (or offline). */
+/** The party of a shared list once this device is signed in; null while unknown, offline or signed out. */
 function useParty(list: TaskList): { members: PartyMember[] | null; me: string | null } {
-  const [members, setMembers] = useState<PartyMember[] | null>(() => cache.get(list.id)?.members ?? null);
+  const [members, setMembers] = useState<PartyMember[] | null>(() => partyRoster.get(list.id));
   const [me, setMe] = useState<string | null>(null);
 
   useEffect(() => {
     if (!list.shared) return;
     let alive = true;
-    let unsub: (() => void) | undefined;
-    setMembers(cache.get(list.id)?.members ?? null);
+    let userId: string | null = null;
+    let loading = false;
+    let fetchRoster: ((listId: string) => Promise<PartyMember[]>) | null = null;
+    const show = () => alive && setMembers(userId ? partyRoster.get(list.id) : null);
+    const load = () => {
+      if (!alive || !userId || !fetchRoster || loading || partyRoster.isFresh(list.id)) return;
+      loading = true;
+      fetchRoster(list.id)
+        .then((m) => partyRoster.set(list.id, m), () => undefined) // offline: keep what we had, retry on wake
+        .finally(() => (loading = false));
+    };
+    // back from the background, refocused or back online: a partner may have joined, or the first try failed
+    const wake = () => document.visibilityState === 'visible' && load();
+    const unsubRoster = partyRoster.subscribe(show);
+    window.addEventListener('focus', wake);
+    window.addEventListener('online', wake);
+    document.addEventListener('visibilitychange', wake);
+    let unsubSync: (() => void) | undefined;
     // sync code loads separately from the app shell; the roster needs a signed-in account
     void Promise.all([import('../../state/sync'), import('../../sync/party')]).then(([{ useSync }, { listParty }]) => {
       if (!alive) return;
-      const load = (userId: string | null) => {
-        if (!alive || !userId) return;
-        setMe(userId);
-        const hit = cache.get(list.id);
-        if (hit && Date.now() - hit.at < FRESH_MS) return setMembers(hit.members);
-        listParty(list.id).then(
-          (m) => {
-            cache.set(list.id, { at: Date.now(), members: m });
-            if (alive) setMembers(m);
-          },
-          () => undefined, // offline or signed out: keep what we had
-        );
+      fetchRoster = listParty;
+      const signedIn = (id: string | null) => {
+        userId = id;
+        setMe(id);
+        show();
+        load();
       };
-      load(useSync.getState().userId);
-      // signing in finishes after the first screen draws
-      unsub = useSync.subscribe((s, prev) => s.userId !== prev.userId && load(s.userId));
+      signedIn(useSync.getState().userId);
+      unsubSync = useSync.subscribe((s, prev) => {
+        if (s.userId === prev.userId) return;
+        if (!s.userId) partyRoster.drop(); // signed out: nobody's party shows any more
+        signedIn(s.userId);
+      });
     });
     return () => {
       alive = false;
-      unsub?.();
+      unsubRoster();
+      unsubSync?.();
+      window.removeEventListener('focus', wake);
+      window.removeEventListener('online', wake);
+      document.removeEventListener('visibilitychange', wake);
     };
   }, [list.id, list.shared]);
 
@@ -65,27 +91,21 @@ export default function PartyStrip({ list }: { list: TaskList }) {
   );
   return (
     <div className="win party-strip" role="group" aria-label={`Party: ${shown.map((m) => m.name).join(', ')}`}>
-      {shown.map((m, i) => (
-        <div key={m.userId} className="pmember" title={`${m.name} · Lv${m.level}${m.role === 'owner' ? ' · leader' : ''}`}>
-          <div className="pmember-sprite" style={{ animationDelay: `${(i % 4) * -0.35}s` }}>
-            {m.appearance ? (
-              <PxImg
-                src={spriteUrl(`member:${m.userId}:${JSON.stringify(m.appearance)}:${m.classId}`, () =>
-                  heroPix(m.appearance!, CLASS_BY_ID[m.classId ?? 'knight']?.look ?? {}),
-                )}
-                size={48}
-              />
-            ) : (
-              <div style={{ width: 48, height: 48 }} />
-            )}
+      {shown.map((m, i) => {
+        const sprite = memberSprite(m);
+        return (
+          <div key={m.userId} className="pmember" title={`${m.name} · Lv${m.level}${m.role === 'owner' ? ' · leader' : ''}`}>
+            <div className="pmember-sprite" style={{ animationDelay: `${(i % 4) * -0.35}s` }}>
+              {sprite ? <PxImg src={sprite} size={48} /> : <div style={{ width: 48, height: 48 }} />}
+            </div>
+            <div className="pmember-name">
+              {m.role === 'owner' && <span aria-hidden>♛ </span>}
+              {m.name}
+            </div>
+            <div className="pmember-lv">Lv{m.level}</div>
           </div>
-          <div className="pmember-name">
-            {m.role === 'owner' && <span aria-hidden>♛ </span>}
-            {m.name}
-          </div>
-          <div className="pmember-lv">Lv{m.level}</div>
-        </div>
-      ))}
+        );
+      })}
       {shown.length < 2 && (
         <button className="pmember pmember-invite" onClick={() => setTab('party')} aria-label="Invite someone to this list">
           <div className="pmember-sprite">+</div>

@@ -4,9 +4,9 @@ import { useSync, joinByCode, resolveConflict, resolveAccountSwitch, restartSync
 import { cloudIsBuiltIn, getSyncConfig, setSyncConfig, signIn, signUp } from '../../sync/supabase';
 import { createInvite, listParty } from '../../sync/party';
 import { iconFor } from '../../pixel/iconGen';
-import { heroPix, type Appearance } from '../../pixel/sprites/hero';
-import { spriteUrl } from '../../pixel/pix';
-import { CLASS_BY_ID } from '../../game/catalog';
+import type { Appearance } from '../../pixel/sprites/hero';
+import { memberSprite } from '../components/PartyStrip';
+import { partyRoster } from '../partyRoster';
 import type { ClassId, TaskList } from '../../core/types';
 import { PxImg, Sheet, themeStyle } from '../components/common';
 import { Field } from './TaskEditSheet';
@@ -250,7 +250,10 @@ function ListParty({ list }: { list: TaskList }) {
     if (!list.shared) return;
     let alive = true;
     listParty(list.id)
-      .then((m) => alive && setMembers(m as Member[]))
+      .then((m) => {
+        partyRoster.set(list.id, m); // the heroes strip on the list's own screen shows the same party
+        if (alive) setMembers(m as Member[]);
+      })
       .catch(() => alive && setMembers([]));
     return () => {
       alive = false;
@@ -311,16 +314,7 @@ function ListParty({ list }: { list: TaskList }) {
         <div className="members">
           {members.map((m) => (
             <div key={m.userId} className="member" title={`${m.name} · Lv${m.level}`}>
-              {m.appearance ? (
-                <PxImg
-                  src={spriteUrl(`member:${m.userId}:${JSON.stringify(m.appearance)}:${m.classId}`, () =>
-                    heroPix(m.appearance!, CLASS_BY_ID[m.classId ?? 'knight']?.look ?? {}),
-                  )}
-                  size={56}
-                />
-              ) : (
-                <div style={{ width: 56, height: 56 }} />
-              )}
+              {memberSprite(m) ? <PxImg src={memberSprite(m)!} size={56} /> : <div style={{ width: 56, height: 56 }} />}
               <div className="small">{m.name}</div>
               <div className="muted" style={{ fontSize: 12 }}>
                 Lv{m.level} {m.role === 'owner' ? '♛' : ''}
@@ -335,7 +329,10 @@ function ListParty({ list }: { list: TaskList }) {
           style={{ marginTop: 8 }}
           onClick={() => {
             // removed here at once; the server is told now, or when this device is back online
-            if (confirm(`Leave "${list.name}"? It is removed from this device; the rest of the party keeps it.`)) s.leaveList(list.id);
+            if (confirm(`Leave "${list.name}"? It is removed from this device; the rest of the party keeps it.`)) {
+              partyRoster.drop(list.id);
+              s.leaveList(list.id);
+            }
           }}
         >
           Leave party list

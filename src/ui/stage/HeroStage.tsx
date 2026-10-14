@@ -12,9 +12,9 @@ import { haptic } from '../components/Effects';
 const QUIPS = ['Hey!', 'Hehe', 'Oi!', 'Boop', 'Hm?', 'Ow!', 'Quest?', 'Yawn'];
 const RACE_QUIPS: Record<string, string[]> = {
   orc: ['WAAGH!', 'Smash?'],
-  undead: ['Braains', 'Creak'],
+  undead: ['Brains', 'Creak'],
   catfolk: ['Mrrp!', 'Nya~'],
-  imp: ['Hehehe', 'Mischief'],
+  imp: ['Hehehe', 'Mwah!'],
   dwarf: ['Aye!', 'Ale?'],
   elf: ['Hmph.', 'Rude.'],
   lizardfolk: ['Hsss', 'Blep'],
@@ -45,6 +45,9 @@ export default function HeroStage({ w, h, scale, heroX, monsterX, theme, classNa
   useEffect(() => {
     if (!ref.current || !hero) return;
     const st = new Stage(ref.current, w, h, theme, hero.appearance, look, heroX, monsterX);
+    // a stage rebuilt for a new size (rotation, the bar measuring itself) keeps the player's settings
+    st.anim = anim;
+    st.sound = sfxVol > 0 && anim !== 'off';
     stage.current = st;
     const off = fx.on((e) => {
       if (e.type === 'kill') st.kill({ monster: e.monster, xp: e.xp, gold: e.gold, crit: e.crit, theme: e.theme as ThemeId });

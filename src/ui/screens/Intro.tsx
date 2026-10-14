@@ -142,12 +142,18 @@ export default function Intro() {
     if (to < 0 || to >= cards.length) return;
     sfx.tick();
     setI(to);
+    // Previous turns off on the first card: keep keyboard focus inside the card
+    if (to === 0) requestAnimationFrame(() => box.current?.querySelector<HTMLElement>('.intro-next')?.focus({ preventScroll: true }));
   };
 
-  // focus starts on the main button and stays inside the card; Esc skips, arrows page
+  // focus starts on the main button and stays inside the card (and goes back where it was when it closes);
+  // Esc skips, arrows page
   useEffect(() => {
-    const el = box.current;
-    el?.querySelector<HTMLElement>('.intro-next')?.focus({ preventScroll: true });
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    box.current?.querySelector<HTMLElement>('.intro-next')?.focus({ preventScroll: true });
+    return () => {
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
   }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -184,9 +190,9 @@ export default function Intro() {
             aria-modal="true"
             aria-labelledby="intro-title"
             aria-describedby="intro-body"
-            onPointerDown={(e) => (press.current = { x: e.clientX, y: e.clientY })}
+            // finger swipes page through; a mouse drag is a click or a text selection, not a swipe
+            onPointerDown={(e) => (press.current = e.pointerType === 'mouse' ? null : { x: e.clientX, y: e.clientY })}
             onPointerUp={(e) => {
-              // swipe sideways to page through
               const p = press.current;
               press.current = null;
               if (!p) return;

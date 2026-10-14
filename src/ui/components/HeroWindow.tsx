@@ -5,7 +5,7 @@ import HeroStage from '../stage/HeroStage';
 import { useStore } from '../../state/store';
 import { HOME_DOCK, settle } from '../heroDock';
 import type { ThemeId } from '../../pixel/themes';
-import { themeStyle } from './common';
+import { themeStyle, useMedia } from './common';
 import { sfx } from '../../audio/sfx';
 
 const MARGIN = 10;
@@ -16,8 +16,13 @@ export function FloatingHero({ theme, small }: { theme: ThemeId; small: boolean 
   const saved = useStore((s) => s.settings.heroDock) ?? HOME_DOCK;
   const update = useStore((s) => s.updateSettings);
   const box = useRef<HTMLDivElement>(null);
-  /** the press in progress: where it started, where the window was, where it is now */
-  const drag = useRef<{ x0: number; y0: number; left: number; top: number; at: { left: number; top: number } | null; id: number } | null>(null);
+  /**
+   * The press in progress: where it started, where the window was and how big it looked (landscape phones
+   * draw it scaled down, so all of this is in on-screen pixels), and where it is now.
+   */
+  const drag = useRef<{ x0: number; y0: number; left: number; top: number; w: number; h: number; at: { left: number; top: number } | null; id: number } | null>(
+    null,
+  );
   const [live, setLive] = useState<{ left: number; top: number } | null>(null);
   const [maxLift, setMaxLift] = useState(0);
   const suppressClick = useRef(false);
@@ -34,7 +39,7 @@ export function FloatingHero({ theme, small }: { theme: ThemeId; small: boolean 
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
-  }, [saved.lift, saved.tucked]);
+  }, [saved.lift, saved.tucked, small]);
 
   const lift = Math.min(saved.lift, maxLift || saved.lift);
 
@@ -53,8 +58,12 @@ export function FloatingHero({ theme, small }: { theme: ThemeId; small: boolean 
   }, []);
 
   const onDown = (e: React.PointerEvent) => {
+    // one finger drives the window; a second one landing mid-drag is ignored
+    if (drag.current || !e.isPrimary) return;
+    // a touch drag never ends in a click, so only the press that just ended may swallow one
+    suppressClick.current = false;
     const r = box.current!.getBoundingClientRect();
-    drag.current = { x0: e.clientX, y0: e.clientY, left: r.left, top: r.top, at: null, id: e.pointerId };
+    drag.current = { x0: e.clientX, y0: e.clientY, left: r.left, top: r.top, w: r.width, h: r.height, at: null, id: e.pointerId };
   };
   const onMove = (e: React.PointerEvent) => {
     const d = drag.current;
@@ -68,14 +77,14 @@ export function FloatingHero({ theme, small }: { theme: ThemeId; small: boolean 
   };
   const onUp = (e: React.PointerEvent) => {
     const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
     drag.current = null;
-    if (!d?.at || !box.current) return;
-    suppressClick.current = true;
-    const height = box.current.offsetHeight;
-    // its bottom edge before the drag, plus the lift it had, is where it rests with no lift
-    const restBottom = d.top + height + lift;
-    const next = settle(d.at.left, box.current.offsetWidth, window.innerWidth, restBottom - (d.at.top + height), maxLift);
     setLive(null);
+    if (!d.at || !box.current) return;
+    suppressClick.current = true;
+    // its bottom edge before the drag, plus the lift it had, is where it rests with no lift
+    const restBottom = d.top + d.h + lift;
+    const next = settle(d.at.left, d.w, window.innerWidth, restBottom - (d.at.top + d.h), maxLift);
     if (next.tucked) sfx.tick();
     update({ heroDock: next });
     try {
@@ -110,12 +119,13 @@ export function FloatingHero({ theme, small }: { theme: ThemeId; small: boolean 
     <>
       <div
         ref={box}
-        className={`corner-hero ${tucked ? `tucked tucked-${saved.side}` : ''} ${live ? 'dragging' : ''}`}
+        className={`corner-hero side-${saved.side} ${tucked ? `tucked tucked-${saved.side}` : ''} ${live ? 'dragging' : ''}`}
         style={style}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onUp}
-        onPointerCancel={() => {
+        onPointerCancel={(e) => {
+          if (drag.current?.id !== e.pointerId) return;
           drag.current = null;
           setLive(null);
         }}
@@ -137,20 +147,23 @@ export function FloatingHero({ theme, small }: { theme: ThemeId; small: boolean 
   );
 }
 
-/** Full-width hero strip under the HUD. */
+/** Full-width hero strip under the HUD; drawn at half size on landscape phones, which are short on height. */
 export function HeroBar({ theme }: { theme: ThemeId }) {
   const wrap = useRef<HTMLDivElement>(null);
-  const [w, setW] = useState(180);
+  const short = useMedia('(max-height: 500px) and (max-width: 899px)');
+  const scale = short ? 1 : 2;
+  const [cw, setCw] = useState(360);
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setW(Math.max(80, Math.floor(e.contentRect.width / 2))));
+    const ro = new ResizeObserver(([e]) => setCw(e.contentRect.width));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  const w = Math.max(80, Math.floor(cw / scale));
   return (
     <div ref={wrap} className="hero-bar" style={themeStyle(theme)}>
-      <HeroStage w={w} h={56} scale={2} heroX={Math.round(w * 0.22) - 20} monsterX={Math.round(w * 0.55)} theme={theme} />
+      <HeroStage w={w} h={56} scale={scale} heroX={Math.round(w * 0.22) - 20} monsterX={Math.round(w * 0.55)} theme={theme} />
     </div>
   );
 }
