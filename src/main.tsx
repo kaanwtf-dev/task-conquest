@@ -1,0 +1,42 @@
+import { StrictMode, lazy, Suspense } from 'react';
+import { createRoot } from 'react-dom/client';
+import './styles/global.css';
+import App from './App';
+import { useStore } from './state/store';
+import { fx } from './state/fx';
+import { setSfxVolume } from './audio/sfx';
+import { registerPWA, requestPersistentStorage } from './pwa';
+import { useAppUpdate } from './ui/components/UpdateBanner';
+
+const SpriteLab = lazy(() => import('./dev/SpriteLab'));
+
+setSfxVolume(useStore.getState().settings.sfx);
+// the sync stack (Supabase client) loads in its own chunk so first paint stays light
+void import('./state/sync').then((m) => m.initSync());
+registerPWA(
+  (update) => useAppUpdate.setState({ update }),
+  () => fx.emit({ type: 'toast', text: 'READY OFFLINE', small: 'Questlog now works without internet.' }),
+);
+if (useStore.getState().hero) void requestPersistentStorage();
+else {
+  const off = useStore.subscribe((s) => {
+    if (s.hero) {
+      off();
+      void requestPersistentStorage();
+    }
+  });
+}
+
+if (import.meta.env.DEV) Object.assign(window, { __ql: { store: useStore, fx } });
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    {location.hash === '#lab' ? (
+      <Suspense fallback={null}>
+        <SpriteLab />
+      </Suspense>
+    ) : (
+      <App />
+    )}
+  </StrictMode>,
+);
