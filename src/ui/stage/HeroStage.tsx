@@ -6,6 +6,20 @@ import { useHeroLook } from '../../game/look';
 import type { ThemeId } from '../../pixel/themes';
 import { chestPix, itemIconPix, potionIconPix } from '../../pixel/sprites/items';
 import { materialOf } from '../../game/loot';
+import { sfx } from '../../audio/sfx';
+import { haptic } from '../components/Effects';
+
+const QUIPS = ['Hey!', 'Hehe', 'Oi!', 'Boop', 'Hm?', 'Ow!', 'Quest?', 'Yawn'];
+const RACE_QUIPS: Record<string, string[]> = {
+  orc: ['WAAGH!', 'Smash?'],
+  undead: ['Brains', 'Creak'],
+  catfolk: ['Mrrp!', 'Nya~'],
+  imp: ['Hehehe', 'Mwah!'],
+  dwarf: ['Aye!', 'Ale?'],
+  elf: ['Hmph.', 'Rude.'],
+  lizardfolk: ['Hsss', 'Blep'],
+  human: ['Yo!', 'Again?'],
+};
 
 interface Props {
   w: number;
@@ -18,18 +32,22 @@ interface Props {
   onTap?: () => void;
 }
 
-/** Live pixel stage. Listens to kill/level events; tap skips a running battle. */
+/** Live pixel stage. Listens to kill/level events; a tap skips a running battle, or pokes the idle hero. */
 export default function HeroStage({ w, h, scale, heroX, monsterX, theme, className, onTap }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const stage = useRef<Stage | null>(null);
   const hero = useStore((s) => s.hero);
   const anim = useStore((s) => s.settings.anim);
   const sfxVol = useStore((s) => s.settings.sfx);
+  const haptics = useStore((s) => s.settings.haptics);
   const look = useHeroLook();
 
   useEffect(() => {
     if (!ref.current || !hero) return;
     const st = new Stage(ref.current, w, h, theme, hero.appearance, look, heroX, monsterX);
+    // a stage rebuilt for a new size (rotation, the bar measuring itself) keeps the player's settings
+    st.anim = anim;
+    st.sound = sfxVol > 0 && anim !== 'off';
     stage.current = st;
     const off = fx.on((e) => {
       if (e.type === 'kill') st.kill({ monster: e.monster, xp: e.xp, gold: e.gold, crit: e.crit, theme: e.theme as ThemeId });
@@ -74,7 +92,12 @@ export default function HeroStage({ w, h, scale, heroX, monsterX, theme, classNa
       className={`px ${className ?? ''}`}
       style={{ width: w * scale, height: h * scale }}
       onClick={() => {
-        if (!stage.current?.skip()) onTap?.();
+        if (!stage.current || stage.current.skip()) return;
+        const lines = [...QUIPS, ...(RACE_QUIPS[hero?.appearance.race ?? ''] ?? [])];
+        stage.current.poke(lines[Math.floor(Math.random() * lines.length)]);
+        if (sfxVol > 0) sfx.poke();
+        if (haptics) haptic();
+        onTap?.();
       }}
     />
   );

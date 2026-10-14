@@ -192,7 +192,22 @@ export interface Settings {
   dayStartHour: number;
   weekStart: number; // 0=Sun, 1=Mon
   taskFont: 'pixel' | 'clean';
-  cornerHero: 'big' | 'small' | 'hidden';
+  /** Phone hero window: floating (big/small, draggable), a full-width bar under the HUD, or hidden. */
+  cornerHero: 'big' | 'small' | 'bar' | 'hidden';
+  /** Where the floating hero window was left (this device only). */
+  heroDock?: HeroDock;
+  /** The welcome walkthrough was seen (or skipped). */
+  introSeen?: boolean;
+  /** Reward pop-ups stay until cleared (default), or hide by themselves after a few seconds. */
+  popups?: 'stay' | 'auto';
+}
+
+export interface HeroDock {
+  side: 'left' | 'right';
+  /** Distance above its home spot (just over the tab bar), in CSS px. */
+  lift: number;
+  /** Pushed off the screen edge: only a small handle shows. */
+  tucked: boolean;
 }
 
 export interface LogEntry {

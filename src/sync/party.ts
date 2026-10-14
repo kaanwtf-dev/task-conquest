@@ -1,6 +1,6 @@
 // Party lists: invite codes/links, joining and leaving, the member roster and public hero cards.
 import type { ClassId, Hero } from '../core/types';
-import type { Appearance } from '../pixel/sprites/hero';
+import { HAIR_STYLES, RACE_BY_ID, type Appearance } from '../pixel/sprites/hero';
 import { flushSync } from './engine';
 import { getClient, toRemoteError } from './supabase';
 
@@ -80,6 +80,19 @@ export async function leaveList(listId: string): Promise<void> {
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
+const isHex = (v: unknown) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+
+/** A published hero look this app can draw, or undefined (another member's profile is untrusted input). */
+export function toAppearance(v: unknown): Appearance | undefined {
+  if (!isObj(v)) return undefined;
+  const skin = v.skin;
+  if (typeof v.race !== 'string' || !Object.prototype.hasOwnProperty.call(RACE_BY_ID, v.race)) return undefined;
+  if (typeof skin !== 'number' || !Number.isInteger(skin) || skin < 0) return undefined;
+  if (typeof v.hair !== 'string' || !HAIR_STYLES.includes(v.hair as Appearance['hair']) || typeof v.beard !== 'string') return undefined;
+  if (![v.hairColor, v.eyes, v.outfit, v.pants].every(isHex)) return undefined;
+  return v as unknown as Appearance;
+}
+
 export function toMember(r: { user_id: string; role: string; name: string | null; data: unknown }): PartyMember {
   const d = isObj(r.data) ? r.data : {};
   const level = Number(d.level);
@@ -88,7 +101,7 @@ export function toMember(r: { user_id: string; role: string; name: string | null
     role: r.role,
     name: r.name?.trim() || 'Adventurer',
     level: Number.isFinite(level) && level >= 1 ? Math.floor(level) : 1,
-    appearance: isObj(d.appearance) ? (d.appearance as unknown as Appearance) : undefined,
+    appearance: toAppearance(d.appearance),
     classId: typeof d.classId === 'string' ? (d.classId as ClassId) : undefined,
     title: typeof d.title === 'string' ? d.title : undefined,
   };

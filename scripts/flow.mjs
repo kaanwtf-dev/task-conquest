@@ -26,6 +26,12 @@ async function run(name, viewport, dpr, steps) {
 }
 
 const create = async (page, race = 'Elf', cls = 'Mage') => {
+  // a first visit opens with the intro over hero creation: page through it
+  const intro = page.getByRole('dialog').filter({ has: page.locator('.intro-next') });
+  if (await intro.count()) {
+    for (let i = 0; i < 4; i++) await intro.getByRole('button', { name: 'Next' }).click();
+    await intro.getByRole('button', { name: "Let's go!" }).click();
+  }
   await page.getByRole('button', { name: race, exact: true }).click();
   await page.getByRole('button', { name: cls, exact: true }).click();
   await page.getByLabel('Hero name').fill('Aldric');

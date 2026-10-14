@@ -24,7 +24,9 @@ import type { Task, TaskList } from '../../core/types';
 import TaskEditSheet from './TaskEditSheet';
 import { todaySections } from '../../state/today';
 import BossBar from '../components/BossBar';
+import PartyStrip from '../components/PartyStrip';
 import { ListSheet } from './OtherScreens';
+import { takeOffList } from '../groceries';
 
 /** Only what the list screens read: the hero's progress changing on every kill must not re-render them. */
 const listState = (st: ReturnType<typeof useStore.getState>) => ({ activeListId: st.activeListId, lists: st.lists, tasks: st.tasks, settings: st.settings });
@@ -76,6 +78,7 @@ export default function QuestsScreen() {
           </div>
         </div>
       </SceneBanner>
+      {list.shared && <PartyStrip list={list} />}
 
       <QuickAdd list={list} />
 
@@ -431,7 +434,9 @@ function SupplyView({ list, tasks, onEdit }: { list: TaskList; tasks: Task[]; on
               {AISLES[aisle]?.name ?? 'Other'}
             </div>
             {items.map((t) => (
-              <TaskRow key={t.id} task={t} done={false} onEdit={onEdit} />
+              <SwipeAway key={t.id} task={t}>
+                <TaskRow task={t} done={false} onEdit={onEdit} />
+              </SwipeAway>
             ))}
           </div>
         ))}
@@ -460,6 +465,110 @@ function SupplyView({ list, tasks, onEdit }: { list: TaskList; tasks: Task[]; on
         </>
       )}
     </>
+  );
+}
+
+/** Sideways travel (px) before a press becomes a swipe; a fling this fast (px/ms) counts even if short. */
+const SWIPE_START = 10;
+const FLING = 0.5;
+
+/**
+ * Slide a grocery sideways (finger or mouse) to take it off the list without buying it. Delete or
+ * Backspace on a focused row does the same. A tap still opens the editor.
+ */
+function SwipeAway({ task, children }: { task: Task; children: React.ReactNode }) {
+  const haptics = useStore((s) => s.settings.haptics);
+  const wrap = useRef<HTMLDivElement>(null);
+  const press = useRef<{ x0: number; y0: number; id: number; on: boolean; x: number; t: number; v: number } | null>(null);
+  const swallowClick = useRef(false);
+  const [dx, setDx] = useState(0);
+  const [settling, setSettling] = useState(false);
+  const width = () => wrap.current?.offsetWidth ?? 300;
+  const past = (d: number) => Math.abs(d) > width() * 0.35;
+  const forgets = task.timesDone === 0 && !task.staple;
+
+  const reset = () => {
+    press.current = null;
+    setSettling(true);
+    setDx(0);
+  };
+  const commit = (dir: number) => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return void takeOffList(task);
+    setSettling(true);
+    setDx(dir * (width() + 20));
+    window.setTimeout(() => takeOffList(task) || reset(), 160);
+  };
+
+  return (
+    <div
+      ref={wrap}
+      className="swipe"
+      onPointerDown={(e) => {
+        swallowClick.current = false;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        press.current = { x0: e.clientX, y0: e.clientY, id: e.pointerId, on: false, x: e.clientX, t: e.timeStamp, v: 0 };
+      }}
+      onPointerMove={(e) => {
+        const p = press.current;
+        if (!p || p.id !== e.pointerId) return;
+        const mx = e.clientX - p.x0;
+        const my = e.clientY - p.y0;
+        if (!p.on) {
+          if (Math.abs(my) > SWIPE_START && Math.abs(my) >= Math.abs(mx)) return void (press.current = null); // scrolling
+          if (Math.abs(mx) < SWIPE_START || Math.abs(mx) < Math.abs(my) * 1.3) return;
+          p.on = true;
+          setSettling(false);
+          wrap.current?.setPointerCapture(e.pointerId);
+        }
+        const dt = Math.max(1, e.timeStamp - p.t);
+        p.v = (e.clientX - p.x) / dt;
+        p.x = e.clientX;
+        p.t = e.timeStamp;
+        if (haptics && past(mx) !== past(dx)) haptic();
+        setDx(mx);
+      }}
+      onPointerUp={(e) => {
+        const p = press.current;
+        if (!p?.on || p.id !== e.pointerId) return void (press.current = null);
+        press.current = null;
+        swallowClick.current = true; // the click that ends a swipe must not open the editor
+        const d = e.clientX - p.x0;
+        const flung = Math.abs(d) > 50 && Math.abs(p.v) > FLING && Math.sign(p.v) === Math.sign(d);
+        if (past(d) || flung) commit(Math.sign(d));
+        else reset();
+      }}
+      onPointerCancel={reset}
+      onClickCapture={(e) => {
+        if (!swallowClick.current) return;
+        swallowClick.current = false;
+        e.stopPropagation();
+        e.preventDefault();
+      }}
+      onKeyDown={(e) => {
+        if ((e.key !== 'Delete' && e.key !== 'Backspace') || e.metaKey || e.ctrlKey || e.altKey) return;
+        e.preventDefault();
+        // a held key repeats: one press takes off one item, never the whole aisle
+        if (e.repeat) return;
+        // keep keyboard focus in the list: on the next item (in any aisle), else the one before
+        const rows = [...(wrap.current?.closest('.tasks')?.querySelectorAll<HTMLElement>('.swipe .task') ?? [])];
+        const at = rows.findIndex((r) => wrap.current?.contains(r));
+        const sib = rows[at + 1] ?? rows[at - 1];
+        if (takeOffList(task)) requestAnimationFrame(() => sib?.isConnected && sib.focus());
+      }}
+    >
+      {dx !== 0 && (
+        <div className={`swipe-under ${forgets ? '' : 'keep'} ${dx < 0 ? 'from-right' : ''} ${past(dx) ? 'go' : ''}`} aria-hidden>
+          {forgets ? '✕ Remove' : '↩ Pantry'}
+        </div>
+      )}
+      <div
+        className={`swipe-row ${dx !== 0 ? 'moving' : ''} ${settling ? 'settling' : ''}`}
+        style={dx ? { transform: `translateX(${dx}px)` } : undefined}
+        onTransitionEnd={() => setSettling(false)}
+      >
+        {children}
+      </div>
+    </div>
   );
 }
 

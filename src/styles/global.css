@@ -637,15 +637,91 @@ canvas.px {
     0 0 0 2px var(--outline),
     0 6px 0 rgba(0, 0, 0, 0.4);
   cursor: pointer;
+  /* drag it anywhere; push it off an edge to tuck it away */
+  touch-action: none;
+  transition: transform 0.22s ease;
+}
+.corner-hero.dragging {
+  cursor: grabbing;
+  box-shadow:
+    0 0 0 2px var(--outline),
+    0 12px 18px rgba(0, 0, 0, 0.5);
+}
+.corner-hero.tucked-right {
+  transform: translateX(calc(100% + 24px + var(--safe-r)));
+}
+.corner-hero.tucked-left {
+  transform: translateX(calc(-100% - 24px - var(--safe-l)));
 }
 .corner-hero canvas {
   display: block;
 }
+/* the tab a tucked hero window leaves at the screen edge */
+.hero-handle {
+  position: fixed;
+  z-index: 15;
+  width: 26px;
+  height: 64px;
+  padding: 0;
+  border: 3px solid var(--border);
+  background: linear-gradient(180deg, var(--winTop), var(--winBot));
+  color: var(--text);
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 0 0 2px var(--outline);
+}
+.hero-handle::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+}
+.hero-handle-right {
+  right: var(--safe-r);
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+}
+.hero-handle-left {
+  left: var(--safe-l);
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+}
+/* the hero as a full-width strip under the HUD */
+.hero-bar {
+  flex: none;
+  margin: 8px max(12px, var(--safe-r)) 0 max(12px, var(--safe-l));
+  border: 3px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  line-height: 0;
+  box-shadow: 0 0 0 2px var(--outline);
+  cursor: pointer;
+}
+.hero-bar canvas {
+  display: block;
+}
 /* landscape phones have little height to spare: the corner hero shrinks instead of covering the list */
 @media (max-height: 500px) and (max-width: 899px) {
+  /* scaled about the corner it is docked to, so it stays against its edge */
   .corner-hero {
     transform: scale(0.6);
     transform-origin: bottom right;
+  }
+  .corner-hero.side-left {
+    transform-origin: bottom left;
+  }
+  /* while dragged its top-left corner is where the finger put it (HeroWindow works in on-screen pixels) */
+  .corner-hero.dragging {
+    transform-origin: top left;
+  }
+  .corner-hero.tucked-right {
+    transform: translateX(calc(100% + 24px + var(--safe-r))) scale(0.6);
+  }
+  .corner-hero.tucked-left {
+    transform: translateX(calc(-100% - 24px - var(--safe-l))) scale(0.6);
+  }
+  .hero-bar {
+    margin-top: 6px;
   }
 }
 
@@ -805,12 +881,105 @@ canvas.px {
   pointer-events: none;
 }
 .toast {
-  pointer-events: none;
+  pointer-events: none; /* brief pop-ups: taps go through to whatever is under them */
   padding: 10px 14px;
   text-align: center;
   animation: toastIn 0.25s steps(5);
-  cursor: pointer;
   width: 100%;
+}
+.toast-count {
+  color: var(--text);
+}
+/* reward pop-ups that stay until cleared: one at a time over the HUD (your level, XP and gold, which is
+   what they are about), so they never cover the list switcher, the list, the hero window or the bottom bars;
+   under sheets and the intro */
+.notes-wrap {
+  position: fixed;
+  top: calc(var(--safe-top) + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 76;
+  width: min(calc(100vw - 12px), 440px);
+  pointer-events: none;
+}
+.toast.note {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 5px 4px 5px 8px;
+  animation-name: noteIn;
+}
+.toast.note .toast-row {
+  gap: 8px;
+}
+.toast.note img {
+  width: 34px;
+  height: 34px;
+}
+.toast.note .toast-text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.toast.note .big {
+  font-size: 11px;
+}
+.toast.note .small {
+  margin-top: 3px;
+  font-size: 14px;
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.note-side {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex: none;
+}
+.note-side .toast-x {
+  height: 26px;
+}
+.note-all {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  padding: 0 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+@keyframes noteIn {
+  from {
+    transform: translateY(-10px) scale(0.95);
+    opacity: 0;
+  }
+}
+/* desktop: over the HUD at the top of the hero panel on the right */
+@media (min-width: 900px) {
+  .notes-wrap {
+    top: 16px;
+    left: auto;
+    right: 16px;
+    transform: none;
+    width: 328px;
+  }
+}
+.toast-x {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 4px;
 }
 .toast .big {
   font-family: var(--font-pixel);
@@ -1598,4 +1767,408 @@ canvas.px {
 .hud-stats {
   flex: none;
   max-width: 40%;
+}
+
+/* ---------- undo bar ---------- */
+.undo-wrap {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  /* above the tab bar, or above the iPhone keyboard while one is up (src/ui/keyboard.ts) */
+  bottom: calc(max(var(--tabbar-h) + var(--safe-bot), var(--kb, 0px)) + 14px);
+  z-index: 75; /* over the hero window, under sheets */
+  width: min(92vw, 420px);
+  pointer-events: none;
+}
+.undo-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 12px;
+  font-size: 15px;
+  pointer-events: auto;
+  animation: toastIn 0.2s steps(4);
+}
+.undo-bar span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- swipe a grocery off the list ---------- */
+.swipe {
+  position: relative;
+  border-radius: 5px;
+  overflow: hidden;
+  touch-action: pan-y; /* vertical scrolling stays native; sideways moves are the swipe */
+}
+.swipe + .swipe {
+  border-top: 2px dashed rgba(255, 255, 255, 0.1);
+}
+/* the row clips its swipe, so the keyboard focus ring is drawn inside it */
+.swipe .task:focus-visible {
+  outline-offset: -3px;
+}
+.swipe-under {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 8px;
+  background: #6b1f2a;
+  color: #ffd9d9;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+.swipe-under.go {
+  background: #a3283a;
+  color: #fff;
+}
+.swipe-under.keep {
+  background: #4a3d1a; /* back to the pantry: not destructive, so not red */
+  color: #ffe6a8;
+}
+.swipe-under.keep.go {
+  background: #8a6a1e;
+  color: #fff;
+}
+.swipe-under.from-right {
+  justify-content: flex-end;
+}
+.swipe-row {
+  position: relative;
+}
+.swipe-row.moving {
+  background: color-mix(in srgb, var(--winTop) 35%, var(--winBot));
+}
+.swipe-row.settling {
+  transition: transform 0.16s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .swipe-row.settling {
+    transition: none;
+  }
+}
+
+/* ---------- party heroes under a shared list's banner ---------- */
+.party-strip {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px 8px;
+  margin-top: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.party-strip::-webkit-scrollbar {
+  display: none;
+}
+.pmember {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 72px;
+  text-align: center;
+}
+.pmember-sprite {
+  height: 48px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: pbob 1.4s steps(2) infinite;
+}
+@keyframes pbob {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+.pmember-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 1.2;
+}
+.pmember-lv {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--accent);
+  margin-top: 2px;
+}
+.pmember-invite {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.pmember-invite .pmember-sprite {
+  width: 40px;
+  height: 40px;
+  margin: 4px 0;
+  align-items: center;
+  border: 2px dashed currentColor;
+  border-radius: 6px;
+  font-size: 22px;
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pmember-sprite {
+    animation: none;
+  }
+}
+
+/* ---------- first-run intro ---------- */
+.intro-back {
+  align-items: center;
+  padding: calc(var(--safe-top) + 12px) 16px calc(var(--safe-bot) + 12px);
+  background: rgba(8, 6, 18, 0.86);
+  z-index: 95; /* over every pop-up: they wait underneath until it closes */
+}
+.intro {
+  position: relative;
+  width: min(420px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 14px 12px;
+  touch-action: pan-y;
+}
+.intro-skip {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  background: rgba(8, 6, 18, 0.7);
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.intro-card {
+  animation: introIn 0.22s steps(4);
+}
+@keyframes introIn {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+.intro-art {
+  height: 170px;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+}
+.intro-art > .banner {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+.intro-art > .banner canvas {
+  width: 100%;
+  height: 100% !important;
+  object-fit: cover;
+}
+.intro-duel {
+  position: absolute;
+  inset: auto 0 6px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 18px;
+}
+.intro-vs {
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: #ffd860;
+  text-shadow: 2px 2px 0 #1a1022;
+  margin-bottom: 30px;
+  animation: pbob 0.8s steps(2) infinite;
+}
+.flip {
+  transform: scaleX(-1);
+}
+.intro-title {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.intro-body {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+  min-height: 5.6em; /* four lines: the card keeps its height from page to page */
+}
+/* the buttons stay in view at the bottom edge even when a short (landscape) screen makes the card scroll */
+.intro-foot {
+  position: sticky;
+  bottom: -12px; /* cancels .intro's bottom padding */
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 12px -14px -12px;
+  padding: 10px 14px 12px;
+  background: var(--winBot);
+}
+@media (max-height: 480px) {
+  /* short screens: the art takes only the room its content needs (the card scrolls; its buttons stay put) */
+  .intro-art {
+    height: auto;
+    min-height: 110px;
+    padding: 6px 0;
+  }
+  .intro-art:has(.banner) {
+    height: 110px;
+    padding: 0;
+  }
+  .intro-lists {
+    gap: 3px;
+    font-size: 13px;
+  }
+  .intro-lists img {
+    width: 22px;
+    height: 22px;
+  }
+  .intro-pair img {
+    width: 56px;
+    height: 56px;
+  }
+  .intro-body {
+    min-height: 0;
+  }
+  .intro-title {
+    margin-top: 8px;
+  }
+}
+.intro-dots {
+  display: flex;
+  gap: 6px;
+}
+.intro-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.25);
+}
+.intro-dots span.on {
+  background: var(--accent);
+}
+.intro-next {
+  min-width: 108px;
+}
+.intro-mock {
+  width: 100%;
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.intro-mock .task {
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 6px;
+}
+.intro-float {
+  position: absolute;
+  right: 10px;
+  top: -6px;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: #ffd860;
+  text-shadow: 2px 2px 0 #1a1022;
+  animation: introFloat 1.6s steps(8) infinite;
+}
+@keyframes introFloat {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-6px);
+    opacity: 0;
+  }
+}
+.intro-loot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.intro-rare {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: #4a8ae8;
+}
+.intro-lists {
+  width: 100%;
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.25;
+}
+.intro-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.intro-grow {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 4px 16px;
+}
+.intro-grow > img {
+  grid-row: span 2;
+}
+.intro-gear {
+  display: grid;
+  grid-template-columns: repeat(2, 36px);
+  gap: 6px;
+}
+.intro-lv {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--accent);
+}
+.intro-party {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+}
+.intro-pair {
+  display: flex;
+  gap: 8px;
+}
+.intro-pair img:nth-child(2) {
+  transform: scaleX(-1);
+}
+.intro-tip {
+  font-size: 14px;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--muted);
 }
