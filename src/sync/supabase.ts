@@ -95,7 +95,14 @@ export function getClient(): SupabaseClient | null {
 
 function need(): SupabaseClient {
   const c = getClient();
-  if (!c) throw new Error(getSyncConfig() ? 'The Project URL looks wrong. Fix it under Change cloud project.' : 'Cloud sync is not set up yet.');
+  if (!c)
+    throw new Error(
+      !getSyncConfig()
+        ? 'Cloud sync is not set up yet.'
+        : cloudIsBuiltIn()
+          ? "This site's cloud address is wrong; whoever runs the site needs to fix it."
+          : 'The Project URL looks wrong. Fix it under Change cloud project.',
+    );
   return c;
 }
 
