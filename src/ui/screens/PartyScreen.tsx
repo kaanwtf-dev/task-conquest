@@ -8,7 +8,7 @@ import { heroPix, type Appearance } from '../../pixel/sprites/hero';
 import { spriteUrl } from '../../pixel/pix';
 import { CLASS_BY_ID } from '../../game/catalog';
 import type { ClassId, TaskList } from '../../core/types';
-import { PxImg, themeStyle } from '../components/common';
+import { BodyPortal, PxImg, themeStyle } from '../components/common';
 import { Field } from './TaskEditSheet';
 import { sfx } from '../../audio/sfx';
 
@@ -366,28 +366,24 @@ function ConflictSheet() {
       {err}
     </p>
   );
-  if (c.kind === 'account')
-    return (
-      <div className="sheet-back">
-        <div className="win sheet">
-          <div className="win-title">Different account</div>
-          <p style={{ fontSize: 16, lineHeight: 1.4 }}>
-            This device was last synced with another account. Its hero and lists ({hero?.name ?? 'no hero'}) belong to that account.
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <button className="btn" disabled={busy} onClick={choose(() => resolveAccountSwitch('fresh'))}>
-              Start fresh with this account
-            </button>
-            <button className="btn ghost" disabled={busy} onClick={choose(() => resolveAccountSwitch('bring'))}>
-              Bring this device's data into this account
-            </button>
-          </div>
-          {errLine}
+  const inner =
+    c.kind === 'account' ? (
+      <div className="win sheet">
+        <div className="win-title">Different account</div>
+        <p style={{ fontSize: 16, lineHeight: 1.4 }}>
+          This device was last synced with another account. Its hero and lists ({hero?.name ?? 'no hero'}) belong to that account.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button className="btn" disabled={busy} onClick={choose(() => resolveAccountSwitch('fresh'))}>
+            Start fresh with this account
+          </button>
+          <button className="btn ghost" disabled={busy} onClick={choose(() => resolveAccountSwitch('bring'))}>
+            Bring this device's data into this account
+          </button>
         </div>
+        {errLine}
       </div>
-    );
-  return (
-    <div className="sheet-back">
+    ) : (
       <div className="win sheet">
         <div className="win-title">Two heroes found</div>
         <p style={{ fontSize: 16, lineHeight: 1.4 }}>
@@ -406,6 +402,15 @@ function ConflictSheet() {
         </div>
         {errLine}
       </div>
-    </div>
+    );
+  // on document.body like every sheet, so iPhone Safari can't clip it to the scrolling Party page
+  return (
+    <BodyPortal>
+      {(zone) => (
+        <div className="sheet-back" style={zone}>
+          {inner}
+        </div>
+      )}
+    </BodyPortal>
   );
 }

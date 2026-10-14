@@ -1062,10 +1062,30 @@ canvas.px {
 .sheet {
   width: min(560px, 100%);
   max-height: 88vh;
+  max-height: 88dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 16px max(14px, var(--safe-r)) calc(var(--safe-bot) + 18px) max(14px, var(--safe-l));
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
+}
+/* a sheet's Save / Cancel row stays pinned to its bottom edge, however long the form is */
+.sheet:has(.sheet-actions) {
+  padding-bottom: 0; /* the action row carries the home-indicator padding */
+}
+.sheet-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  margin: 16px calc(-1 * max(14px, var(--safe-r))) 0 calc(-1 * max(14px, var(--safe-l)));
+  padding: 12px max(14px, var(--safe-r)) calc(14px + var(--safe-bot)) max(14px, var(--safe-l));
+  background: var(--winBot);
+  border-top: 2px solid rgba(0, 0, 0, 0.35);
+  box-shadow: 0 -6px 10px rgba(0, 0, 0, 0.25);
 }
 @media (min-width: 900px) {
   .sheet-back {

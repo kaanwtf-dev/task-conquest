@@ -245,7 +245,7 @@ export function ListSheet({ onClose, editId }: { onClose: () => void; editId?: s
               </button>
             ))}
           </Opt>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 14 }}>
+          <div className="sheet-actions">
             <div>
               {existing &&
                 (isForeignList(existing, s.accountId) ? (
