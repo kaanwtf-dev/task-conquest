@@ -448,7 +448,9 @@ syncHooks.heroReset = (born: number) => {
 
 /** Signs this device out, even offline. */
 export async function signOutHere() {
-  // reminders belong to the account: stop them on this device while the session can still remove them
+  // reminders belong to the account: stop them on this device while the session can still remove them,
+  // and never hand them to whoever signs in next
+  useStore.getState().updateSettings({ pushAccount: undefined });
   await import('../push/client').then((m) => m.disablePush()).catch(() => undefined);
   await signOut(); // throws only when the server refused (the message is shown)
   stopEngine();

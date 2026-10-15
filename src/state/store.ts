@@ -698,7 +698,16 @@ export const useStore = create<State>()(
               tasks: restore(cur.tasks, d.tasks, (tk) => tk.listId),
               items: restore(cur.items, d.items),
               potions: restore(cur.potions, d.potions),
-              settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) }, log: Array.isArray(d.log) ? d.log : [], activeListId: first?.id ?? null,
+              // reminders belong to this device and its account, not to the save being restored
+              settings: {
+                ...DEFAULT_SETTINGS,
+                ...(d.settings ?? {}),
+                pushAccount: cur.settings.pushAccount,
+                pushAskedAt: cur.settings.pushAskedAt,
+                push: cur.settings.push,
+              },
+              log: Array.isArray(d.log) ? d.log : [],
+              activeListId: first?.id ?? null,
             });
             return true;
           } catch {

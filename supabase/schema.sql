@@ -334,7 +334,9 @@ begin
      or p_endpoint !~ '^https://(web\.push\.apple\.com|fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|[a-z0-9-]+\.notify\.windows\.com)/' then
     raise exception 'not a push service endpoint' using errcode = '22023';
   end if;
-  if coalesce(length(p_p256dh), 0) not between 1 and 200 or coalesce(length(p_auth), 0) not between 1 and 100
+  -- the keys a browser makes: a 65-byte P-256 point and a 16-byte secret, base64url (junk would make the
+  -- sender waste time on every run)
+  if coalesce(p_p256dh, '') !~ '^[A-Za-z0-9_+/-]{87}=?$' or coalesce(p_auth, '') !~ '^[A-Za-z0-9_+/-]{22}(==)?$'
      or coalesce(length(p_tz), 0) not between 1 and 64 or pg_column_size(p_prefs) > 4096
      or jsonb_typeof(p_prefs) is distinct from 'object' then
     raise exception 'invalid subscription' using errcode = '22023';

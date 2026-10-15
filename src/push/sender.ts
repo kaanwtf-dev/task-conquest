@@ -32,6 +32,8 @@ export interface SubRow {
 
 export interface Cloud {
   subscriptions(): Promise<SubRow[]>;
+  /** What the last run wrote (to know whether this signing key has ever been accepted). */
+  lastStats(): Promise<Partial<RunStats> | null>;
   /** The player's own live docs, plus the live docs of the party lists they belong to. */
   docs(userId: string): Promise<RemoteRow[]>;
   saveHistory(endpoint: string, history: PushHistory): Promise<void>;
@@ -51,6 +53,10 @@ export interface RunStats {
   gone: number;
   failed: number;
   config: number;
+  /** the public signing key a push service has accepted (once one has) */
+  keyOk?: string;
+  /** true when the run stopped early to stay inside the job's time limit */
+  cut?: boolean;
 }
 
 /** The push services browsers use. The sender only ever posts to these (the table accepts no others either). */
@@ -124,20 +130,21 @@ export function stateFromRows(rows: RemoteRow[], userId: string): NudgeState {
  * service worker, so it can never count as a silent push), which public/push-sw.js also reads on older
  * systems and other browsers. WebKit reads app_badge from the top level only.
  */
-export function payload(n: Pick<Nudge, 'title' | 'body' | 'tag' | 'badge'>, appUrl: string): string {
+export function payload(n: Pick<Nudge, 'title' | 'body' | 'tag'> & { badge?: number }, appUrl: string): string {
   // push services refuse anything over 4 KB (encrypted): keep well inside it whatever players named things
   const clip = (s: string, max: number) => ([...String(s)].length > max ? `${[...String(s)].slice(0, max - 1).join('')}…` : String(s));
   return JSON.stringify({
     web_push: 8030,
     notification: { title: clip(n.title, 120), body: clip(n.body, 400), navigate: appUrl, tag: n.tag, lang: 'en-US', dir: 'ltr' },
-    app_badge: Math.max(0, Math.min(999, Math.round(Number(n.badge) || 0))),
+    // no badge: leave the icon as it is (a test message must not wipe everyone's count)
+    ...(n.badge === undefined ? {} : { app_badge: Math.max(0, Math.min(999, Math.round(Number(n.badge) || 0))) }),
   });
 }
 
 /** What "Run workflow › test" sends to every device: proof the whole chain works, right now. */
-export function testNudge(state: NudgeState): Nudge {
+export function testNudge(state: NudgeState): Omit<Nudge, 'badge'> & { badge?: number } {
   const name = state.hero?.name ?? 'adventurer';
-  return { kind: 'plan', title: '🔔 Test reminder', body: `Hello ${name}! Reminders from Questlog reach this device.`, tag: 'questlog-test', badge: 0 };
+  return { kind: 'plan', title: '🔔 Test reminder', body: `Hello ${name}! Reminders from Questlog reach this device.`, tag: 'questlog-test' };
 }
 
 export async function runReminders(opts: {
@@ -146,11 +153,18 @@ export async function runReminders(opts: {
   now: number;
   mode: Mode;
   appUrl: string;
+  /** the public signing key: once a push service accepted it, a refusal means that one device is bad */
+  key: string;
   /** puts the process in the player's time zone, so the app's day logic reads their local time */
   setZone: (tz: string) => void;
+  /** stop starting new sends after this (the heartbeat must still be written inside the job's limit) */
+  deadline?: number;
+  clock?: () => number;
 }): Promise<RunStats> {
-  const { cloud, send, now, mode, appUrl, setZone } = opts;
+  const { cloud, send, now, mode, appUrl, setZone, key } = opts;
+  const clock = opts.clock ?? Date.now;
   const stats: RunStats = { devices: 0, due: 0, sent: 0, gone: 0, failed: 0, config: 0 };
+  const proven = (await cloud.lastStats().catch(() => null))?.keyOk === key;
   const saves = new Map<string, Promise<NudgeState>>();
   const saveOf = (userId: string) => {
     let s = saves.get(userId);
@@ -165,13 +179,20 @@ export async function runReminders(opts: {
     const subs = await cloud.subscriptions();
     stats.devices = subs.length;
     for (const sub of subs) {
+      if (opts.deadline !== undefined && clock() > opts.deadline) {
+        stats.cut = true;
+        break;
+      }
       try {
         await device(sub);
       } catch {
         stats.failed++; // one broken save or a cloud hiccup must not cost everyone else their reminder
       }
     }
-    if (stats.sent > 0 || mode === 'dry-run') {
+    // the key works if anything got through, now or in an earlier run: then each refusal is that device's
+    // own problem (made for another key) and it goes; if nothing has ever got through, the key is suspect
+    if (stats.sent > 0 || proven) {
+      stats.keyOk = key;
       for (const sub of refused) {
         stats.gone++;
         await cloud.forget(sub.endpoint).catch(() => undefined);
@@ -196,7 +217,7 @@ export async function runReminders(opts: {
     setZone(validZone(sub.tz));
     const prefs = sanitizePrefs(sub.prefs);
     const history = sanitizeHistory(sub.history);
-    let nudge: Nudge | null;
+    let nudge: (Omit<Nudge, 'badge'> & { badge?: number }) | null;
     let topic: string;
     if (mode === 'test') {
       nudge = testNudge(await saveOf(sub.user_id));
@@ -206,9 +227,10 @@ export async function runReminders(opts: {
       if (!slot) return;
       const state = await saveOf(sub.user_id);
       setZone(validZone(sub.tz)); // another device's turn may have run while the save loaded
-      nudge = pickNudge(state, now, slot, prefs, history);
+      const picked = pickNudge(state, now, slot, prefs, history);
+      nudge = picked;
       topic = slot;
-      const next = afterSlot(history, state, now, slot, prefs, nudge);
+      const next = afterSlot(history, state, now, slot, prefs, picked);
       // the slot is claimed before sending: a send that fails is a missed reminder, never a doubled one
       if (mode === 'run' && JSON.stringify(next) !== JSON.stringify(history)) await cloud.saveHistory(sub.endpoint, next);
     }

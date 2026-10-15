@@ -2,9 +2,10 @@
 // moment. Pure (no DOM, no store) so the scheduled sender and the tests share it. Times are read in the
 // process's local time zone, like the app; the sender sets it to each player's zone before calling.
 import type { Hero, Task, TaskList } from '../core/types';
-import { dateKey, parseDateKey, streak, todayKey, type TimeCfg } from '../core/time';
+import { dateKey, isDone, parseDateKey, periodKey, streak, todayKey, type TimeCfg } from '../core/time';
 import { bossProgress } from '../game/bosses';
 import { todaySections, todayRemaining } from '../state/today';
+import { undeadSave } from '../state/rewards';
 
 export type Slot = 'morning' | 'evening';
 /** What a player can switch off, one by one. */
@@ -128,7 +129,9 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
   }
 
   if (!on('evening') && !on('party')) return null;
-  const run = streak(days, now, cfg);
+  // the streak as it would stand after a quest tonight (the undead perk forgives one missed day a week)
+  const saved = hero.appearance?.race === 'undead' ? undeadSave(hero, now, cfg) : hero.savedDays ?? [];
+  const run = streak([...hero.activeDays, ...saved], now, cfg);
   if (on('evening') && !playedToday && run >= 2) {
     return {
       kind: 'streak',
@@ -144,7 +147,8 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
     const byWho = new Map<string, number>();
     for (const t of live) {
       const l = lists.get(t.listId)!;
-      if (!l.shared || !t.doneBy || t.doneBy === hero.name || !t.doneAt) continue;
+      // still done (a mistaken tick that was undone is not news)
+      if (!l.shared || !t.doneBy || t.doneBy === hero.name || !t.doneAt || !isDone(t, now, cfg)) continue;
       if (todayKey(t.doneAt, cfg) !== today) continue;
       byWho.set(t.doneBy, (byWho.get(t.doneBy) ?? 0) + 1);
     }
@@ -161,8 +165,10 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
   }
 
   if (!on('evening') || !left.length) return null;
-  // the routine ones reset tonight: those are worth a nudge
-  const dailies = s.routine;
+  // the routine ones whose period ends tonight ('every 3 days' ones mostly do not): those are worth a nudge
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dailies = s.routine.filter((t) => periodKey(t.repeat, now, cfg) !== periodKey(t.repeat, tomorrow.getTime(), cfg));
   if (playedToday && dailies.length) {
     return {
       kind: 'dailies',

@@ -32,12 +32,17 @@ function fakeCloud(subs: SubRow[], rows: Record<string, RemoteRow[]>) {
   const histories = new Map<string, PushHistory>();
   const forgotten: string[] = [];
   const beats: unknown[] = [];
+  let last: Partial<import('./sender').RunStats> | null = null;
   const cloud: Cloud = {
     subscriptions: async () => subs.map((s) => ({ ...s, history: histories.get(s.endpoint) ?? s.history })),
+    lastStats: async () => last,
     docs: async (u) => rows[u] ?? [],
     saveHistory: async (e, h) => void histories.set(e, h),
     forget: async (e) => void forgotten.push(e),
-    heartbeat: async (s) => void beats.push(s),
+    heartbeat: async (s) => {
+      beats.push(s);
+      last = s;
+    },
   };
   return { cloud, histories, forgotten, beats };
 }
@@ -61,7 +66,7 @@ describe('reminder sender', () => {
     const f = fakeCloud([sub(apple('A'))], rows);
     const sent: string[] = [];
     const run = (now: number) =>
-      runReminders({ cloud: f.cloud, now, mode: 'run', appUrl: 'https://app/', setZone, send: async (_s, p) => (sent.push(p), 'ok') });
+      runReminders({ key: 'K', cloud: f.cloud, now, mode: 'run', appUrl: 'https://app/', setZone, send: async (_s, p) => (sent.push(p), 'ok') });
     expect((await run(NOON)).sent).toBe(0); // 12:30 in Istanbul: no slot
     const first = await run(MORNING);
     expect(first).toMatchObject({ devices: 1, due: 1, sent: 1 });
@@ -78,7 +83,7 @@ describe('reminder sender', () => {
   it('saves a streak in the evening slot', async () => {
     const f = fakeCloud([sub(apple('A'))], { [U]: [hero(['2026-10-13', '2026-10-14']), listRow('D'), taskRow('Read', 'D')] });
     const sent: string[] = [];
-    await runReminders({ cloud: f.cloud, now: EVENING, mode: 'run', appUrl: 'https://app/', setZone, send: async (_s, p) => (sent.push(p), 'ok') });
+    await runReminders({ key: 'K', cloud: f.cloud, now: EVENING, mode: 'run', appUrl: 'https://app/', setZone, send: async (_s, p) => (sent.push(p), 'ok') });
     expect(JSON.parse(sent[0]).notification.title).toBe('🔥 Your 2-day streak is on the line');
     expect(f.histories.get(apple('A'))?.sent?.evening).toBe('2026-10-15');
   });
@@ -87,12 +92,12 @@ describe('reminder sender', () => {
     const f = fakeCloud([sub(apple('A')), sub(apple('B'), { user_id: P })], rows);
     const sent: string[] = [];
     const send = async (_s: SubRow, p: string) => (sent.push(p), 'ok' as const);
-    const dry = await runReminders({ cloud: f.cloud, now: MORNING, mode: 'dry-run', appUrl: 'https://app/', setZone, send });
+    const dry = await runReminders({ key: 'K', cloud: f.cloud, now: MORNING, mode: 'dry-run', appUrl: 'https://app/', setZone, send });
     expect(dry).toMatchObject({ due: 1, sent: 0 });
     expect(sent).toHaveLength(0);
     expect(f.histories.size).toBe(0);
     expect(f.beats).toHaveLength(0);
-    const test = await runReminders({ cloud: f.cloud, now: NOON, mode: 'test', appUrl: 'https://app/', setZone, send });
+    const test = await runReminders({ key: 'K', cloud: f.cloud, now: NOON, mode: 'test', appUrl: 'https://app/', setZone, send });
     expect(test).toMatchObject({ due: 2, sent: 2 });
     expect(JSON.parse(sent[0]).notification.title).toBe('🔔 Test reminder');
     expect(f.histories.size).toBe(0); // a test never uses up a real reminder
@@ -102,7 +107,7 @@ describe('reminder sender', () => {
     const f = fakeCloud([sub(apple('gone')), sub('https://evil.example.com/hook'), sub(apple('cfg'))], rows);
     const tried: string[] = [];
     const stats = await runReminders({
-      cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone,
+      key: 'K', cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone,
       send: async (s) => (tried.push(s.endpoint), s.endpoint.endsWith('gone') ? 'gone' : 'config'),
     });
     expect(tried).toEqual([apple('gone'), apple('cfg')]);
@@ -115,7 +120,7 @@ describe('reminder sender', () => {
     const recent = new Date(MORNING - 5 * 86_400_000).toISOString();
     const f = fakeCloud([sub(apple('old'), { updated_at: old }), sub(apple('new'), { updated_at: recent })], rows);
     const tried: string[] = [];
-    const stats = await runReminders({ cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async (s) => (tried.push(s.endpoint), 'ok') });
+    const stats = await runReminders({ key: 'K', cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async (s) => (tried.push(s.endpoint), 'ok') });
     expect(tried).toEqual([apple('new')]);
     expect(f.forgotten).toEqual([apple('old')]);
     expect(stats).toMatchObject({ gone: 1, sent: 1 });
@@ -142,7 +147,7 @@ describe('sender resilience', () => {
     const docs = f.cloud.docs;
     f.cloud.docs = async (u) => (u === 'flaky' ? Promise.reject(new Error('503')) : docs(u));
     const sent: string[] = [];
-    const stats = await runReminders({ cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async (s) => (sent.push(s.endpoint), 'ok') });
+    const stats = await runReminders({ key: 'K', cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async (s) => (sent.push(s.endpoint), 'ok') });
     expect(sent).toEqual([apple('P'), apple('A')]); // the malformed save still gets its plan
     expect(stats).toMatchObject({ devices: 3, sent: 2, failed: 1 });
     expect(f.beats).toHaveLength(1);
@@ -154,26 +159,59 @@ describe('sender resilience', () => {
   it('writes the heartbeat even when the subscription list cannot be read', async () => {
     const f = fakeCloud([], good);
     f.cloud.subscriptions = async () => Promise.reject(new Error('down'));
-    await expect(runReminders({ cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async () => 'ok' })).rejects.toThrow('down');
+    await expect(runReminders({ key: 'K', cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async () => 'ok' })).rejects.toThrow('down');
     expect(f.beats).toHaveLength(1);
   });
 
   it('drops a device made for another key, but blames the key when nothing gets through', async () => {
     const two = fakeCloud([sub(apple('old')), sub(apple('ok'))], good);
-    const s1 = await runReminders({ cloud: two.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async (s) => (s.endpoint.endsWith('old') ? 'config' : 'ok') });
+    const s1 = await runReminders({ key: 'K', cloud: two.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async (s) => (s.endpoint.endsWith('old') ? 'config' : 'ok') });
     expect(s1).toMatchObject({ sent: 1, gone: 1, config: 0 });
     expect(two.forgotten).toEqual([apple('old')]);
     const all = fakeCloud([sub(apple('a')), sub(apple('b'))], good);
-    const s2 = await runReminders({ cloud: all.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async () => 'config' });
+    const s2 = await runReminders({ key: 'K', cloud: all.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async () => 'config' });
     expect(s2).toMatchObject({ sent: 0, config: 2 });
     expect(all.forgotten).toEqual([]); // the devices are fine; the setup is not
+  });
+
+  it('once the key has worked, a lone refusal is that device made for another key: it goes, the job stays green', async () => {
+    const f = fakeCloud([sub(apple('ok')), sub(apple('old'), { prefs: { morningHour: 15, eveningHour: 20 } })], { [U]: [hero(['2026-10-14']), listRow('D'), taskRow('Read', 'D')] });
+    // run 1: the good device gets through, which proves the key
+    await runReminders({ key: 'K', cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async () => 'ok' });
+    expect(f.beats.at(-1)).toMatchObject({ keyOk: 'K' });
+    // run 2, hours later: only the old-key device is due and it is refused
+    const later = Date.UTC(2026, 9, 15, 12, 30); // 15:30 in Istanbul
+    const s2 = await runReminders({ key: 'K', cloud: f.cloud, now: later, mode: 'run', appUrl: 'https://app/', setZone, send: async () => 'config' });
+    expect(s2).toMatchObject({ sent: 0, config: 0, gone: 1 });
+    expect(f.forgotten).toEqual([apple('old')]);
+    // a new key is not proven by the old one's success: with nothing getting through, the key is blamed
+    const s3 = await runReminders({ key: 'NEW', cloud: f.cloud, now: later + 86_400_000, mode: 'run', appUrl: 'https://app/', setZone, send: async () => 'config' });
+    expect(s3).toMatchObject({ config: 1, gone: 0 });
+  });
+
+  it('stops starting sends at the deadline but still writes the heartbeat', async () => {
+    const f = fakeCloud([sub(apple('a')), sub(apple('b')), sub(apple('c'))], good);
+    let t = 0;
+    const stats = await runReminders({
+      key: 'K', cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone,
+      send: async () => ((t += 10), 'ok'), deadline: 15, clock: () => t,
+    });
+    expect(stats).toMatchObject({ sent: 2, cut: true });
+    expect(f.beats).toHaveLength(1);
+  });
+
+  it("a test message leaves everyone's icon badge alone", async () => {
+    const f = fakeCloud([sub(apple('A'))], good);
+    const sent: string[] = [];
+    await runReminders({ key: 'K', cloud: f.cloud, now: NOON, mode: 'test', appUrl: 'https://app/', setZone, send: async (_s, p) => (sent.push(p), 'ok') });
+    expect(JSON.parse(sent[0])).not.toHaveProperty('app_badge');
   });
 
   it('keeps every message well inside the 4 KB limit, whatever the quests are called', async () => {
     const long = 'Ş'.repeat(3000);
     const f = fakeCloud([sub(apple('A'))], { [U]: [hero(['2026-10-14']), listRow('D'), taskRow(long, 'D'), taskRow(long + '2', 'D')] });
     const sent: string[] = [];
-    await runReminders({ cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async (_s, p) => (sent.push(p), 'ok') });
+    await runReminders({ key: 'K', cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async (_s, p) => (sent.push(p), 'ok') });
     expect(new TextEncoder().encode(sent[0]).length).toBeLessThan(1500);
     expect(JSON.parse(sent[0]).notification.body).toMatch(/…/);
   });

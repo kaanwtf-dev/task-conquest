@@ -109,6 +109,7 @@ async function subscribe(prefs: PushPrefs): Promise<void> {
 
 /** Turns reminders off on this device (and forgets it in the cloud, when reachable). */
 export async function disablePush(): Promise<void> {
+  setIconBadge(0);
   const sub = await currentSubscription();
   if (!sub) return;
   try {

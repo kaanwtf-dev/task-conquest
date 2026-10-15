@@ -204,8 +204,11 @@ export interface Settings {
   push?: { morningHour: number; eveningHour: number; off: ('plan' | 'evening' | 'comeback' | 'party')[] };
   /** When the in-app "want reminders?" card was last answered with Not now (or the system prompt refused). */
   pushAskedAt?: number;
-  /** Reminders were turned on here (and not off): a subscription the system dropped is quietly renewed. */
-  pushWanted?: boolean;
+  /**
+   * The account that turned reminders on here (and has not turned them off or signed out): while it is
+   * signed in, a subscription the system dropped is quietly renewed. Another account never inherits it.
+   */
+  pushAccount?: string;
 }
 
 export interface HeroDock {

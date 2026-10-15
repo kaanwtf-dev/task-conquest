@@ -75,7 +75,7 @@ export function achievementEvents(before: Hero, after: Hero): { events: FxEvent[
 }
 
 /** Undead perk: one missed day per week is forgiven automatically. */
-function undeadSave(hero: Hero, now: number, cfg: TimeCfg): string[] {
+export function undeadSave(hero: Hero, now: number, cfg: TimeCfg): string[] {
   if (hero.appearance.race !== 'undead') return hero.savedDays ?? [];
   const days = new Set(streakDays(hero));
   const today = parseDateKey(todayKey(now, cfg));

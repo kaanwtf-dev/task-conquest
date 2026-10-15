@@ -3,8 +3,9 @@
 // The cloud URL and the public VAPID key come from .env.production (they are public); only the two
 // secrets come from the environment. Logs show counts only: a public repository's Actions logs are public.
 import { readFileSync } from 'node:fs';
+import { createECDH } from 'node:crypto';
 import webpush from 'web-push';
-import { runReminders, type Cloud, type Mode, type SendResult, type Sender } from '../../src/push/sender';
+import { runReminders, type Cloud, type Mode, type RunStats, type SendResult, type Sender } from '../../src/push/sender';
 import type { RemoteRow } from '../../src/sync/types';
 
 const APP_URL = process.env.APP_URL ?? 'https://kaanwtf-dev.github.io/TODOLIST/';
@@ -36,13 +37,26 @@ const mode = (process.argv[2] ?? process.env.MODE ?? 'run') as Mode;
 
 if (!['run', 'dry-run', 'test'].includes(mode)) fail(`Unknown mode "${mode}" (run, dry-run or test).`);
 if (!secret || !vapidPrivate) {
-  // not set up yet: nothing to do, and nothing to fail (the schedule runs on every fork too)
-  console.log('Reminders are not set up: add the SUPABASE_SECRET_KEY and VAPID_PRIVATE_KEY repository secrets.');
+  const msg = 'Reminders are not set up: add the SUPABASE_SECRET_KEY and VAPID_PRIVATE_KEY repository secrets.';
+  // a test run asked for is a setup check: say so loudly; scheduled runs before setup are harmless no-ops
+  if (mode === 'test') fail(msg);
+  console.log(msg);
   process.exit(0);
 }
 if (!url || !vapidPublic) fail('VITE_SUPABASE_URL or VITE_VAPID_PUBLIC_KEY is missing from .env.production.');
 if (secret.startsWith('sb_publishable_') || /"role"\s*:\s*"anon"/.test(Buffer.from(secret.split('.')[1] ?? '', 'base64').toString())) {
   fail('SUPABASE_SECRET_KEY holds the public (anon/publishable) key. It needs the secret (service_role / sb_secret_) key.');
+}
+
+// a mistyped key would fail every send without a word: check it is the private half of the app's key
+try {
+  const raw = Buffer.from(vapidPrivate, 'base64url');
+  if (raw.length !== 32 || raw.toString('base64url') !== vapidPrivate) throw new Error();
+  const ecdh = createECDH('prime256v1');
+  ecdh.setPrivateKey(raw);
+  if (ecdh.getPublicKey('base64url') !== vapidPublic) throw new Error();
+} catch {
+  fail('VAPID_PRIVATE_KEY is not the private half of VITE_VAPID_PUBLIC_KEY in .env.production. Paste only the bare key: no quotes, spaces or name.');
 }
 
 // new-style sb_secret_ keys go in apikey only; legacy service_role keys are JWTs and go in both
@@ -78,6 +92,10 @@ const DOC_COLS = 'id,kind,list_id,data,updated_at,deleted,owner';
 
 const cloud: Cloud = {
   subscriptions: () => all('push_subscriptions?select=endpoint,user_id,p256dh,auth,tz,prefs,history,updated_at&order=endpoint'),
+  async lastStats() {
+    const rows = await rest<{ stats: RunStats | null }[]>('push_status?select=stats&id=eq.1');
+    return rows?.[0]?.stats ?? null;
+  },
   // exactly what the player's app sees (as the row-level security rules allow): their own hero, and every
   // list they are a member of (their own included) with all its tasks, whoever wrote them
   async docs(userId) {
@@ -115,6 +133,12 @@ const send: Sender = async (sub, body, { ttl, topic }) => {
     vapid = webpush.getVapidHeaders(audience, APP_URL, vapidPublic, vapidPrivate, 'aes128gcm', Math.floor(Date.now() / 1000) + 12 * 3600) as Record<string, string>;
     auth.set(audience, vapid);
   }
+  try {
+    // keys no browser would make (wrong length, not a curve point) fail here, before any request: drop them
+    webpush.generateRequestDetails({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, body, { headers: vapid, contentEncoding: 'aes128gcm', TTL: ttl });
+  } catch {
+    return 'gone';
+  }
   // a busy push service (429, 5xx, no answer) gets one more try a moment later
   for (let attempt = 1; ; attempt++) {
     try {
@@ -142,15 +166,18 @@ const send: Sender = async (sub, body, { ttl, topic }) => {
   }
 };
 
+const started = Date.now();
 const stats = await runReminders({
   cloud,
   send,
-  now: Date.now(),
+  now: started,
   mode,
   appUrl: APP_URL,
+  key: vapidPublic,
+  deadline: started + 7 * 60_000, // GitHub stops the job at 10 minutes: leave room for the heartbeat
   setZone: (tz) => {
     process.env.TZ = tz; // Node re-reads it: Date then works in the player's local time
   },
 });
-console.log(`mode=${mode} devices=${stats.devices} due=${stats.due} sent=${stats.sent} gone=${stats.gone} failed=${stats.failed} config=${stats.config}`);
+console.log(`mode=${mode} devices=${stats.devices} due=${stats.due} sent=${stats.sent} gone=${stats.gone} failed=${stats.failed} config=${stats.config}${stats.cut ? ' (stopped at the time limit)' : ''}`);
 if (stats.config) fail('A push service refused the VAPID keys: check VAPID_PRIVATE_KEY matches VITE_VAPID_PUBLIC_KEY in .env.production.');

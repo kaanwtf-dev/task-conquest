@@ -12,7 +12,7 @@ grant execute on function public._expect(boolean, text) to anon, authenticated;
 -- ---------------------------------------------------------------- signed out: nothing
 set role anon;
 do $$ begin
-  perform save_push_subscription('https://web.push.apple.com/x', 'k', 'a', 'UTC', '{}');
+  perform save_push_subscription('https://web.push.apple.com/x', 'BKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBK', 'AAAAAAAAAAAAAAAAAAAAAA', 'UTC', '{}');
   raise exception 'PUSH TEST FAILED: anon saved a subscription';
 exception when insufficient_privilege then null;
 end $$;
@@ -20,24 +20,34 @@ end $$;
 -- ---------------------------------------------------------------- A saves a device
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'A', false);
-select save_push_subscription('https://web.push.apple.com/E1', 'p256', 'auth', 'Europe/Istanbul', '{"morningHour":9}');
+select save_push_subscription('https://web.push.apple.com/E1', 'BKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBK', 'AAAAAAAAAAAAAAAAAAAAAA', 'Europe/Istanbul', '{"morningHour":9}');
 select _expect((select count(*) from push_subscriptions) = 1, 'A sees own device');
 select _expect((select tz from push_subscriptions where endpoint = 'https://web.push.apple.com/E1') = 'Europe/Istanbul', 'tz saved');
 
 -- only real push services, sane sizes
 do $$ begin
-  perform save_push_subscription('https://evil.example.com/hook', 'k', 'a', 'UTC', '{}');
+  perform save_push_subscription('https://evil.example.com/hook', 'BKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBK', 'AAAAAAAAAAAAAAAAAAAAAA', 'UTC', '{}');
   raise exception 'PUSH TEST FAILED: accepted a non-push endpoint';
 exception when invalid_parameter_value then null;
 end $$;
 do $$ begin
-  perform save_push_subscription('https://web.push.apple.com.evil.com/x', 'k', 'a', 'UTC', '{}');
+  perform save_push_subscription('https://web.push.apple.com.evil.com/x', 'BKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBK', 'AAAAAAAAAAAAAAAAAAAAAA', 'UTC', '{}');
   raise exception 'PUSH TEST FAILED: accepted a look-alike host';
 exception when invalid_parameter_value then null;
 end $$;
 do $$ begin
-  perform save_push_subscription('https://fcm.googleapis.com/x', 'k', 'a', 'UTC', '[]');
+  perform save_push_subscription('https://fcm.googleapis.com/x', 'BKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBK', 'AAAAAAAAAAAAAAAAAAAAAA', 'UTC', '[]');
   raise exception 'PUSH TEST FAILED: accepted non-object prefs';
+exception when invalid_parameter_value then null;
+end $$;
+do $$ begin
+  perform save_push_subscription('https://fcm.googleapis.com/x', 'x', 'AAAAAAAAAAAAAAAAAAAAAA', 'UTC', '{}');
+  raise exception 'PUSH TEST FAILED: accepted a junk key';
+exception when invalid_parameter_value then null;
+end $$;
+do $$ begin
+  perform save_push_subscription('https://fcm.googleapis.com/x', 'BKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBK', 'y', 'UTC', '{}');
+  raise exception 'PUSH TEST FAILED: accepted a junk auth secret';
 exception when invalid_parameter_value then null;
 end $$;
 
@@ -66,7 +76,7 @@ reset role;
 select _expect((select count(*) from push_subscriptions) = 1, 'B could not delete A''s device');
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'B', false);
-select save_push_subscription('https://web.push.apple.com/E1', 'p2', 'a2', 'UTC', '{}');
+select save_push_subscription('https://web.push.apple.com/E1', 'BKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBK', 'AAAAAAAAAAAAAAAAAAAAAA', 'UTC', '{}');
 select _expect((select count(*) from push_subscriptions) = 1, 'B now owns the device');
 reset role;
 select _expect((select user_id from push_subscriptions where endpoint = 'https://web.push.apple.com/E1') = :'B'::uuid, 'moved to B');
@@ -78,7 +88,7 @@ reset role;
 update push_subscriptions set history = '{"comebacks":2}' where endpoint = 'https://web.push.apple.com/E1';
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'B', false);
-select save_push_subscription('https://web.push.apple.com/E1', 'p3', 'a3', 'Asia/Tokyo', '{"off":["party"]}');
+select save_push_subscription('https://web.push.apple.com/E1', 'BKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBK', 'AAAAAAAAAAAAAAAAAAAAAA', 'Asia/Tokyo', '{"off":["party"]}');
 reset role;
 select _expect((select history->>'comebacks' from push_subscriptions where endpoint = 'https://web.push.apple.com/E1') = '2', 'own re-save keeps history');
 set role authenticated;
@@ -87,7 +97,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', :'A', false);
 do $$ begin
   for i in 1..12 loop
-    perform save_push_subscription('https://fcm.googleapis.com/fcm/send/D' || i, 'k', 'a', 'UTC', '{}');
+    perform save_push_subscription('https://fcm.googleapis.com/fcm/send/D' || i, 'BKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBKxyzBK', 'AAAAAAAAAAAAAAAAAAAAAA', 'UTC', '{}');
   end loop;
 end $$;
 select _expect((select count(*) from push_subscriptions) = 10, 'capped at 10 devices');

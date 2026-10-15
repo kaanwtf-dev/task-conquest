@@ -1,6 +1,6 @@
 // Reminder notifications: the Options section, the one-time "want reminders?" card, and the bits that
 // keep the home-screen badge and the cloud copy of the reminder settings current.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../../state/store';
 import { fx } from '../../state/fx';
 import { sum } from '../../game/progression';
@@ -64,7 +64,7 @@ function useSubscribed(): [boolean | null, (on: boolean) => void] {
 }
 
 /** Must be called straight from a tap: the permission prompt needs it (see enablePush). */
-async function turnOn(): Promise<boolean> {
+async function turnOn(account: string): Promise<boolean> {
   try {
     const r = await enablePush(pushPrefs(useStore.getState().settings));
     unlockAudio();
@@ -79,7 +79,7 @@ async function turnOn(): Promise<boolean> {
       );
       return false;
     }
-    useStore.getState().updateSettings({ pushWanted: true });
+    useStore.getState().updateSettings({ pushAccount: account });
     sfx.loot();
     fx.emit({ type: 'toast', text: 'REMINDERS ON', small: 'Your hero will nudge you, never more than twice a day.' });
     return true;
@@ -150,17 +150,18 @@ export function RemindersOption() {
     <div className="reminders">
       <div className="reminders-head">
         <span>{on ? 'Reminders are on.' : 'A morning plan and an evening streak saver from your hero, never more than twice a day.'}</span>
-        {!note && on !== null && (
+        {/* turning off always works, signed in or not; turning on needs everything in place */}
+        {(on || (!note && on !== null && userId)) && (
           <button
             className={`btn small ${on ? 'ghost' : ''}`}
-            disabled={busy || userId === undefined}
+            disabled={busy}
             onClick={async () => {
               setBusy(true);
               if (on) {
-                update({ pushWanted: false });
+                update({ pushAccount: undefined });
                 await disablePush();
                 setOn(false);
-              } else setOn(await turnOn());
+              } else if (userId) setOn(await turnOn(userId));
               setBusy(false);
             }}
           >
@@ -169,7 +170,8 @@ export function RemindersOption() {
         )}
       </div>
       {note && <div className="muted small reminders-note">{note}</div>}
-      {on && (
+      {/* settings only reach the reminder service while signed in */}
+      {on && userId && (
         <>
           <div className="reminders-row">
             <span className="muted small reminders-status">
@@ -249,7 +251,7 @@ export function PushInvite() {
           disabled={busy}
           onClick={async () => {
             setBusy(true);
-            setOn(await turnOn());
+            setOn(await turnOn(userId));
             setBusy(false);
           }}
         >
@@ -270,8 +272,8 @@ export function PushInvite() {
 }
 
 /**
- * No UI: keeps the home-screen badge at today's quests left, and the cloud's copy of this device's reminder
- * settings (times, kinds, day start, time zone) current while reminders are on.
+ * No UI: keeps the home-screen badge at today's quests left (while reminders are on), and the cloud's copy
+ * of this device's reminder settings (times, kinds, day start, time zone) current.
  */
 export function PushKeeper() {
   const lists = useStore((s) => s.lists);
@@ -279,25 +281,34 @@ export function PushKeeper() {
   const settings = useStore((s) => s.settings);
   const userId = useSignedIn();
   const now = useNow(60_000);
-  const day = Math.floor(now / 3_600_000); // re-counted at least hourly (a new day resets the dailies)
+  const hour = Math.floor(now / 3_600_000); // re-counted at least hourly (a new day resets the dailies)
+  const account = settings.pushAccount;
+  const mine = !!userId && account === userId;
 
   useEffect(() => {
-    setIconBadge(todayRemaining(todaySections(lists, tasks, Date.now(), settings)));
-  }, [lists, tasks, settings.dayStartHour, settings.weekStart, day]);
+    if (mine) setIconBadge(todayRemaining(todaySections(lists, tasks, Date.now(), settings)));
+  }, [mine, lists, tasks, settings.dayStartHour, settings.weekStart, hour]);
+
+  // the session ended without a sign-out (expired or revoked): this device stops getting that account's
+  // reminders; signing back in as it brings them back
+  const was = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (was.current && userId === null) void disablePush().catch(() => undefined);
+    if (userId !== undefined) was.current = userId;
+  }, [userId]);
 
   // every launch (and every settings change) re-saves the device: its time zone may have changed, the
   // sender prunes devices it has not heard from in months, and iOS may have dropped the subscription
   const key = JSON.stringify(pushPrefs(settings));
-  const wanted = !!settings.pushWanted;
   useEffect(() => {
     if (!userId) return;
     const t = setTimeout(() => {
       const prefs = JSON.parse(key);
-      void (wanted ? renewPush(prefs) : Promise.resolve(false))
-        .then((renewed) => (renewed ? undefined : updatePushPrefs(prefs)))
+      void (mine ? renewPush(prefs) : Promise.resolve(false))
+        .then((renewed) => (renewed || !mine ? undefined : updatePushPrefs(prefs)))
         .catch(() => undefined);
     }, 1500);
     return () => clearTimeout(t);
-  }, [key, userId, wanted]);
+  }, [key, userId, mine]);
   return null;
 }
