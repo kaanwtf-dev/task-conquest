@@ -131,6 +131,54 @@ describe('reminder sender', () => {
   });
 });
 
+describe('sender resilience', () => {
+  const good = { [U]: [hero(['2026-10-14']), listRow('D'), taskRow('Read', 'D')] };
+
+  it("one player's broken save or a cloud hiccup never costs everyone else their reminder", async () => {
+    const bad = { ...hero(['2026-10-14']), id: `hero:${P}`, owner: P };
+    bad.data = { ...bad.data, activeDays: [1, null, '2026-10-14'], savedDays: 7, name: 'Bob' };
+    const rows = { ...good, [P]: [bad, listRow('E', P), { ...taskRow('Walk', 'E'), owner: P }] };
+    const f = fakeCloud([sub(apple('P'), { user_id: P }), sub(apple('X'), { user_id: 'flaky' }), sub(apple('A'))], rows);
+    const docs = f.cloud.docs;
+    f.cloud.docs = async (u) => (u === 'flaky' ? Promise.reject(new Error('503')) : docs(u));
+    const sent: string[] = [];
+    const stats = await runReminders({ cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async (s) => (sent.push(s.endpoint), 'ok') });
+    expect(sent).toEqual([apple('P'), apple('A')]); // the malformed save still gets its plan
+    expect(stats).toMatchObject({ devices: 3, sent: 2, failed: 1 });
+    expect(f.beats).toHaveLength(1);
+    // a hero the app itself would not accept is simply skipped
+    bad.data = { ...bad.data, name: 42 };
+    expect(stateFromRows(rows[P], P).hero).toBeNull();
+  });
+
+  it('writes the heartbeat even when the subscription list cannot be read', async () => {
+    const f = fakeCloud([], good);
+    f.cloud.subscriptions = async () => Promise.reject(new Error('down'));
+    await expect(runReminders({ cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async () => 'ok' })).rejects.toThrow('down');
+    expect(f.beats).toHaveLength(1);
+  });
+
+  it('drops a device made for another key, but blames the key when nothing gets through', async () => {
+    const two = fakeCloud([sub(apple('old')), sub(apple('ok'))], good);
+    const s1 = await runReminders({ cloud: two.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async (s) => (s.endpoint.endsWith('old') ? 'config' : 'ok') });
+    expect(s1).toMatchObject({ sent: 1, gone: 1, config: 0 });
+    expect(two.forgotten).toEqual([apple('old')]);
+    const all = fakeCloud([sub(apple('a')), sub(apple('b'))], good);
+    const s2 = await runReminders({ cloud: all.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async () => 'config' });
+    expect(s2).toMatchObject({ sent: 0, config: 2 });
+    expect(all.forgotten).toEqual([]); // the devices are fine; the setup is not
+  });
+
+  it('keeps every message well inside the 4 KB limit, whatever the quests are called', async () => {
+    const long = 'Ş'.repeat(3000);
+    const f = fakeCloud([sub(apple('A'))], { [U]: [hero(['2026-10-14']), listRow('D'), taskRow(long, 'D'), taskRow(long + '2', 'D')] });
+    const sent: string[] = [];
+    await runReminders({ cloud: f.cloud, now: MORNING, mode: 'run', appUrl: 'https://app/', setZone, send: async (_s, p) => (sent.push(p), 'ok') });
+    expect(new TextEncoder().encode(sent[0]).length).toBeLessThan(1500);
+    expect(JSON.parse(sent[0]).notification.body).toMatch(/…/);
+  });
+});
+
 describe('sender input hygiene', () => {
   it('falls back to defaults for anything malformed', () => {
     expect(sanitizePrefs({ morningHour: 7, eveningHour: 30, off: ['party', 'nope'], dayStartHour: 4, weekStart: '1' })).toEqual({

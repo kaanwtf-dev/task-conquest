@@ -62,6 +62,11 @@ export function slotAt(now: number, prefs: PushPrefs): Slot | null {
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** Player-written text (quest titles, hero names) shortened to fit a notification line. */
+const clip = (s: unknown, max: number) => {
+  const chars = [...String(s ?? '')];
+  return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : chars.join('');
+};
 
 /** Days between two day keys (b - a). */
 function daysBetween(a: string, b: string): number {
@@ -92,7 +97,7 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
   const playedToday = days.includes(today);
   const lastDay = days.reduce((a, d) => (d > a ? d : a), '');
   const idle = lastDay ? daysBetween(lastDay, today) : Infinity;
-  const name = hero.name;
+  const name = clip(hero.name, 24); // for display; comparisons use hero.name
 
   if (slot === 'morning') {
     if (on('comeback') && idle >= IDLE_DAYS && idle !== Infinity && (history.comebacks ?? 0) < MAX_COMEBACKS) {
@@ -111,7 +116,7 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
       .slice()
       .sort((a, b) => b.difficulty - a.difficulty)
       .slice(0, 2)
-      .map((t) => t.title);
+      .map((t) => clip(t.title, 48));
     const more = left.length > named.length ? ` +${left.length - named.length} more` : '';
     return {
       kind: 'plan',
@@ -139,7 +144,7 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
     const byWho = new Map<string, number>();
     for (const t of live) {
       const l = lists.get(t.listId)!;
-      if (!l.shared || !t.doneBy || t.doneBy === name || !t.doneAt) continue;
+      if (!l.shared || !t.doneBy || t.doneBy === hero.name || !t.doneAt) continue;
       if (todayKey(t.doneAt, cfg) !== today) continue;
       byWho.set(t.doneBy, (byWho.get(t.doneBy) ?? 0) + 1);
     }
@@ -147,7 +152,7 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
     if (top) {
       return {
         kind: 'party',
-        title: `👀 ${top[0]} finished ${plural(top[1], 'quest')} today`,
+        title: `👀 ${clip(top[0], 24)} finished ${plural(top[1], 'quest')} today`,
         body: `Your move, ${name}.${left.length ? ` ${plural(left.length, 'quest')} left for you.` : ''}`,
         tag: 'questlog-evening',
         badge,
@@ -162,7 +167,7 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
     return {
       kind: 'dailies',
       title: `🌙 ${plural(dailies.length, 'daily quest')} left`,
-      body: `${dailies[0].title}${dailies.length > 1 ? ` and ${plural(dailies.length - 1, 'other')}` : ''} reset when the day ends.`,
+      body: `${clip(dailies[0].title, 48)}${dailies.length > 1 ? ` and ${plural(dailies.length - 1, 'other')}` : ''} reset when the day ends.`,
       tag: 'questlog-evening',
       badge,
     };

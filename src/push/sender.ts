@@ -103,11 +103,16 @@ export function validZone(tz: unknown): string {
 /** The player's save as the app would see it after syncing: hero, lists and tasks (others are not needed). */
 export function stateFromRows(rows: RemoteRow[], userId: string): NudgeState {
   const state: NudgeState = { hero: null, lists: {}, tasks: {} };
+  // a save is written by its player's devices, so anything in it may be malformed: never trust its shape
+  const days = (v: unknown) => (Array.isArray(v) ? v.filter((d): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) : []);
   for (const row of rows) {
     if (row.deleted) continue;
     const m = fromRow(row, userId);
     if (!m || m.doc.deleted) continue;
-    if (m.kind === 'hero') state.hero = m.doc as Hero;
+    if (m.kind === 'hero') {
+      const h = m.doc as Hero;
+      state.hero = { ...h, name: typeof h.name === 'string' ? h.name : 'adventurer', activeDays: days(h.activeDays), savedDays: days(h.savedDays) };
+    }
     else if (m.kind === 'list') state.lists[m.doc.id] = m.doc as TaskList;
     else if (m.kind === 'task') state.tasks[m.doc.id] = m.doc as Task;
   }
@@ -120,10 +125,12 @@ export function stateFromRows(rows: RemoteRow[], userId: string): NudgeState {
  * systems and other browsers. WebKit reads app_badge from the top level only.
  */
 export function payload(n: Pick<Nudge, 'title' | 'body' | 'tag' | 'badge'>, appUrl: string): string {
+  // push services refuse anything over 4 KB (encrypted): keep well inside it whatever players named things
+  const clip = (s: string, max: number) => ([...String(s)].length > max ? `${[...String(s)].slice(0, max - 1).join('')}…` : String(s));
   return JSON.stringify({
     web_push: 8030,
-    notification: { title: n.title, body: n.body, navigate: appUrl, tag: n.tag, lang: 'en-US', dir: 'ltr' },
-    app_badge: Math.max(0, Math.min(999, Math.round(n.badge))),
+    notification: { title: clip(n.title, 120), body: clip(n.body, 400), navigate: appUrl, tag: n.tag, lang: 'en-US', dir: 'ltr' },
+    app_badge: Math.max(0, Math.min(999, Math.round(Number(n.badge) || 0))),
   });
 }
 
@@ -144,25 +151,47 @@ export async function runReminders(opts: {
 }): Promise<RunStats> {
   const { cloud, send, now, mode, appUrl, setZone } = opts;
   const stats: RunStats = { devices: 0, due: 0, sent: 0, gone: 0, failed: 0, config: 0 };
-  const subs = await cloud.subscriptions();
-  stats.devices = subs.length;
   const saves = new Map<string, Promise<NudgeState>>();
   const saveOf = (userId: string) => {
     let s = saves.get(userId);
     if (!s) saves.set(userId, (s = cloud.docs(userId).then((rows) => stateFromRows(rows, userId))));
     return s;
   };
+  // devices whose push service refused our signing key: either this one subscription was made for another
+  // key (it can never work: drop it), or, when nothing at all got through, the key itself is wrong
+  const refused: SubRow[] = [];
 
-  for (const sub of subs) {
+  try {
+    const subs = await cloud.subscriptions();
+    stats.devices = subs.length;
+    for (const sub of subs) {
+      try {
+        await device(sub);
+      } catch {
+        stats.failed++; // one broken save or a cloud hiccup must not cost everyone else their reminder
+      }
+    }
+    if (stats.sent > 0 || mode === 'dry-run') {
+      for (const sub of refused) {
+        stats.gone++;
+        await cloud.forget(sub.endpoint).catch(() => undefined);
+      }
+    } else stats.config = refused.length;
+  } finally {
+    if (mode !== 'dry-run') await cloud.heartbeat(stats).catch(() => undefined);
+  }
+  return stats;
+
+  async function device(sub: SubRow): Promise<void> {
     if (!PUSH_ENDPOINT.test(sub.endpoint)) {
       stats.failed++;
-      continue;
+      return;
     }
     const seen = sub.updated_at ? Date.parse(sub.updated_at) : NaN;
     if (mode === 'run' && now - seen > STALE_MS) {
       stats.gone++;
       await cloud.forget(sub.endpoint);
-      continue;
+      return;
     }
     setZone(validZone(sub.tz));
     const prefs = sanitizePrefs(sub.prefs);
@@ -174,7 +203,7 @@ export async function runReminders(opts: {
       topic = 'test';
     } else {
       const slot = slotAt(now, prefs);
-      if (!slot) continue;
+      if (!slot) return;
       const state = await saveOf(sub.user_id);
       setZone(validZone(sub.tz)); // another device's turn may have run while the save loaded
       nudge = pickNudge(state, now, slot, prefs, history);
@@ -183,19 +212,17 @@ export async function runReminders(opts: {
       // the slot is claimed before sending: a send that fails is a missed reminder, never a doubled one
       if (mode === 'run' && JSON.stringify(next) !== JSON.stringify(history)) await cloud.saveHistory(sub.endpoint, next);
     }
-    if (!nudge) continue;
+    if (!nudge) return;
     stats.due++;
-    if (mode === 'dry-run') continue;
+    if (mode === 'dry-run') return;
     const r = await send(sub, payload(nudge, appUrl), { ttl: mode === 'test' ? 600 : TTL_SECONDS, topic });
     if (r === 'ok') stats.sent++;
     else if (r === 'gone') {
       stats.gone++;
       await cloud.forget(sub.endpoint);
-    } else if (r === 'config') stats.config++;
+    } else if (r === 'config') refused.push(sub);
     else stats.failed++;
   }
-  if (mode !== 'dry-run') await cloud.heartbeat(stats);
-  return stats;
 }
 
 export type { NudgeKind };

@@ -55,24 +55,41 @@ async function rest<T>(path: string, init: RequestInit = {}): Promise<T> {
     const hint = res.status === 404 ? ' (has the latest supabase/schema.sql been run?)' : res.status === 401 ? ' (check SUPABASE_SECRET_KEY)' : '';
     throw new Error(`Supabase ${init.method ?? 'GET'} ${path.split('?')[0]}: HTTP ${res.status}${hint}`);
   }
-  return (res.status === 204 ? null : await res.json()) as T;
+  // writes with Prefer: return=minimal answer 201/204 with an empty body
+  const text = await res.text();
+  return (text ? JSON.parse(text) : null) as T;
 }
+
+const PAGE = 1000; // PostgREST returns at most this many rows per request
+async function all<T>(path: string): Promise<T[]> {
+  const out: T[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const rows = (await rest<T[]>(`${path}&limit=${PAGE}&offset=${offset}`)) ?? [];
+    out.push(...rows);
+    if (rows.length < PAGE) return out;
+  }
+}
+
+/** A PostgREST in.() filter; ids are client-chosen text, so quotes and backslashes are escaped, not dropped. */
+const inList = (ids: string[]) => `in.(${ids.map((id) => `"${id.replace(/["\\]/g, '\\$&')}"`).join(',')})`;
 
 const enc = encodeURIComponent;
 const DOC_COLS = 'id,kind,list_id,data,updated_at,deleted,owner';
 
 const cloud: Cloud = {
-  subscriptions: () => rest('push_subscriptions?select=endpoint,user_id,p256dh,auth,tz,prefs,history,updated_at'),
+  subscriptions: () => all('push_subscriptions?select=endpoint,user_id,p256dh,auth,tz,prefs,history,updated_at&order=endpoint'),
+  // exactly what the player's app sees (as the row-level security rules allow): their own hero, and every
+  // list they are a member of (their own included) with all its tasks, whoever wrote them
   async docs(userId) {
-    const own = await rest<RemoteRow[]>(`docs?select=${DOC_COLS}&owner=eq.${enc(userId)}&deleted=is.false&kind=in.(hero,list,task)`);
-    const member = await rest<{ list_id: string }[]>(`list_members?select=list_id&user_id=eq.${enc(userId)}`);
-    const ownLists = new Set(own.filter((r) => r.kind === 'list').map((r) => r.id));
-    const party = member.map((m) => m.list_id).filter((id) => !ownLists.has(id));
-    if (!party.length) return own;
-    const quoted = party.map((id) => `"${id.replace(/["\\]/g, '')}"`).join(',');
-    const shared = await rest<RemoteRow[]>(`docs?select=${DOC_COLS}&list_id=in.(${enc(quoted)})&deleted=is.false&kind=in.(list,task)`);
-    const seen = new Set(own.map((r) => r.id));
-    return [...own, ...shared.filter((r) => !seen.has(r.id))];
+    const hero = (await rest<RemoteRow[]>(`docs?select=${DOC_COLS}&id=eq.${enc(`hero:${userId}`)}&owner=eq.${enc(userId)}&deleted=is.false`)) ?? [];
+    const lists = (await all<{ list_id: string }>(`list_members?select=list_id&user_id=eq.${enc(userId)}&order=list_id`)).map((m) => m.list_id);
+    const member = new Set(lists);
+    const rows: RemoteRow[] = [];
+    for (let i = 0; i < lists.length; i += 40) {
+      const chunk = lists.slice(i, i + 40); // keeps each URL short
+      rows.push(...(await all<RemoteRow>(`docs?select=${DOC_COLS}&list_id=${enc(inList(chunk))}&deleted=is.false&kind=in.(list,task)&order=id`)));
+    }
+    return [...hero, ...rows.filter((r) => r.list_id !== null && member.has(r.list_id))];
   },
   async saveHistory(endpoint, history) {
     await rest(`push_subscriptions?endpoint=eq.${enc(endpoint)}`, { method: 'PATCH', body: JSON.stringify({ history }), headers: { Prefer: 'return=minimal' } });

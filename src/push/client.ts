@@ -82,17 +82,23 @@ export async function enablePush(prefs: PushPrefs): Promise<'on' | 'denied'> {
  * gone (iOS drops it after a reinstall or an OS hiccup and never says so). Needs no tap once allowed.
  */
 export async function renewPush(prefs: PushPrefs): Promise<boolean> {
-  if (pushSupport() !== 'ok' || pushPermission() !== 'granted' || (await currentSubscription())) return false;
-  await subscribe(prefs);
+  if (pushSupport() !== 'ok' || pushPermission() !== 'granted') return false;
+  const sub = await currentSubscription();
+  if (sub && sameKey(sub.options.applicationServerKey)) return false;
+  await subscribe(prefs); // none, or one made for another sender key (which can never be delivered)
   return true;
 }
+
+const sameKey = (a: ArrayBuffer | null | undefined) => {
+  const key = keyBytes(VAPID);
+  return !!a && a.byteLength === key.length && new Uint8Array(a).every((x, i) => x === key[i]);
+};
 
 async function subscribe(prefs: PushPrefs): Promise<void> {
   const reg = await timeout(navigator.serviceWorker.ready, 10_000, 'The app is still installing. Try again in a moment.');
   let sub = await reg.pushManager.getSubscription();
   const key = keyBytes(VAPID);
-  const same = (a: ArrayBuffer | null | undefined) => !!a && new Uint8Array(a).every((x, i) => x === key[i]) && a.byteLength === key.length;
-  if (sub && !same(sub.options.applicationServerKey)) {
+  if (sub && !sameKey(sub.options.applicationServerKey)) {
     // made for another sender key: it cannot be reused
     await sub.unsubscribe();
     sub = null;

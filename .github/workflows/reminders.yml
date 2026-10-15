@@ -49,7 +49,7 @@ jobs:
       # GitHub switches off scheduled workflows in repositories without activity for 60 days; re-enabling
       # it once a day resets that clock, so reminders keep coming even when nobody commits.
       - name: Keep the schedule on
-        if: github.event_name == 'schedule'
+        if: always() && github.event_name == 'schedule'
         run: |
           if [ "$(date -u +%H)" = "03" ] && [ "$(date -u +%M)" -lt 30 ]; then
             gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/reminders.yml/enable"
