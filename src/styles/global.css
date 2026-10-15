@@ -2172,3 +2172,64 @@ canvas.px {
   text-align: center;
   color: var(--muted);
 }
+
+/* ---------- reminder notifications ---------- */
+.reminders {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.reminders-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+.reminders-head span {
+  flex: 1;
+}
+.reminders-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.reminders-row > .muted {
+  width: 62px;
+}
+.reminders-row > .reminders-status {
+  width: auto;
+  flex: 1;
+  min-width: 160px;
+}
+.push-invite {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.push-invite-icon {
+  font-size: 26px;
+  flex: none;
+}
+.push-invite-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 15px;
+  line-height: 1.25;
+}
+.push-invite-text span {
+  color: var(--muted);
+  font-size: 14px;
+}
+.push-invite-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+}

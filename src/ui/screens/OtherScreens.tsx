@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { RemindersOption } from '../components/Reminders';
 import { useStore, heroStats, isForeignList, LIST_TYPE_INFO } from '../../state/store';
 import { SKILLS } from '../../game/catalog';
 import { iconFor } from '../../pixel/iconGen';
@@ -98,6 +99,9 @@ export function SettingsScreen() {
               {d === 1 ? 'Monday' : 'Sunday'}
             </button>
           ))}
+        </Opt>
+        <Opt label="Reminders (notifications)">
+          <RemindersOption />
         </Opt>
         <Opt label="New here?">
           <button className="pill" onClick={() => (sfx.tick(), set({ introSeen: false }))}>

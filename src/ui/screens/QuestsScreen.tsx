@@ -25,6 +25,7 @@ import TaskEditSheet from './TaskEditSheet';
 import { todaySections } from '../../state/today';
 import BossBar from '../components/BossBar';
 import PartyStrip from '../components/PartyStrip';
+import { PushInvite } from '../components/Reminders';
 import { ListSheet } from './OtherScreens';
 import { takeOffList } from '../groceries';
 
@@ -81,6 +82,7 @@ export default function QuestsScreen() {
       {list.shared && <PartyStrip list={list} />}
 
       <QuickAdd list={list} />
+      <PushInvite />
 
       {list.type === 'supply' ? (
         <SupplyView list={list} tasks={tasks} onEdit={setEditTask} />
@@ -140,6 +142,7 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
         }
         dueToday
       />
+      <PushInvite />
       {overdue.length + dueToday.length + routine.length + week.length === 0 && (
         <div className="win tasks">
           <div className="empty">Nothing due today. Go touch some grass, adventurer.</div>

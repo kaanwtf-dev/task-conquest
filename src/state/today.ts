@@ -1,6 +1,6 @@
 // Single source of truth for the cross-list "Today" view and its badge count.
-import type { Settings, Task, TaskList } from '../core/types';
-import { isActiveToday, isDone, todayKey } from '../core/time';
+import type { Task, TaskList } from '../core/types';
+import { isActiveToday, isDone, todayKey, type TimeCfg } from '../core/time';
 
 export interface TodaySections {
   overdue: Task[];
@@ -13,7 +13,7 @@ export interface TodaySections {
 const ROUTINE = new Set(['daily', 'days', 'interval']);
 const PERIODIC = new Set(['weekly', 'monthly']);
 
-export function todaySections(lists: Record<string, TaskList>, tasks: Record<string, Task>, now: number, cfg: Settings): TodaySections {
+export function todaySections(lists: Record<string, TaskList>, tasks: Record<string, Task>, now: number, cfg: TimeCfg): TodaySections {
   const today = todayKey(now, cfg);
   const live = new Set(Object.values(lists).filter((l) => !l.deleted && l.type !== 'supply').map((l) => l.id));
   const all = Object.values(tasks).filter((t) => !t.deleted && live.has(t.listId));

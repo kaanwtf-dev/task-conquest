@@ -289,3 +289,91 @@ begin
     end if;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------- reminder notifications
+-- One row per device that turned reminders on. The app saves it through save_push_subscription(); the
+-- scheduled sender (scripts/push) reads it with the service role and keeps `history` (what went out when).
+
+create table if not exists public.push_subscriptions (
+  endpoint text primary key,
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  p256dh text not null,
+  auth text not null,
+  tz text not null default 'UTC',
+  prefs jsonb not null default '{}'::jsonb,
+  history jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists push_subscriptions_user_idx on public.push_subscriptions (user_id);
+
+alter table public.push_subscriptions enable row level security;
+
+drop policy if exists "push: read own" on public.push_subscriptions;
+create policy "push: read own" on public.push_subscriptions for select to authenticated
+  using (user_id = (select auth.uid()));
+
+drop policy if exists "push: delete own" on public.push_subscriptions;
+create policy "push: delete own" on public.push_subscriptions for delete to authenticated
+  using (user_id = (select auth.uid()));
+
+revoke all on public.push_subscriptions from anon, authenticated;
+grant select, delete on public.push_subscriptions to authenticated;
+grant all on public.push_subscriptions to service_role;
+
+-- Save (or move to the signed-in player) this device's subscription and its reminder settings.
+-- Endpoints must belong to a known push service: the sender posts to them.
+create or replace function public.save_push_subscription(p_endpoint text, p_p256dh text, p_auth text, p_tz text, p_prefs jsonb)
+returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if auth.uid() is null then
+    raise exception 'sign in first' using errcode = '42501';
+  end if;
+  if p_endpoint is null or length(p_endpoint) > 1024
+     or p_endpoint !~ '^https://(web\.push\.apple\.com|fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|[a-z0-9-]+\.notify\.windows\.com)/' then
+    raise exception 'not a push service endpoint' using errcode = '22023';
+  end if;
+  if coalesce(length(p_p256dh), 0) not between 1 and 200 or coalesce(length(p_auth), 0) not between 1 and 100
+     or coalesce(length(p_tz), 0) not between 1 and 64 or pg_column_size(p_prefs) > 4096
+     or jsonb_typeof(p_prefs) is distinct from 'object' then
+    raise exception 'invalid subscription' using errcode = '22023';
+  end if;
+  insert into public.push_subscriptions as s (endpoint, user_id, p256dh, auth, tz, prefs, updated_at)
+  values (p_endpoint, auth.uid(), p_p256dh, p_auth, p_tz, p_prefs, clock_timestamp())
+  on conflict (endpoint) do update set
+    user_id = excluded.user_id,
+    p256dh = excluded.p256dh,
+    auth = excluded.auth,
+    tz = excluded.tz,
+    prefs = excluded.prefs,
+    -- another player signing in on this device starts with a clean slate
+    history = case when s.user_id = excluded.user_id then s.history else '{}'::jsonb end,
+    updated_at = clock_timestamp();
+  -- a handful of devices per player is plenty; the oldest ones go
+  delete from public.push_subscriptions p
+  where p.user_id = auth.uid() and p.endpoint in (
+    select q.endpoint from public.push_subscriptions q
+    where q.user_id = auth.uid() order by q.updated_at desc offset 10
+  );
+end $$;
+
+revoke execute on function public.save_push_subscription(text, text, text, text, jsonb) from public, anon;
+grant execute on function public.save_push_subscription(text, text, text, text, jsonb) to authenticated;
+
+-- When the reminder sender last ran (Options shows it, so a stalled schedule gets noticed).
+create table if not exists public.push_status (
+  id int primary key default 1 check (id = 1),
+  last_run timestamptz,
+  stats jsonb
+);
+alter table public.push_status enable row level security;
+revoke all on public.push_status from anon, authenticated;
+grant all on public.push_status to service_role;
+
+create or replace function public.reminders_last_run() returns timestamptz
+language sql stable security definer set search_path = '' as $$
+  select s.last_run from public.push_status s where s.id = 1;
+$$;
+revoke execute on function public.reminders_last_run() from public, anon;
+grant execute on function public.reminders_last_run() to authenticated;

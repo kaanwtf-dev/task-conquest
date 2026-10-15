@@ -47,6 +47,11 @@ It is an installable web app (PWA) that works offline:
 - Share lists (groceries, chores…) with friends and family through an invite code or link. Members appear as their heroes, checks show up instantly, and whoever completes a quest gets the XP.
 - Setup guide: [docs/SYNC_SETUP.md](docs/SYNC_SETUP.md)
 
+**Reminders (optional)**
+- Signed-in players can turn on up to two reminder notifications a day: a morning plan, and an evening streak saver or party update. On an iPhone this needs the Home Screen app.
+- The home-screen icon shows how many quests are left today.
+- They are sent by a free scheduled GitHub Actions job: [docs/REMINDERS_SETUP.md](docs/REMINDERS_SETUP.md)
+
 ## Hosting it (GitHub Pages)
 
 The workflow in `.github/workflows/deploy.yml` builds and publishes the app on every push to `main`. One-time setup: repository **Settings → Pages → Source: GitHub Actions**. The cloud (Supabase) settings are built in from `.env.production`, so everyone who opens the site is connected without entering anything; repository secrets `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (set both) override them. **Forks:** that file points at this repository owner's project; put your own values in it, or delete it so players can enter a cloud in the Party tab.

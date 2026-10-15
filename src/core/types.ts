@@ -200,6 +200,12 @@ export interface Settings {
   introSeen?: boolean;
   /** Reward pop-ups stay until cleared (default), or hide by themselves after a few seconds. */
   popups?: 'stay' | 'auto';
+  /** Reminder notifications: when they go out and which kinds are off (on/off is the device's subscription). */
+  push?: { morningHour: number; eveningHour: number; off: ('plan' | 'evening' | 'comeback' | 'party')[] };
+  /** When the in-app "want reminders?" card was last answered with Not now (or the system prompt refused). */
+  pushAskedAt?: number;
+  /** Reminders were turned on here (and not off): a subscription the system dropped is quietly renewed. */
+  pushWanted?: boolean;
 }
 
 export interface HeroDock {

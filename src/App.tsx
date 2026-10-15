@@ -5,6 +5,7 @@ import { useMedia, themeStyle } from './ui/components/common';
 import Effects from './ui/components/Effects';
 import UpdateBanner from './ui/components/UpdateBanner';
 import UndoBar from './ui/components/UndoBar';
+import { PushKeeper } from './ui/components/Reminders';
 import { playMusic, setMusicVolume, stopMusic } from './audio/music';
 import { setSfxVolume } from './audio/sfx';
 import HeroStage from './ui/stage/HeroStage';
@@ -123,6 +124,7 @@ export default function App() {
       <Effects />
       <UpdateBanner />
       <UndoBar />
+      <PushKeeper />
       {!introSeen && <Intro />}
       {newList && <ListSheet onClose={() => setNewList(false)} />}
     </div>

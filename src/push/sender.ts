@@ -1,0 +1,201 @@
+// The scheduled reminder sender's logic; scripts/push/send.ts wires it to the cloud and the push services.
+// For each device with reminders on: is it one of that player's reminder hours (in their own time zone),
+// and does their save give the reminder something worth saying? Then it goes out, once per slot per day.
+// Nothing here logs player data: the GitHub Actions logs of a public repository are public.
+import type { Hero, Task, TaskList } from '../core/types';
+import { fromRow } from '../sync/engine';
+import type { RemoteRow } from '../sync/types';
+import {
+  DEFAULT_PUSH_PREFS,
+  NUDGE_KINDS,
+  afterSlot,
+  pickNudge,
+  slotAt,
+  type Nudge,
+  type NudgeKind,
+  type NudgeState,
+  type PushHistory,
+  type PushPrefs,
+} from './nudges';
+
+export interface SubRow {
+  endpoint: string;
+  user_id: string;
+  p256dh: string;
+  auth: string;
+  tz: string;
+  prefs: unknown;
+  history: unknown;
+  /** when the app last re-saved it (every launch): a device unseen for long is gone or abandoned */
+  updated_at?: string;
+}
+
+export interface Cloud {
+  subscriptions(): Promise<SubRow[]>;
+  /** The player's own live docs, plus the live docs of the party lists they belong to. */
+  docs(userId: string): Promise<RemoteRow[]>;
+  saveHistory(endpoint: string, history: PushHistory): Promise<void>;
+  forget(endpoint: string): Promise<void>;
+  heartbeat(stats: RunStats): Promise<void>;
+}
+
+/** 'gone': the device dropped the subscription; 'config': the push service refused our keys (fix the setup). */
+export type SendResult = 'ok' | 'gone' | 'config' | 'retry';
+export type Sender = (sub: SubRow, payload: string, opts: { ttl: number; topic: string }) => Promise<SendResult>;
+
+export type Mode = 'run' | 'dry-run' | 'test';
+export interface RunStats {
+  devices: number;
+  due: number;
+  sent: number;
+  gone: number;
+  failed: number;
+  config: number;
+}
+
+/** The push services browsers use. The sender only ever posts to these (the table accepts no others either). */
+export const PUSH_ENDPOINT = /^https:\/\/(web\.push\.apple\.com|fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|[a-z0-9-]+\.notify\.windows\.com)\//;
+/** A morning reminder for a phone that was off all day is stale by evening. */
+export const TTL_SECONDS = 3 * 3600;
+/**
+ * Devices whose app has not been opened for this long are dropped: Apple keeps accepting pushes for an app
+ * deleted from the Home Screen, so a dead subscription can look alive forever.
+ */
+export const STALE_MS = 60 * 86_400_000;
+
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const intIn = (v: unknown, lo: number, hi: number, dflt: number) =>
+  typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi ? v : dflt;
+
+/** Reminder settings as the device saved them, with anything malformed back at its default. */
+export function sanitizePrefs(v: unknown): PushPrefs {
+  const p = isObj(v) ? v : {};
+  return {
+    morningHour: intIn(p.morningHour, 0, 23, DEFAULT_PUSH_PREFS.morningHour),
+    eveningHour: intIn(p.eveningHour, 0, 23, DEFAULT_PUSH_PREFS.eveningHour),
+    off: Array.isArray(p.off) ? NUDGE_KINDS.filter((k) => (p.off as unknown[]).includes(k)) : [],
+    dayStartHour: intIn(p.dayStartHour, 0, 23, DEFAULT_PUSH_PREFS.dayStartHour),
+    weekStart: intIn(p.weekStart, 0, 6, DEFAULT_PUSH_PREFS.weekStart),
+  };
+}
+
+export function sanitizeHistory(v: unknown): PushHistory {
+  const h = isObj(v) ? v : {};
+  const sent = isObj(h.sent) ? h.sent : {};
+  const day = (x: unknown) => (typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : undefined);
+  return {
+    sent: { ...(day(sent.morning) ? { morning: day(sent.morning) } : {}), ...(day(sent.evening) ? { evening: day(sent.evening) } : {}) },
+    comebacks: intIn(h.comebacks, 0, 1000, 0),
+  };
+}
+
+/** An IANA time zone this runtime knows, or UTC. */
+export function validZone(tz: unknown): string {
+  if (typeof tz !== 'string' || !tz || tz.length > 64) return 'UTC';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return tz;
+  } catch {
+    return 'UTC';
+  }
+}
+
+/** The player's save as the app would see it after syncing: hero, lists and tasks (others are not needed). */
+export function stateFromRows(rows: RemoteRow[], userId: string): NudgeState {
+  const state: NudgeState = { hero: null, lists: {}, tasks: {} };
+  for (const row of rows) {
+    if (row.deleted) continue;
+    const m = fromRow(row, userId);
+    if (!m || m.doc.deleted) continue;
+    if (m.kind === 'hero') state.hero = m.doc as Hero;
+    else if (m.kind === 'list') state.lists[m.doc.id] = m.doc as TaskList;
+    else if (m.kind === 'task') state.tasks[m.doc.id] = m.doc as Task;
+  }
+  return state;
+}
+
+/**
+ * The push message: Declarative Web Push (iOS 18.4+ and Safari show it themselves, without running the
+ * service worker, so it can never count as a silent push), which public/push-sw.js also reads on older
+ * systems and other browsers. WebKit reads app_badge from the top level only.
+ */
+export function payload(n: Pick<Nudge, 'title' | 'body' | 'tag' | 'badge'>, appUrl: string): string {
+  return JSON.stringify({
+    web_push: 8030,
+    notification: { title: n.title, body: n.body, navigate: appUrl, tag: n.tag, lang: 'en-US', dir: 'ltr' },
+    app_badge: Math.max(0, Math.min(999, Math.round(n.badge))),
+  });
+}
+
+/** What "Run workflow › test" sends to every device: proof the whole chain works, right now. */
+export function testNudge(state: NudgeState): Nudge {
+  const name = state.hero?.name ?? 'adventurer';
+  return { kind: 'plan', title: '🔔 Test reminder', body: `Hello ${name}! Reminders from Questlog reach this device.`, tag: 'questlog-test', badge: 0 };
+}
+
+export async function runReminders(opts: {
+  cloud: Cloud;
+  send: Sender;
+  now: number;
+  mode: Mode;
+  appUrl: string;
+  /** puts the process in the player's time zone, so the app's day logic reads their local time */
+  setZone: (tz: string) => void;
+}): Promise<RunStats> {
+  const { cloud, send, now, mode, appUrl, setZone } = opts;
+  const stats: RunStats = { devices: 0, due: 0, sent: 0, gone: 0, failed: 0, config: 0 };
+  const subs = await cloud.subscriptions();
+  stats.devices = subs.length;
+  const saves = new Map<string, Promise<NudgeState>>();
+  const saveOf = (userId: string) => {
+    let s = saves.get(userId);
+    if (!s) saves.set(userId, (s = cloud.docs(userId).then((rows) => stateFromRows(rows, userId))));
+    return s;
+  };
+
+  for (const sub of subs) {
+    if (!PUSH_ENDPOINT.test(sub.endpoint)) {
+      stats.failed++;
+      continue;
+    }
+    const seen = sub.updated_at ? Date.parse(sub.updated_at) : NaN;
+    if (mode === 'run' && now - seen > STALE_MS) {
+      stats.gone++;
+      await cloud.forget(sub.endpoint);
+      continue;
+    }
+    setZone(validZone(sub.tz));
+    const prefs = sanitizePrefs(sub.prefs);
+    const history = sanitizeHistory(sub.history);
+    let nudge: Nudge | null;
+    let topic: string;
+    if (mode === 'test') {
+      nudge = testNudge(await saveOf(sub.user_id));
+      topic = 'test';
+    } else {
+      const slot = slotAt(now, prefs);
+      if (!slot) continue;
+      const state = await saveOf(sub.user_id);
+      setZone(validZone(sub.tz)); // another device's turn may have run while the save loaded
+      nudge = pickNudge(state, now, slot, prefs, history);
+      topic = slot;
+      const next = afterSlot(history, state, now, slot, prefs, nudge);
+      // the slot is claimed before sending: a send that fails is a missed reminder, never a doubled one
+      if (mode === 'run' && JSON.stringify(next) !== JSON.stringify(history)) await cloud.saveHistory(sub.endpoint, next);
+    }
+    if (!nudge) continue;
+    stats.due++;
+    if (mode === 'dry-run') continue;
+    const r = await send(sub, payload(nudge, appUrl), { ttl: mode === 'test' ? 600 : TTL_SECONDS, topic });
+    if (r === 'ok') stats.sent++;
+    else if (r === 'gone') {
+      stats.gone++;
+      await cloud.forget(sub.endpoint);
+    } else if (r === 'config') stats.config++;
+    else stats.failed++;
+  }
+  if (mode !== 'dry-run') await cloud.heartbeat(stats);
+  return stats;
+}
+
+export type { NudgeKind };

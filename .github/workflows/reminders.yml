@@ -1,0 +1,58 @@
+name: Reminders
+
+# Sends the reminder notifications that are due (scripts/push/send.ts). Each device's reminders go out at
+# its player's chosen local hours; the sender checks every half hour and never sends a slot twice.
+# Setup (once): run supabase/schema.sql, then add the SUPABASE_SECRET_KEY and VAPID_PRIVATE_KEY
+# repository secrets (docs/REMINDERS_SETUP.md). Without them every run is a harmless no-op.
+
+on:
+  schedule:
+    # off the top of the hour: GitHub delays (and under load drops) runs scheduled at :00
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'test: send a test reminder to every device now · run: send what is due · dry-run: only count'
+        type: choice
+        options: [test, run, dry-run]
+        default: test
+
+permissions:
+  contents: read
+  actions: write # only to keep this schedule switched on (see the last step)
+
+concurrency:
+  group: reminders
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Send reminders
+        run: npx vite-node scripts/push/send.ts "$MODE"
+        env:
+          MODE: ${{ inputs.mode || 'run' }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+
+      # GitHub switches off scheduled workflows in repositories without activity for 60 days; re-enabling
+      # it once a day resets that clock, so reminders keep coming even when nobody commits.
+      - name: Keep the schedule on
+        if: github.event_name == 'schedule'
+        run: |
+          if [ "$(date -u +%H)" = "03" ] && [ "$(date -u +%M)" -lt 30 ]; then
+            gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/reminders.yml/enable"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
