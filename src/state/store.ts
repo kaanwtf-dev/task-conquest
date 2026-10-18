@@ -6,8 +6,8 @@ import type {
 import type { TimeCfg } from '../core/time';
 import type { Appearance } from '../pixel/sprites/hero';
 import type { ThemeId } from '../pixel/themes';
-import { dateKey, isActiveToday, isDone, parseDateKey, periodKey, todayKey } from '../core/time';
-import { heroLevel, sum } from '../game/progression';
+import { dateKey, isActiveToday, isDone, parseDateKey, periodKey, streak, todayKey } from '../core/time';
+import { baseXp, heroLevel, sum } from '../game/progression';
 import { guessAisle } from '../pixel/keywords';
 import { hashStr } from '../core/rng';
 import { itemDisplayName, sellPrice, starterItems, upgradeCost } from '../game/loot';
@@ -147,6 +147,8 @@ export interface State {
   usePotion(stackId: string): boolean;
   buyOffer(offer: ShopOffer): boolean;
   claimAchievements(): { gold: number; newTitles: string[] };
+  /** Daily check-in: the first time the app is opened on a (logical) day pays a small reward. */
+  checkIn(): void;
   setTitle(title: string | undefined): void;
   updateHero(patch: Partial<Pick<Hero, 'name' | 'appearance' | 'capeDye'>>): void;
   exportData(): string;
@@ -616,6 +618,29 @@ export const useStore = create<State>()(
           }
           log('loot', `Bought ${offer.label} for ${offer.price}g.`);
           return true;
+        },
+
+        checkIn() {
+          const s = get();
+          const hero = s.hero;
+          if (!hero) return;
+          const t = now();
+          const today = todayKey(t, s.settings);
+          const days = hero.loginDays ?? [];
+          if (days.includes(today)) return;
+          const loginDays = [...days, today].sort().slice(-400);
+          const run = streak(loginDays, t, s.settings);
+          const level = heroLevel(hero).level;
+          // a little for showing up, more for a run of days, double every 7th day
+          const bonus = run % 7 === 0;
+          const mult = (1 + Math.min(run, 10) * 0.2) * (bonus ? 2 : 1);
+          const gold = Math.round((10 + level * 2) * mult);
+          const xp = Math.round(baseXp(level) * mult);
+          const after = { ...hero, loginDays, xp: inc(hero.xp, s.deviceId, xp), gold: inc(hero.gold, s.deviceId, gold), updatedAt: t };
+          set({ hero: after });
+          fx.emit({ type: 'checkIn', day: run, gold, xp, bonus });
+          const lv = heroLevel(after).level;
+          if (lv > level) fx.emit({ type: 'levelUp', level: lv });
         },
 
         claimAchievements() {

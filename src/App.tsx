@@ -59,6 +59,22 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // daily check-in: opening the app on a new day pays a little (now, and whenever it comes back to the front)
+  const checkIn = useStore((s) => s.checkIn);
+  const hasHero = !!hero;
+  useEffect(() => {
+    if (!hasHero) return;
+    const go = () => document.visibilityState === 'visible' && checkIn();
+    const t = setTimeout(go, 1200); // after the first sync pull had a moment to bring in today's check-in
+    const every = setInterval(go, 10 * 60_000);
+    document.addEventListener('visibilitychange', go);
+    return () => {
+      clearTimeout(t);
+      clearInterval(every);
+      document.removeEventListener('visibilitychange', go);
+    };
+  }, [hasHero, checkIn]);
+
   const sfxVolume = useStore((s) => s.settings.sfx);
   useEffect(() => setSfxVolume(sfxVolume), [sfxVolume]);
 

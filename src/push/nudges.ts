@@ -29,6 +29,8 @@ export interface PushHistory {
   sent?: Partial<Record<Slot, string>>;
   /** comeback reminders sent during the current absence (they stop after a few) */
   comebacks?: number;
+  /** party activity up to this time (ms) has been told already */
+  partyAt?: number;
 }
 
 export interface Nudge {
@@ -202,7 +204,61 @@ export function afterSlot(history: PushHistory, state: NudgeState, now: number, 
   // playing again (today or yesterday) starts a fresh absence count
   const played = days.includes(today) || days.includes(yesterday);
   return {
+    ...history,
     sent: nudge ? { ...history.sent, [slot]: today } : history.sent,
     comebacks: nudge?.kind === 'comeback' ? (history.comebacks ?? 0) + 1 : played ? 0 : history.comebacks ?? 0,
+  };
+}
+
+/** Party digests: at most one an hour, and only between the morning reminder hour and 10pm. */
+export const PARTY_GAP_MS = 60 * 60_000;
+export function partyHours(now: number, prefs: PushPrefs): boolean {
+  const h = new Date(now).getHours();
+  return h >= Math.min(prefs.morningHour, 9) && h < 22;
+}
+
+/**
+ * What the rest of the party did on shared lists between `since` and `until`: items bought or quests done
+ * (still done), and items or quests added. One line per message, the busiest list first.
+ */
+export function partyDigest(state: NudgeState, since: number, until: number): Pick<Nudge, 'title' | 'body' | 'tag'> | null {
+  const me = state.hero?.name;
+  if (!me) return null;
+  type Acts = { done: string[]; added: string[]; who: Set<string> };
+  const byList = new Map<string, Acts>();
+  const acts = (id: string) => {
+    let a = byList.get(id);
+    if (!a) byList.set(id, (a = { done: [], added: [], who: new Set() }));
+    return a;
+  };
+  for (const t of Object.values(state.tasks)) {
+    const l = state.lists[t.listId];
+    if (!l || l.deleted || !l.shared || t.deleted) continue;
+    if (t.doneFor && t.doneBy && t.doneBy !== me && t.doneAt && t.doneAt > since && t.doneAt <= until) {
+      const a = acts(l.id);
+      a.done.push(clip(t.title, 24));
+      a.who.add(t.doneBy);
+    } else if (!t.doneFor && t.createdBy && t.createdBy !== me && t.createdAt > since && t.createdAt <= until) {
+      const a = acts(l.id);
+      a.added.push(clip(t.title, 24));
+      a.who.add(t.createdBy);
+    }
+  }
+  const busiest = [...byList.entries()].sort((a, b) => b[1].done.length + b[1].added.length - (a[1].done.length + a[1].added.length))[0];
+  if (!busiest) return null;
+  const [listId, a] = busiest;
+  const l = state.lists[listId];
+  const who = [...a.who];
+  const names = who.length === 1 ? clip(who[0], 20) : `${clip(who[0], 20)} & co.`;
+  const list3 = (xs: string[]) => xs.slice(0, 3).join(', ') + (xs.length > 3 ? ` +${xs.length - 3} more` : '');
+  const supply = l.type === 'supply';
+  const parts = [
+    ...(a.done.length ? [`${supply ? 'Bought' : 'Done'}: ${list3(a.done)}`] : []),
+    ...(a.added.length ? [`Added: ${list3(a.added)}`] : []),
+  ];
+  return {
+    title: `${supply ? '🛒' : '👥'} ${names} updated ${clip(l.name, 24)}`,
+    body: parts.join(' · '),
+    tag: `questlog-party-${listId}`.slice(0, 64),
   };
 }

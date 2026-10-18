@@ -8,7 +8,10 @@ import type { RemoteRow } from '../sync/types';
 import {
   DEFAULT_PUSH_PREFS,
   NUDGE_KINDS,
+  PARTY_GAP_MS,
   afterSlot,
+  partyDigest,
+  partyHours,
   pickNudge,
   slotAt,
   type Nudge,
@@ -92,6 +95,7 @@ export function sanitizeHistory(v: unknown): PushHistory {
   return {
     sent: { ...(day(sent.morning) ? { morning: day(sent.morning) } : {}), ...(day(sent.evening) ? { evening: day(sent.evening) } : {}) },
     comebacks: intIn(h.comebacks, 0, 1000, 0),
+    ...(typeof h.partyAt === 'number' && Number.isFinite(h.partyAt) ? { partyAt: h.partyAt } : {}),
   };
 }
 
@@ -224,13 +228,27 @@ export async function runReminders(opts: {
       topic = 'test';
     } else {
       const slot = slotAt(now, prefs);
-      if (!slot) return;
+      const partyOn = !prefs.off.includes('party') && partyHours(now, prefs) && now - (history.partyAt ?? 0) >= PARTY_GAP_MS;
+      if (!slot && !partyOn) return;
       const state = await saveOf(sub.user_id);
       setZone(validZone(sub.tz)); // another device's turn may have run while the save loaded
-      const picked = pickNudge(state, now, slot, prefs, history);
-      nudge = picked;
-      topic = slot;
-      const next = afterSlot(history, state, now, slot, prefs, picked);
+      let next = history;
+      nudge = null;
+      topic = slot ?? 'party';
+      if (slot) {
+        const picked = pickNudge(state, now, slot, prefs, history);
+        nudge = picked;
+        next = afterSlot(history, state, now, slot, prefs, picked);
+      }
+      if (!nudge && partyOn) {
+        // what the party did since the last digest (a new device starts with the last hour)
+        const digest = partyDigest(state, history.partyAt ?? now - PARTY_GAP_MS, now);
+        next = { ...next, partyAt: now };
+        if (digest) {
+          nudge = { kind: 'party', ...digest };
+          topic = 'party';
+        }
+      }
       // the slot is claimed before sending: a send that fails is a missed reminder, never a doubled one
       if (mode === 'run' && JSON.stringify(next) !== JSON.stringify(history)) await cloud.saveHistory(sub.endpoint, next);
     }

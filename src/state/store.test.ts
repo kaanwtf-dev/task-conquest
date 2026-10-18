@@ -31,6 +31,34 @@ describe('store: hero creation', () => {
   });
 });
 
+describe('store: daily check-in', () => {
+  beforeEach(() => fresh());
+  afterEach(() => vi.useRealTimers());
+
+  it('pays once a day, more for a run of days, double on every 7th', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const events: FxEvent[] = [];
+    const off = fx.on((e) => events.push(e));
+    const gold = () => heroGold(st().hero!);
+    vi.setSystemTime(new Date(2026, 9, 1, 12));
+    const g0 = gold();
+    st().checkIn();
+    const g1 = gold();
+    expect(g1).toBeGreaterThan(g0);
+    st().checkIn(); // same day: nothing more
+    expect(gold()).toBe(g1);
+    for (let d = 2; d <= 7; d++) {
+      vi.setSystemTime(new Date(2026, 9, d, 12));
+      st().checkIn();
+    }
+    off();
+    const ins = events.filter((e) => e.type === 'checkIn') as Extract<FxEvent, { type: 'checkIn' }>[];
+    expect(ins.map((e) => e.day)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(ins[6].bonus).toBe(true);
+    expect(ins[6].gold).toBeGreaterThan(ins[5].gold * 1.5);
+  });
+});
+
 describe('store: completing tasks', () => {
   beforeEach(() => fresh());
   afterEach(() => vi.useRealTimers());

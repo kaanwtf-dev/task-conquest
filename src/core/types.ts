@@ -167,6 +167,7 @@ export interface Hero extends Meta {
   savedDays: string[]; // days covered by a streak save / undead perk
   capeDye?: string; // purchased dye overriding the equipped cape color
   bestStreak?: number; // longest streak ever (day history is capped, this is not)
+  loginDays?: string[]; // logical days the app was opened (daily check-in reward), last 400
 }
 
 /** Combined effective stats (after soft caps) derived from equipped gear + race/class. */

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Hero, Task, TaskList } from '../core/types';
 import { dateKey } from '../core/time';
 import { bossFor } from '../game/bosses';
-import { DEFAULT_PUSH_PREFS, afterSlot, pickNudge, slotAt, type NudgeState, type PushPrefs } from './nudges';
+import { DEFAULT_PUSH_PREFS, afterSlot, partyDigest, pickNudge, slotAt, type NudgeState, type PushPrefs } from './nudges';
 
 const at = (d: number, h: number) => new Date(2026, 9, d, h).getTime(); // October 2026, local time
 const day = (d: number) => dateKey(new Date(2026, 9, d));
@@ -129,5 +129,32 @@ describe('reminder history', () => {
     expect(sent).toEqual({ sent: { morning: day(15) }, comebacks: 1 });
     const back = state(hero({ activeDays: [day(15)] }), []);
     expect(afterSlot(sent, back, at(15, 20), 'evening', prefs(), null)).toEqual({ sent: { morning: day(15) }, comebacks: 0 });
+  });
+});
+
+describe('party digest', () => {
+  const S = list('S', { type: 'supply', shared: true, name: 'Groceries' });
+  const C = list('C', { type: 'weekly', shared: true, name: 'Chores' });
+  const since = at(15, 17);
+  const until = at(15, 18);
+
+  it('tells what the others bought and added on a shared list since last time', () => {
+    const tasks = [
+      task('Milk', 'S', { repeat: { kind: 'none' }, doneFor: 'once', doneBy: 'Luna', doneAt: at(15, 17) + 60_000 }),
+      task('Eggs', 'S', { repeat: { kind: 'none' }, doneFor: 'once', doneBy: 'Luna', doneAt: at(15, 17) + 120_000 }),
+      task('Bread', 'S', { repeat: { kind: 'none' }, createdBy: 'Luna', createdAt: at(15, 17) + 180_000 }),
+      task('Mine', 'S', { repeat: { kind: 'none' }, doneFor: 'once', doneBy: 'Aria', doneAt: at(15, 17) + 60_000 }),
+      task('Old', 'S', { repeat: { kind: 'none' }, doneFor: 'once', doneBy: 'Luna', doneAt: at(15, 12) }),
+      task('Undone', 'S', { repeat: { kind: 'none' }, doneFor: null, doneBy: 'Luna', doneAt: at(15, 17) + 60_000 }),
+    ];
+    const d = partyDigest(state(hero(), tasks, [S, C]), since, until)!;
+    expect(d.title).toBe('🛒 Luna updated Groceries');
+    expect(d.body).toBe('Bought: Milk, Eggs · Added: Bread');
+  });
+
+  it('is quiet with nothing new, and ignores private lists', () => {
+    const P = list('P', { type: 'supply', name: 'Mine' });
+    const tasks = [task('Milk', 'P', { repeat: { kind: 'none' }, doneFor: 'once', doneBy: 'Luna', doneAt: at(15, 17) + 60_000 })];
+    expect(partyDigest(state(hero(), tasks, [S, P]), since, until)).toBeNull();
   });
 });
