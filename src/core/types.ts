@@ -68,6 +68,8 @@ export interface Task extends Meta {
   // supply-list extras
   qty?: string;
   aisle?: string;
+  /** extra completions of a repeating task within one period: { period key, count } */
+  again?: { period: string; n: number };
   staple?: boolean;
 }
 
@@ -212,6 +214,8 @@ export interface Settings {
   pushAccount?: string;
   /** Grocery categories the player picked by hand, by item name (lower case): next time it goes there. */
   aisleMemory?: Record<string, string>;
+  /** Difficulties the player set by hand, by quest name (lower case): used instead of the automatic guess. */
+  difficultyMemory?: Record<string, number>;
 }
 
 export interface HeroDock {

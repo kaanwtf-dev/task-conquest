@@ -115,7 +115,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
           </>
         ) : (
           <>
-            <Field label="Difficulty">
+            <Field label="Difficulty (set automatically from the name; change it if it's off)">
               {DIFFICULTY.map((d, i) => (
                 <button type="button" key={d.name} className={`pill ${draft.difficulty === i ? 'sel' : ''}`} aria-pressed={draft.difficulty === i} onClick={() => patch({ difficulty: i as Difficulty })}>
                   {d.name} <span style={{ opacity: 0.7, fontSize: 13 }}>+{taskXp(level, i as Difficulty)}xp</span>

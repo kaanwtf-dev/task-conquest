@@ -162,6 +162,23 @@ describe('store: completing tasks', () => {
     expect(listTasks(st(), g.id).filter((t) => t.title.toLowerCase() === 'kale')).toHaveLength(1);
   });
 
+  it('a done repeating quest can be done again for less, a few times per period', () => {
+    const daily = listOf('daily');
+    const id = listTasks(st(), daily.id)[0].id;
+    expect(st().repeatTask(id)).toBe(false); // not done yet
+    st().toggleTask(id);
+    const xp1 = sum(st().hero!.xp);
+    expect(st().repeatTask(id)).toBe(true);
+    const gain = sum(st().hero!.xp) - xp1;
+    expect(gain).toBeGreaterThan(0);
+    for (let i = 1; i < 5; i++) expect(st().repeatTask(id)).toBe(true);
+    expect(st().repeatTask(id)).toBe(false); // capped
+    expect(st().tasks[id].again?.n).toBe(5);
+    const q = st().addTask(listOf('quests').id, 'one-off')!;
+    st().toggleTask(q);
+    expect(st().repeatTask(q)).toBe(false); // one-off quests are just done
+  });
+
   it('chips at the boss and eventually defeats it', () => {
     const side = listOf('quests');
     const maxHp = bossFor(1).maxHp;

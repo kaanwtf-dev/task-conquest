@@ -19,6 +19,7 @@ import { iconFor } from '../../pixel/iconGen';
 import { AISLES } from '../../pixel/keywords';
 import { SceneBanner, Stars, PxImg, Ui, useNow, useMedia, themeStyle } from '../components/common';
 import { markTap, haptic } from '../components/Effects';
+import { fx } from '../../state/fx';
 import { sfx, unlockAudio } from '../../audio/sfx';
 import type { Task, TaskList } from '../../core/types';
 import TaskEditSheet from './TaskEditSheet';
@@ -324,9 +325,42 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
         )}
       </div>
       {task.difficulty > 0 && <Stars n={d.stars} />}
+      {done && task.repeat.kind !== 'none' && <AgainButton task={task} />}
     </>
   );
 });
+
+/** On a finished repeating quest: do it once more (another workout, brushing again) for a smaller reward. */
+function AgainButton({ task }: { task: Task }) {
+  const repeat = useStore((s) => s.repeatTask);
+  const supply = useStore((s) => s.lists[task.listId]?.type === 'supply');
+  const sfxOn = useStore((s) => s.settings.sfx > 0);
+  const haptics = useStore((s) => s.settings.haptics);
+  if (supply) return null;
+  const extra = task.again && task.again.period === task.doneFor ? task.again.n : 0;
+  return (
+    <button
+      className="again"
+      aria-label={`Do ${task.title} again`}
+      title="Did it again? Smaller reward each time"
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        unlockAudio();
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        markTap(r.left, r.top);
+        if (repeat(task.id)) {
+          if (sfxOn) sfx.check();
+          if (haptics) haptic();
+        } else fx.emit({ type: 'toast', text: 'That will do for now', small: 'Come back when it resets.' });
+      }}
+    >
+      +1{extra > 0 && <span className="again-n">×{extra + 1}</span>}
+    </button>
+  );
+}
 
 const SortableRow = memo(function SortableRow(props: Omit<RowProps, 'sortable'>) {
   const sortable = useSortable({ id: props.task.id });

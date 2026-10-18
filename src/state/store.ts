@@ -9,6 +9,7 @@ import type { ThemeId } from '../pixel/themes';
 import { dateKey, isActiveToday, isDone, parseDateKey, periodKey, streak, todayKey } from '../core/time';
 import { baseXp, heroLevel, sum } from '../game/progression';
 import { guessAisle } from '../pixel/keywords';
+import { guessDifficulty } from '../game/difficulty';
 import { hashStr } from '../core/rng';
 import { itemDisplayName, sellPrice, starterItems, upgradeCost } from '../game/loot';
 import { makeBuff, potionName, potionStackId } from '../game/potions';
@@ -133,6 +134,11 @@ export interface State {
    */
   unlistItem(id: string): { forgot: boolean; undo: () => void } | null;
   toggleTask(id: string): void;
+  /**
+   * Do a repeating task again within the same period (a second workout, brushing again): pays half, then
+   * less each time, never loot, at most REPEAT_MAX extra times per period. Returns false when it can't.
+   */
+  repeatTask(id: string): boolean;
   restockStaples(listId: string): number;
   reorderTasks(orderedIds: string[]): void;
   reorderLists(orderedIds: string[]): void;
@@ -157,6 +163,10 @@ export interface State {
 }
 
 const now = () => Date.now();
+
+/** Doing a done repeating task again: what each extra time pays (half, then less), and how many are allowed. */
+export const REPEAT_SCALE = [0.5, 0.35, 0.25, 0.15, 0.1];
+export const REPEAT_MAX = REPEAT_SCALE.length;
 
 const aisleKey = (title: string) => title.trim().toLowerCase();
 /** The category an item goes in: where the player last put it by hand, else a guess from its name. */
@@ -331,7 +341,7 @@ export const useStore = create<State>()(
           const t = now();
           const order = Math.min(0, ...Object.values(get().tasks).filter((x) => x.listId === listId && !x.deleted).map((x) => x.order)) - 1;
           const task: Task = {
-            id: uid(), listId, title: clean, difficulty: list.type === 'supply' ? 0 : 2,
+            id: uid(), listId, title: clean, difficulty: list.type === 'supply' ? 0 : guessDifficulty(clean, get().settings.difficultyMemory),
             repeat: LIST_TYPE_INFO[list.type].repeat, order, createdAt: t, updatedAt: t, timesDone: 0,
             createdBy: get().hero?.name,
             ...(list.type === 'supply' ? { aisle: aisleOf(clean, get().settings) } : {}),
@@ -350,6 +360,13 @@ export const useStore = create<State>()(
             full = { ...remapPeriod(cur, cur.repeat, cfg, patch.repeat, cfg, now()), ...patch };
           }
           set((s) => ({ tasks: { ...s.tasks, [id]: { ...s.tasks[id], ...full, updatedAt: now() } } }));
+          // a difficulty set by hand: the next quest with this name starts there instead of the guess
+          if (patch.difficulty !== undefined && get().lists[cur.listId]?.type !== 'supply') {
+            const memory = { ...get().settings.difficultyMemory, [aisleKey(patch.title ?? cur.title)]: patch.difficulty };
+            const keys = Object.keys(memory);
+            if (keys.length > 500) for (const k of keys.slice(0, keys.length - 500)) delete memory[k];
+            get().updateSettings({ difficultyMemory: memory });
+          }
           // a grocery moved to another category by hand: remember it for next time (and for its new name)
           if (patch.aisle && get().lists[cur.listId]?.type === 'supply') {
             const memory = { ...get().settings.aisleMemory, [aisleKey(patch.title ?? cur.title)]: patch.aisle };
@@ -418,6 +435,24 @@ export const useStore = create<State>()(
               apply(questChestRewards({ hero: st.hero!, items: st.items, list, dev: st.deviceId, now: t, seed: hashStr(`chest:${list.id}:${pk}:${t}:${st.deviceId}`) }));
             }
           }
+        },
+
+        repeatTask(id) {
+          const s = get();
+          const task = s.tasks[id];
+          const hero = s.hero;
+          const list = task ? s.lists[task.listId] : undefined;
+          if (!task || task.deleted || !hero || !list || list.type === 'supply' || task.repeat.kind === 'none') return false;
+          const cfg = s.settings;
+          const t = now();
+          if (!isDone(task, t, cfg)) return false;
+          const pk = periodKey(task.repeat, t, cfg);
+          const n = task.again?.period === pk ? task.again.n : 0;
+          if (n >= REPEAT_MAX) return false;
+          s.updateTask(id, { again: { period: pk, n: n + 1 }, doneAt: t, timesDone: task.timesDone + 1, doneBy: hero.name });
+          const seed = hashStr(`${id}:${pk}:again${n}:${t}:${s.deviceId}`);
+          apply(taskRewards({ hero, items: s.items, task, list, dev: s.deviceId, now: t, seed, cfg, scale: REPEAT_SCALE[n] }));
+          return true;
         },
 
         restockStaples(listId) {

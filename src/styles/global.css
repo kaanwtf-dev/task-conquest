@@ -2298,3 +2298,23 @@ canvas.px {
   font-family: var(--font-pixel);
   font-size: 9px;
 }
+
+/* do a finished repeating quest again */
+.again {
+  flex: none;
+  min-width: 40px;
+  height: 30px;
+  padding: 0 6px;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--accent);
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  cursor: pointer;
+}
+.again-n {
+  margin-left: 3px;
+  color: var(--muted);
+  font-size: 8px;
+}
