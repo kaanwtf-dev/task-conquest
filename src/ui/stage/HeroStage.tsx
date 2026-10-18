@@ -50,7 +50,7 @@ export default function HeroStage({ w, h, scale, heroX, monsterX, theme, classNa
     st.sound = sfxVol > 0 && anim !== 'off';
     stage.current = st;
     const off = fx.on((e) => {
-      if (e.type === 'kill') st.kill({ monster: e.monster, xp: e.xp, gold: e.gold, crit: e.crit, theme: e.theme as ThemeId });
+      if (e.type === 'kill') st.kill({ monster: e.monster, xp: e.xp, gold: e.gold, crit: e.crit, theme: e.theme as ThemeId, difficulty: e.difficulty });
       if (e.type === 'levelUp') st.levelUp();
       if (e.type === 'loot' && !e.soldFor) {
         const rarity = e.item?.rarity ?? 0;

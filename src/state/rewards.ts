@@ -156,7 +156,7 @@ export function taskRewards(p: {
   };
   hero = { ...hero, savedDays: undeadSave(hero, now, cfg) };
   hero = { ...hero, bestStreak: Math.max(before.bestStreak ?? 0, streak(streakDays(hero), now, cfg)) };
-  events.push({ type: 'kill', monster, xp, gold, crit, theme: theme.id, listId: list.id });
+  events.push({ type: 'kill', monster, xp, gold, crit, theme: theme.id, listId: list.id, difficulty: task.difficulty });
   log.push({ kind: 'kill', text: `Slew a Lv${level} ${monster.name} — "${task.title}" (+${xp} XP, +${gold}g${crit ? ', CRIT!' : ''})` });
 
   // ---- loot ----

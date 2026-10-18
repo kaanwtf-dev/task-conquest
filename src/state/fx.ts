@@ -3,7 +3,7 @@ import type { MonsterSpawn } from '../game/catalog';
 import type { Item, PotionId } from '../core/types';
 
 export type FxEvent =
-  | { type: 'kill'; monster: MonsterSpawn; xp: number; gold: number; crit: boolean; theme: string; listId: string }
+  | { type: 'kill'; monster: MonsterSpawn; xp: number; gold: number; crit: boolean; theme: string; listId: string; difficulty?: number }
   | { type: 'levelUp'; level: number }
   | { type: 'skillUp'; skill: string; level: number }
   | { type: 'questComplete'; listName: string; item?: Item; gold: number }

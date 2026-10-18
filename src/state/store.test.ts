@@ -113,6 +113,16 @@ describe('store: completing tasks', () => {
     expect(st().unlistItem(q)).toBeNull();
   });
 
+  it('remembers the category a grocery was moved to, for next time', () => {
+    const g = listOf('supply');
+    const id = st().addTask(g.id, 'Ice cream')!;
+    st().updateTask(id, { aisle: 'dairy' });
+    st().deleteTask(id);
+    const again = st().addTask(g.id, 'ice cream ')!;
+    expect(again).not.toBe(id);
+    expect(st().tasks[again].aisle).toBe('dairy');
+  });
+
   it('undoing a forgotten grocery never duplicates one added again since', () => {
     const g = listOf('supply');
     const typo = st().addTask(g.id, 'Kale')!;

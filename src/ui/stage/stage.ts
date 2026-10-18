@@ -14,7 +14,13 @@ export interface KillJob {
   gold: number;
   crit: boolean;
   theme: ThemeId;
+  /** 0 trivial .. 4 epic: harder quests get a longer, heavier fight */
+  difficulty?: number;
 }
+
+/** How much slower than the base timing a fight plays, by quest difficulty (trivial .. epic). */
+const PACE = [1.4, 1.6, 1.8, 2.2, 2.6];
+const paceOf = (job: KillJob) => PACE[Math.max(0, Math.min(4, job.difficulty ?? 2))];
 
 interface Particle {
   x: number;
@@ -114,7 +120,7 @@ export class Stage {
   /** Loot chest pops out of the last slain monster, opens, and the item floats up. */
   loot(chest: HTMLCanvasElement, open: HTMLCanvasElement, icon?: HTMLCanvasElement) {
     if (this.anim === 'off') return;
-    const delay = this.battle || this.queue.length ? (BATTLE_MS - 300) / this.speed() : 0;
+    const delay = this.battle || this.queue.length ? (BATTLE_MS * PACE[2] - 300) / this.speed() : 0;
     this.pops.push({ chest, open, icon, t0: performance.now(), delay });
     if (this.pops.length > 3) this.pops.shift();
     this.schedule(true);
@@ -211,7 +217,9 @@ export class Stage {
 
     if (this.battle) {
       const b = this.battle;
-      const t = (now - b.t0) * this.speed();
+      const t = ((now - b.t0) * this.speed()) / paceOf(b.job);
+      const heavy = (b.job.difficulty ?? 2) >= 3;
+      const epic = (b.job.difficulty ?? 2) >= 4;
       const ranged = RANGED.has(this.look.weapon?.kind ?? '');
       const once = (k: string, fn: () => void) => {
         if (!b.sounded.has(k)) {
@@ -258,9 +266,19 @@ export class Stage {
         if (b.job.crit) this.slash(mx, monY, true);
       }
       if (t >= 300 && t < 470) this.slash(mx, monY, b.job.crit);
+      // hard quests hit harder: a second slash and a white flash as the blow lands
+      if (heavy && t >= 380 && t < 470) this.slash(mx + 2, monY - 3, true);
+      if (heavy && t >= 420 && t < 470) {
+        ctx.fillStyle = epic ? 'rgba(255,240,180,0.45)' : 'rgba(255,255,255,0.25)';
+        ctx.fillRect(0, 0, this.w, this.h);
+      }
       if (t >= 520 && !b.exploded) {
         b.exploded = true;
         this.explode(b.pix, mx, monY, b.job.gold);
+        if (epic) {
+          this.explode(b.pix, mx, monY, b.job.gold);
+          this.floaters.push({ text: 'EPIC!', color: '#ffb84a', x: mx + 10, y: monY - 22, t0: now, dur: 1400 });
+        }
         this.floaters.push({ text: `+${b.job.xp} XP`, short: `+${b.job.xp}`, color: '#5fcde4', x: mx + 10, y: monY - 2, t0: now, dur: 900 / Math.min(2, this.speed()) });
         if (b.job.crit) this.floaters.push({ text: 'CRIT!', color: '#ff5a5a', x: mx + 10, y: monY - 12, t0: now, dur: 900 });
         once('coin', () => sfx.coin());

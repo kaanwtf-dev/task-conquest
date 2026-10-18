@@ -209,6 +209,8 @@ export interface Settings {
    * signed in, a subscription the system dropped is quietly renewed. Another account never inherits it.
    */
   pushAccount?: string;
+  /** Grocery categories the player picked by hand, by item name (lower case): next time it goes there. */
+  aisleMemory?: Record<string, string>;
 }
 
 export interface HeroDock {

@@ -1,5 +1,5 @@
 // App chrome: HUD, mobile tab bar, list chips, desktop sidebar.
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, visibleLists, listTasks, TODAY_ID, type Tab } from '../../state/store';
 import { useAttention } from '../../state/attention';
@@ -9,7 +9,7 @@ import { streak, isDone, isActiveToday } from '../../core/time';
 import { useHeroLook } from '../../game/look';
 import { streakDays } from '../../state/rewards';
 import { iconFor } from '../../pixel/iconGen';
-import { Bar, PxImg, Ui, compact, portraitUrl, useNow } from './common';
+import { Bar, PxImg, Sheet, Ui, compact, portraitUrl, useNow } from './common';
 import type { TaskList } from '../../core/types';
 import type { UiSprite } from '../../pixel/sprites/ui';
 import { sfx } from '../../audio/sfx';
@@ -135,8 +135,39 @@ const navState = (st: ReturnType<typeof useStore.getState>) => ({ lists: st.list
 export function ListChips({ onNew }: { onNew: () => void }) {
   const s = useStore(useShallow(navState));
   const lists = useMemo(() => visibleLists(s), [s.lists]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [all, setAll] = useState(false);
+  const pick = (id: string) => {
+    sfx.tick();
+    s.setActiveList(id);
+    setAll(false);
+  };
   return (
     <div className="chips">
+      {/* every list at once, top to bottom: quicker than scrolling the chips sideways */}
+      <button className="chip chip-all" onClick={() => (sfx.tick(), setAll(true))} aria-label="All lists">
+        <span aria-hidden>☰</span>
+      </button>
+      {all && (
+        <Sheet onClose={() => setAll(false)}>
+          <div className="win-title">Your lists</div>
+          <div className="all-lists">
+            <TodayItem className="all-item" active={s.activeListId === TODAY_ID} onPick={() => pick(TODAY_ID)} />
+            {lists.map((l) => (
+              <ChipItem key={l.id} l={l} className="all-item" active={l.id === s.activeListId} onPick={() => pick(l.id)} />
+            ))}
+            <button
+              className="all-item"
+              onClick={() => {
+                setAll(false);
+                onNew();
+              }}
+            >
+              <Ui name="plus" size={20} />
+              <span>New list</span>
+            </button>
+          </div>
+        </Sheet>
+      )}
       <TodayItem className="chip" active={s.activeListId === TODAY_ID} onPick={() => (sfx.tick(), s.setActiveList(TODAY_ID))} />
       {lists.map((l) => (
         <ChipItem key={l.id} l={l} className="chip" active={l.id === s.activeListId} onPick={() => (sfx.tick(), s.setActiveList(l.id))} />

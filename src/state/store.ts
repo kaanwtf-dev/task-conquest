@@ -156,6 +156,12 @@ export interface State {
 
 const now = () => Date.now();
 
+const aisleKey = (title: string) => title.trim().toLowerCase();
+/** The category an item goes in: where the player last put it by hand, else a guess from its name. */
+function aisleOf(title: string, settings: Settings): string {
+  return settings.aisleMemory?.[aisleKey(title)] ?? guessAisle(title);
+}
+
 function seedLists(): { lists: Record<string, TaskList>; tasks: Record<string, Task> } {
   const t = now();
   const mk = (name: string, type: ListType, theme: ThemeId, skill: SkillId, icon: string, color: string, order: number): TaskList => ({
@@ -326,7 +332,7 @@ export const useStore = create<State>()(
             id: uid(), listId, title: clean, difficulty: list.type === 'supply' ? 0 : 2,
             repeat: LIST_TYPE_INFO[list.type].repeat, order, createdAt: t, updatedAt: t, timesDone: 0,
             createdBy: get().hero?.name,
-            ...(list.type === 'supply' ? { aisle: guessAisle(clean) } : {}),
+            ...(list.type === 'supply' ? { aisle: aisleOf(clean, get().settings) } : {}),
             ...extra,
           };
           set((s) => ({ tasks: { ...s.tasks, [task.id]: task } }));
@@ -342,6 +348,13 @@ export const useStore = create<State>()(
             full = { ...remapPeriod(cur, cur.repeat, cfg, patch.repeat, cfg, now()), ...patch };
           }
           set((s) => ({ tasks: { ...s.tasks, [id]: { ...s.tasks[id], ...full, updatedAt: now() } } }));
+          // a grocery moved to another category by hand: remember it for next time (and for its new name)
+          if (patch.aisle && get().lists[cur.listId]?.type === 'supply') {
+            const memory = { ...get().settings.aisleMemory, [aisleKey(patch.title ?? cur.title)]: patch.aisle };
+            const keys = Object.keys(memory);
+            if (keys.length > 500) for (const k of keys.slice(0, keys.length - 500)) delete memory[k];
+            get().updateSettings({ aisleMemory: memory });
+          }
         },
 
         deleteTask(id) {
@@ -444,7 +457,7 @@ export const useStore = create<State>()(
           if (!task || !list || task.listId === listId) return;
           const order = Math.min(0, ...Object.values(get().tasks).filter((x) => x.listId === listId && !x.deleted).map((x) => x.order)) - 1;
           const patch: Partial<Task> = { listId, order };
-          if (list.type === 'supply') patch.aisle = task.aisle ?? guessAisle(task.title);
+          if (list.type === 'supply') patch.aisle = task.aisle ?? aisleOf(task.title, get().settings);
           if (from?.shared || list.shared) {
             // crossing a sharing boundary: party members must see it disappear, so move = copy + tombstone
             const t = now();
