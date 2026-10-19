@@ -28,7 +28,9 @@ describe('registerPWA', () => {
 describe('registerPWA in a production build', () => {
   const listeners: Record<string, () => void> = {};
   const doc = { visibilityState: 'visible', addEventListener: (type: string, fn: () => void) => (listeners[type] = fn) };
-  const nav = { serviceWorker: {}, onLine: true };
+  const swListeners: Record<string, () => void> = {};
+  const nav = { serviceWorker: { addEventListener: (type: string, fn: () => void) => (swListeners[type] = fn) }, onLine: true };
+  const loc = { reload: vi.fn() };
   const updateSW = vi.fn(async (_reload?: boolean) => undefined);
 
   beforeEach(() => {
@@ -37,6 +39,9 @@ describe('registerPWA in a production build', () => {
     vi.stubEnv('PROD', true);
     vi.stubGlobal('document', doc);
     vi.stubGlobal('navigator', nav);
+    vi.stubGlobal('location', loc);
+    loc.reload.mockClear();
+    for (const k of Object.keys(swListeners)) delete swListeners[k];
     nav.onLine = true;
     registerSW.mockReset().mockImplementation(() => updateSW);
     updateSW.mockClear();
@@ -70,6 +75,28 @@ describe('registerPWA in a production build', () => {
     expect(updateSW).not.toHaveBeenCalled();
     update();
     expect(updateSW).toHaveBeenCalledWith(true);
+    // no word from the browser (iPhone Home Screen apps): it reloads anyway, once
+    expect(loc.reload).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(3200);
+    expect(loc.reload).toHaveBeenCalledTimes(1);
+    swListeners.controllerchange?.();
+    expect(loc.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads as soon as the new version has taken over', async () => {
+    const { opts, onNeedRefresh } = await register();
+    const waiting = { postMessage: vi.fn() };
+    const reg = { installing: null, waiting: waiting as unknown, active: { state: 'activating' }, update: vi.fn(async () => undefined) };
+    opts?.onRegisteredSW?.('sw.js', reg as unknown as ServiceWorkerRegistration);
+    opts?.onNeedRefresh?.();
+    (onNeedRefresh.mock.calls[0][0] as () => void)();
+    expect(waiting.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+    vi.advanceTimersByTime(300);
+    expect(loc.reload).not.toHaveBeenCalled(); // still switching
+    reg.waiting = null;
+    reg.active.state = 'activated';
+    vi.advanceTimersByTime(300);
+    expect(loc.reload).toHaveBeenCalledTimes(1);
   });
 
   it('checks for a new deploy hourly and on refocus, only online and not mid-install', async () => {

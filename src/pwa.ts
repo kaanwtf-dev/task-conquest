@@ -49,16 +49,16 @@ function applyUpdate(updateSW: (reload?: boolean) => Promise<void>, reg: Service
   const reload = () => {
     if (reloaded) return;
     reloaded = true;
-    window.location.reload();
+    location.reload();
   };
-  navigator.serviceWorker.addEventListener('controllerchange', reload, { once: true });
+  navigator.serviceWorker.addEventListener?.('controllerchange', reload, { once: true });
   void updateSW(true).catch(() => undefined);
   reg?.waiting?.postMessage({ type: 'SKIP_WAITING' });
   const started = Date.now();
-  const poll = window.setInterval(() => {
+  const poll = setInterval(() => {
     const switched = !!reg && !reg.waiting && reg.active?.state === 'activated';
     if (switched || Date.now() - started > UPDATE_FALLBACK_MS) {
-      window.clearInterval(poll);
+      clearInterval(poll);
       reload();
     }
   }, 150);

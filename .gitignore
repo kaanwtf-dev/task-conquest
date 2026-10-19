@@ -5,3 +5,4 @@ dist
 shots/
 *.tsbuildinfo
 dist-functions
+release

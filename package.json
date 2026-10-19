@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -b && tsc -p scripts/push",
     "test": "vitest run",
-    "build:reminders": "node scripts/build-reminders.mjs"
+    "build:reminders": "node scripts/build-reminders.mjs",
+    "release": "bash scripts/release.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",
