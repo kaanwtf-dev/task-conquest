@@ -249,7 +249,7 @@ const TaskRow = memo(function TaskRow({ task, done, inactive, showList, onEdit, 
   return (
     <div
       ref={sortable?.setNodeRef}
-      className={`task ${done ? 'done' : ''} ${sortable?.isDragging ? 'dragging' : ''}`}
+      className={`task ${done ? 'done' : ''} ${sortable?.isDragging ? 'dragging' : ''} ${task.stakes && !done ? `stakes-${task.stakes}` : ''}`}
       style={style}
       {...(sortable ? { ...sortable.attributes, ...sortable.listeners, role: 'listitem', 'aria-roledescription': 'draggable quest' } : {})}
       onClick={() => onEdit(task.id)}
@@ -310,7 +310,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
       <PxImg className="ticon" src={iconFor(task.title, task.icon)} size={32} />
       <div className="tmain">
         <div className="ttitle">{task.title}</div>
-        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy) || timed || !!task.misses) && (
+        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy) || timed || !!task.misses || !!task.stakes) && (
           <div className="tmeta">
             {listName && <span className="tlist">{listName}</span>}
             {shared && done && task.doneBy && <span className="tlist">✓ {task.doneBy}</span>}
@@ -326,6 +326,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
               ) : (
                 <span>Due {task.due}</span>
               ))}
+            {task.stakes && !done && <StakesChip stakes={task.stakes} />}
             {timed && <TimeLeft task={task} />}
             {!done && !!task.misses && <span className="overdue">missed {task.misses}×</span>}
             {task.notes && <span>✎</span>}
@@ -338,6 +339,15 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
     </>
   );
 });
+
+/** What missing the quest costs, at a glance: "!!" must do (red), "!" flexible (amber). */
+function StakesChip({ stakes }: { stakes: NonNullable<Task['stakes']> }) {
+  return (
+    <span className={`stakes ${stakes}`} title={stakes === 'must' ? 'Must do: missing it hurts' : 'Flexible: missing it costs a little'}>
+      {stakes === 'must' ? '!! MUST' : '! FLEX'}
+    </span>
+  );
+}
 
 /** The countdown behind a time-limited quest: full when the window opens, empty at the deadline. */
 function TimeBar({ task }: { task: Task }) {
@@ -360,7 +370,7 @@ function TimeLeft({ task }: { task: Task }) {
   if (late && task.due && task.due < todayKey(now, cfg)) return null; // the "Overdue" chip says it already
   return (
     <span className={late || soon ? 'overdue' : ''}>
-      {task.stakes === 'must' ? '⚠ ' : '⏳ '}
+      ⏳ 
       {label}
     </span>
   );
