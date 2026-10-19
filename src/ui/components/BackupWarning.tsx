@@ -1,8 +1,7 @@
-// "Your save is only on this phone!": shown to players who aren't signed in once they've made progress.
+// "Your save is only on this phone!": shown to players who aren't signed in, from the moment the hero exists.
 // "Later" hides it for a few days; it keeps coming back until the save is backed up to the cloud.
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store';
-import { sum } from '../../game/progression';
 import { t } from '../../i18n';
 
 const NAG_AGAIN_MS = 3 * 86_400_000;
@@ -29,10 +28,10 @@ function useCloudAccount(): string | null | 'off' | undefined {
 
 /** Whether the "back up your save" card is showing now. */
 export function useBackupDue(): boolean {
-  const done = useStore((s) => (s.hero ? sum(s.hero.tasksDone) : 0));
+  const hasHero = useStore((s) => !!s.hero);
   const askedAt = useStore((s) => s.settings.backupAskedAt ?? 0);
   const account = useCloudAccount();
-  return account === null && done >= 1 && Date.now() - askedAt >= NAG_AGAIN_MS;
+  return account === null && hasHero && Date.now() - askedAt >= NAG_AGAIN_MS;
 }
 
 export default function BackupWarning() {
