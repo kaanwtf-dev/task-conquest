@@ -128,6 +128,23 @@ export async function signIn(email: string, password: string): Promise<AuthUser>
   return toUser(data.user);
 }
 
+/** Emails a link that opens the app's "choose a new password" page. */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const env = import.meta.env as Record<string, unknown>;
+  const base = typeof env.BASE_URL === 'string' ? env.BASE_URL : '/';
+  const { error } = await need().auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}${base}` });
+  if (error) throw new Error(/rate limit/i.test(error.message) ? 'Too many emails were sent just now. Try again in an hour.' : authMessage(error.message));
+}
+
+/** Sets the password of the account a reset link signed in (see sync/recovery.ts). */
+export async function setNewPassword(password: string): Promise<void> {
+  const c = need();
+  const { data } = await c.auth.getSession(); // (also waits for the client to read the link's session)
+  if (!data.session) throw new Error('This reset link has expired. Ask for a new one on the sign-in screen.');
+  const { error } = await c.auth.updateUser({ password });
+  if (error) throw new Error(/different from the old/i.test(error.message) ? 'That is your current password. Pick a new one.' : authMessage(error.message));
+}
+
 /**
  * Signs out this device only. Works offline too: auth-js asks the server first and keeps the session when it
  * can't reach it, so then the stored session is dropped here (its token simply expires on the server).

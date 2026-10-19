@@ -32,7 +32,8 @@ Go to **Authentication → Sign In / Providers → Email** (older dashboards: **
 - Make sure **Email** is enabled.
 - **Recommended:** switch **Confirm email** off and click **Save**. New accounts then work immediately.
 - **If you keep confirmation on:** after you tap *Create account*, Supabase emails you a link. On iPhone that link opens in Safari, not the home-screen app. That's fine: open the link once, then go back to Questlog and sign in with the same email and password. The free plan only sends a few emails per hour, which is another reason to switch confirmation off.
-- Under **Authentication → URL Configuration**, set **Site URL** to the address of your app (for example `https://yourname.github.io/TODOLIST/`). Confirmation links then lead back to the app instead of `localhost`.
+- Under **Authentication → URL Configuration**, set **Site URL** to the address of your app (for example `https://yourname.github.io/TODOLIST/`), and add the same address followed by `**` under **Redirect URLs** (for example `https://yourname.github.io/TODOLIST/**`). Confirmation and password-reset links then lead back to the app instead of `localhost`.
+- **Forgot password?** on the sign-in screen emails a reset link. It opens a page where the player picks a new password, then they sign in with it as usual. These emails count toward the same hourly limit.
 
 ## 4. Connect the app
 
@@ -83,6 +84,8 @@ Repository secrets with the same names (**Settings → Secrets and variables →
 | *Wrong email or password* | Check both. Passwords are case-sensitive. |
 | *The Project URL looks wrong* | Built-in cloud: fix `VITE_SUPABASE_URL` in `.env.production` (or the secret) and push. Otherwise tap **Change cloud project** and paste the URL again, exactly like `https://abcdefgh.supabase.co`. |
 | *Confirm your email first* | Open the confirmation email, or switch **Confirm email** off (step 3). |
+| A reset email's link opens `localhost` or an error page | Set the **Site URL** and **Redirect URLs** (step 3). |
+| *That reset link has expired or was already used* | Ask for a new one with **Forgot password?**. Links work once, for about an hour. |
 | *This list is not in the cloud yet* | The list was just created. Wait a few seconds and try again. |
 | *That invite code does not exist* | Check the code. Codes never use 0, O, 1, I or L. |
 | Status says **Sync error** | Run `schema.sql` again (step 2), then check the URL and key: in `.env.production` for a built-in cloud, otherwise in the Party tab (**Change cloud project**). |

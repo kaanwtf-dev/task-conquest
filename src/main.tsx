@@ -8,13 +8,19 @@ import { setSfxVolume } from './audio/sfx';
 import { registerPWA, requestPersistentStorage } from './pwa';
 import { useAppUpdate } from './ui/components/UpdateBanner';
 import { trackKeyboard } from './ui/keyboard';
+import { readRecoveryLink } from './sync/recovery';
+import PasswordReset from './ui/screens/PasswordReset';
+
+// a password-reset email's link (read before the Supabase client consumes the address)
+const recovery = readRecoveryLink(location.hash);
 
 const SpriteLab = lazy(() => import('./dev/SpriteLab'));
 
 setSfxVolume(useStore.getState().settings.sfx);
 trackKeyboard();
 // the sync stack (Supabase client) loads in its own chunk so first paint stays light
-void import('./state/sync').then((m) => m.initSync());
+// (not on the reset page: the link's session is only there to change the password)
+if (!recovery) void import('./state/sync').then((m) => m.initSync());
 registerPWA(
   (update) => useAppUpdate.setState({ update }),
   () => fx.emit({ type: 'toast', text: 'READY OFFLINE', small: 'Questlog now works without internet.' }),
@@ -33,7 +39,9 @@ if (import.meta.env.DEV) Object.assign(window, { __ql: { store: useStore, fx } }
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {location.hash === '#lab' ? (
+    {recovery ? (
+      <PasswordReset link={recovery} />
+    ) : location.hash === '#lab' ? (
       <Suspense fallback={null}>
         <SpriteLab />
       </Suspense>
