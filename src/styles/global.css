@@ -2440,3 +2440,42 @@ canvas.px {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* the page a password-reset email opens */
+.reset-page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.reset-win {
+  width: 100%;
+  max-width: 420px;
+  padding: 16px;
+}
+.reset-win p {
+  font-size: 16px;
+  line-height: 1.45;
+}
+.reset-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 14px 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+.reset-msg {
+  color: #ff8a80;
+}
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: 15px;
+  text-decoration: underline;
+  cursor: pointer;
+}

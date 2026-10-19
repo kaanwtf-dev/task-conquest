@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { isForeignList, useStore, visibleLists } from '../../state/store';
 import { useSync, joinByCode, resolveConflict, resolveAccountSwitch, restartSync, signOutHere, syncNow } from '../../state/sync';
-import { cloudIsBuiltIn, getSyncConfig, setSyncConfig, signIn, signUp } from '../../sync/supabase';
+import { cloudIsBuiltIn, getSyncConfig, requestPasswordReset, setSyncConfig, signIn, signUp } from '../../sync/supabase';
 import { createInvite, listParty } from '../../sync/party';
 import { iconFor } from '../../pixel/iconGen';
 import type { Appearance } from '../../pixel/sprites/hero';
@@ -105,6 +105,18 @@ function AuthCard() {
             <input className="text-in" type="password" aria-label="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
           {msg && <p style={{ fontSize: 15 }}>{msg}</p>}
+          <button
+            type="button"
+            className="link-btn"
+            disabled={busy}
+            onClick={() =>
+              email.trim()
+                ? run(() => requestPasswordReset(email.trim()), `Sent! Open the email to ${email.trim()}, choose a new password, then sign in here with it.`)
+                : setMsg('Type your email above first, then tap "Forgot password?".')
+            }
+          >
+            Forgot password?
+          </button>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12, flexWrap: 'wrap' }}>
             <button
               type="button"
