@@ -1,7 +1,7 @@
-// The scheduled reminder sender's logic; scripts/push/send.ts wires it to the cloud and the push services.
+// The scheduled reminder sender's logic; supabase/functions/reminders wires it to the cloud and the push services.
 // For each device with reminders on: is it one of that player's reminder hours (in their own time zone),
 // and does their save give the reminder something worth saying? Then it goes out, once per slot per day.
-// Nothing here logs player data: the GitHub Actions logs of a public repository are public.
+// Nothing here logs player data: function logs are kept by the hosting service.
 import type { Hero, Task, TaskList } from '../core/types';
 import { fromRow } from '../sync/engine';
 import type { RemoteRow } from '../sync/types';

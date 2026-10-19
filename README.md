@@ -50,11 +50,11 @@ It is an installable web app (PWA) that works offline:
 **Reminders (optional)**
 - Signed-in players can turn on up to two reminder notifications a day: a morning plan, and an evening streak saver or party update. On an iPhone this needs the Home Screen app.
 - The home-screen icon shows how many quests are left today.
-- They are sent by a free scheduled GitHub Actions job: [docs/REMINDERS_SETUP.md](docs/REMINDERS_SETUP.md)
+- They are sent by a Supabase Edge Function on a schedule (free): [docs/REMINDERS_SETUP.md](docs/REMINDERS_SETUP.md)
 
-## Hosting it (GitHub Pages)
+## Hosting it (Netlify)
 
-The workflow in `.github/workflows/deploy.yml` builds and publishes the app on every push to `main`. One-time setup: repository **Settings → Pages → Source: GitHub Actions**. The cloud (Supabase) settings are built in from `.env.production`, so everyone who opens the site is connected without entering anything; repository secrets `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (set both) override them. **Forks:** that file points at this repository owner's project; put your own values in it, or delete it so players can enter a cloud in the Party tab.
+The app is a static site. Build it with `npm run build` and publish the `dist` folder: on Netlify, drag it onto the project's **Deploys** page (or connect a repository; `netlify.toml` holds the build settings). The cloud (Supabase) settings are built in from `.env.production`, so everyone who opens the site is connected without entering anything. After moving to a new address, update **Site URL** and **Redirect URLs** in Supabase (see [docs/SYNC_SETUP.md](docs/SYNC_SETUP.md)).
 
 ## Development
 

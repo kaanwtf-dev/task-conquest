@@ -20,7 +20,7 @@ you can connect a free [Supabase](https://supabase.com) project. Setup takes abo
 ## 2. Create the tables
 
 1. In the left sidebar, open **SQL Editor** and click **New query**.
-2. Open the file [`supabase/schema.sql`](../supabase/schema.sql) from this repository and copy all of it. On GitHub, open the file, click **Raw**, then select all and copy.
+2. Open the file [`supabase/schema.sql`](../supabase/schema.sql) from this repository and copy all of it.
 3. Paste it into the editor and click **Run**.
 
 You should see *"Success. No rows returned"*. It is safe to run the file again later, for example after an app update.
@@ -32,7 +32,7 @@ Go to **Authentication → Sign In / Providers → Email** (older dashboards: **
 - Make sure **Email** is enabled.
 - **Recommended:** switch **Confirm email** off and click **Save**. New accounts then work immediately.
 - **If you keep confirmation on:** after you tap *Create account*, Supabase emails you a link. On iPhone that link opens in Safari, not the home-screen app. That's fine: open the link once, then go back to Task Conquest and sign in with the same email and password. The free plan only sends a few emails per hour, which is another reason to switch confirmation off.
-- Under **Authentication → URL Configuration**, set **Site URL** to the address of your app (for example `https://yourname.github.io/TODOLIST/`), and add the same address followed by `**` under **Redirect URLs** (for example `https://yourname.github.io/TODOLIST/**`). Confirmation and password-reset links then lead back to the app instead of `localhost`.
+- Under **Authentication → URL Configuration**, set **Site URL** to the address of your app (for example `https://yoursite.netlify.app/`), and add the same address followed by `**` under **Redirect URLs** (for example `https://yoursite.netlify.app/**`). Confirmation and password-reset links then lead back to the app instead of `localhost`.
 - **Forgot password?** on the sign-in screen emails a reset link. It opens a page where the player picks a new password, then they sign in with it as usual. These emails count toward the same hourly limit.
 
 ## 4. Connect the app

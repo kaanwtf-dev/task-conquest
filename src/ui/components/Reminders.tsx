@@ -179,9 +179,9 @@ export function RemindersOption() {
               {lastRun === undefined
                 ? ''
                 : lastRun === null
-                  ? 'The reminder service has not run yet (it needs a one-time setup on GitHub).'
+                  ? 'The reminder service has not run yet (it needs a one-time setup in Supabase).'
                   : Date.now() - lastRun > 3 * 3600_000
-                    ? `The reminder service last ran ${ago(Date.now() - lastRun)}: it may be switched off on GitHub.`
+                    ? `The reminder service last ran ${ago(Date.now() - lastRun)}: check its schedule in Supabase.`
                     : `Reminder service checked ${ago(Date.now() - lastRun)}.`}
             </span>
             <button className="pill" onClick={() => void preview()}>
