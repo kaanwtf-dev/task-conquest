@@ -1,7 +1,7 @@
 // App-side wiring for cloud sync: store <-> SyncEngine adapter, auth lifecycle, party join links.
 import { create } from 'zustand';
 import type { Hero, Task, TaskList } from '../core/types';
-import { syncHooks, TODAY_ID, uid, useStore, visibleLists, type State } from './store';
+import { syncHooks, TODAY_ID, ALL_ID, uid, useStore, visibleLists, type State } from './store';
 import { fx } from './fx';
 import { useAttention } from './attention';
 import { heroLevel } from '../game/progression';
@@ -377,7 +377,7 @@ export async function resolveConflict(strategy: 'merge' | 'cloud' | 'local') {
 /** After adopting cloud data the selected list may be gone. */
 function pickLiveList() {
   const st = useStore.getState();
-  if (st.activeListId === TODAY_ID) return;
+  if (st.activeListId === TODAY_ID || st.activeListId === ALL_ID) return;
   const cur = st.activeListId ? st.lists[st.activeListId] : undefined;
   if (cur && !cur.deleted) return;
   const first = visibleLists(st)[0];

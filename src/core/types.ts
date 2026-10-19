@@ -226,6 +226,11 @@ export interface Settings {
   pushAskedAt?: number;
   /** when "back up your save" was last put off (this device) */
   backupAskedAt?: number;
+  /** the "enjoying Task Conquest? tip the developer" card: when it was last put off, and whether it is done for good */
+  tipAskedAt?: number;
+  tipDone?: boolean;
+  /** the newest "what's new" this device has shown (src/whatsNew.ts) */
+  seenVersion?: string;
   /**
    * The account that turned reminders on here (and has not turned them off or signed out): while it is
    * signed in, a subscription the system dropped is quietly renewed. Another account never inherits it.

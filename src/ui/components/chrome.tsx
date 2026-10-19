@@ -1,7 +1,7 @@
 // App chrome: HUD, mobile tab bar, list chips, desktop sidebar.
 import { useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useStore, visibleLists, listTasks, TODAY_ID, type Tab } from '../../state/store';
+import { useStore, visibleLists, listTasks, TODAY_ID, ALL_ID, type Tab } from '../../state/store';
 import { useAttention } from '../../state/attention';
 import { todaySections, todayRemaining } from '../../state/today';
 import { heroGold, heroLevel, levelTitle } from '../../game/progression';
@@ -119,6 +119,15 @@ function useTodayCount(): number {
   return useMemo(() => todayRemaining(todaySections(lists, tasks, now, cfg)), [lists, tasks, cfg, now]);
 }
 
+function EverythingItem({ className, active, onPick }: { className: string; active: boolean; onPick: () => void }) {
+  return (
+    <button className={`${className} ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} style={{ ['--chip' as string]: '#3a4a8a' }} onClick={onPick}>
+      <PxImg src={iconFor('', '🗺️')} size={className === 'chip' ? 24 : 26} />
+      <span>Everything</span>
+    </button>
+  );
+}
+
 function TodayItem({ className, active, onPick }: { className: string; active: boolean; onPick: () => void }) {
   const n = useTodayCount();
   return (
@@ -152,6 +161,7 @@ export function ListChips({ onNew }: { onNew: () => void }) {
           <div className="win-title">Your lists</div>
           <div className="all-lists">
             <TodayItem className="all-item" active={s.activeListId === TODAY_ID} onPick={() => pick(TODAY_ID)} />
+            <EverythingItem className="all-item" active={s.activeListId === ALL_ID} onPick={() => pick(ALL_ID)} />
             {lists.map((l) => (
               <ChipItem key={l.id} l={l} className="all-item" active={l.id === s.activeListId} onPick={() => pick(l.id)} />
             ))}
@@ -194,6 +204,7 @@ export function Sidebar({ onNew }: { onNew: () => void }) {
       <div className="side-head">Quest Lists</div>
       <div className="side-nav">
         <TodayItem className="side-item" active={s.tab === 'quests' && s.activeListId === TODAY_ID} onPick={() => (sfx.tick(), s.setActiveList(TODAY_ID))} />
+        <EverythingItem className="side-item" active={s.tab === 'quests' && s.activeListId === ALL_ID} onPick={() => (sfx.tick(), s.setActiveList(ALL_ID))} />
         {lists.map((l) => (
           <ChipItem
             key={l.id}

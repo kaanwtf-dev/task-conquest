@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { RemindersOption } from '../components/Reminders';
 import { SupportBox } from '../components/Support';
+import { WhatsNewSheet } from '../components/WhatsNew';
 import { useStore, heroStats, isForeignList, LIST_TYPE_INFO } from '../../state/store';
 import { SKILLS } from '../../game/catalog';
 import { iconFor } from '../../pixel/iconGen';
@@ -14,6 +15,7 @@ export function SettingsScreen() {
   const importInput = useRef<HTMLInputElement>(null);
   const cfg = s.settings;
   const set = s.updateSettings;
+  const [notes, setNotes] = useState(false);
   return (
     <div className="scroll">
       <div className="win" style={{ padding: 12 }}>
@@ -56,7 +58,7 @@ export function SettingsScreen() {
         </Opt>
         <Opt label="Hero window (phone): drag it anywhere, or off an edge to tuck it away">
           {(['big', 'small', 'bar', 'hidden'] as const).map((v) => (
-            <button key={v} className={`pill ${(cfg.cornerHero ?? 'big') === v ? 'sel' : ''}`} aria-pressed={(cfg.cornerHero ?? 'big') === v} onClick={() => (sfx.tick(), set({ cornerHero: v }))}>
+            <button key={v} className={`pill ${(cfg.cornerHero ?? 'bar') === v ? 'sel' : ''}`} aria-pressed={(cfg.cornerHero ?? 'bar') === v} onClick={() => (sfx.tick(), set({ cornerHero: v }))}>
               {v === 'bar' ? 'top bar' : v}
             </button>
           ))}
@@ -108,6 +110,10 @@ export function SettingsScreen() {
           <button className="pill" onClick={() => (sfx.tick(), set({ introSeen: false }))}>
             show the intro again
           </button>
+          <button className="pill" onClick={() => (sfx.tick(), setNotes(true))}>
+            what's new
+          </button>
+          {notes && <WhatsNewSheet onClose={() => setNotes(false)} />}
         </Opt>
       </div>
       <SupportBox />

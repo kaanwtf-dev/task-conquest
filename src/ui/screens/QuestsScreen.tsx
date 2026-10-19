@@ -12,7 +12,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useStore, listTasks, visibleLists, LIST_TYPE_INFO, TODAY_ID } from '../../state/store';
+import { useStore, listTasks, visibleLists, LIST_TYPE_INFO, TODAY_ID, ALL_ID } from '../../state/store';
 import { isActiveToday, isDone, msUntilReset, fmtDuration, repeatLabel, todayKey } from '../../core/time';
 import { DIFFICULTY } from '../../game/progression';
 import { iconFor } from '../../pixel/iconGen';
@@ -24,6 +24,7 @@ import { sfx, unlockAudio } from '../../audio/sfx';
 import type { Task, TaskList } from '../../core/types';
 import TaskEditSheet from './TaskEditSheet';
 import BackupWarning from '../components/BackupWarning';
+import { TipNudge } from '../components/Support';
 import { WARN_MS, hasLimit, leftLabel, timeLeft, windowOf } from '../../game/deadlines';
 import { todaySections } from '../../state/today';
 import BossBar from '../components/BossBar';
@@ -43,6 +44,7 @@ export default function QuestsScreen() {
   const [editList, setEditList] = useState(false);
 
   if (s.activeListId === TODAY_ID) return <TodayView now={now} wide={wide} onEdit={setEditTask} editTask={editTask} closeEdit={() => setEditTask(null)} />;
+  if (s.activeListId === ALL_ID) return <EverythingView now={now} wide={wide} onEdit={setEditTask} editTask={editTask} closeEdit={() => setEditTask(null)} />;
 
   const chosen = s.activeListId ? s.lists[s.activeListId] : undefined;
   // the active list can vanish underneath us (left a party list, deleted on another device)
@@ -86,6 +88,7 @@ export default function QuestsScreen() {
 
       <QuickAdd list={list} />
       <BackupWarning />
+      <TipNudge />
       <PushInvite />
 
       {list.type === 'supply' ? (
@@ -147,6 +150,7 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
         dueToday
       />
       <BackupWarning />
+      <TipNudge />
       <PushInvite />
       {overdue.length + dueToday.length + routine.length + week.length === 0 && (
         <div className="win tasks">
@@ -158,6 +162,52 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
       {section('Daily routine', routine)}
       {section('This week', week)}
       {section(`Slain today (${doneToday.length})`, doneToday, true)}
+      {editTask && <TaskEditSheet taskId={editTask} onClose={closeEdit} />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Everything
+
+/** Every list on one screen: what's open in each (and what's done today), groceries still to buy included. */
+function EverythingView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wide: boolean; onEdit: (id: string) => void; editTask: string | null; closeEdit: () => void }) {
+  const s = useStore(useShallow(listState));
+  const setActiveList = useStore((st) => st.setActiveList);
+  const cfg = s.settings;
+  const sections = visibleLists(s).map((l) => {
+    const all = listTasks(s, l.id).filter((t) => (l.type === 'supply' ? !isDone(t, now, cfg) : isActiveToday(t, now, cfg)));
+    return { list: l, open: all.filter((t) => !isDone(t, now, cfg)), done: all.filter((t) => isDone(t, now, cfg)) };
+  });
+  const open = sections.reduce((n, x) => n + x.open.length, 0);
+
+  return (
+    <div className="scroll" style={themeStyle('castle')}>
+      <BossBar />
+      <SceneBanner theme="castle" height={wide ? 56 : 52} scale={wide ? 3 : 2}>
+        <div className="banner-info">
+          <div className="win banner-title">
+            Everything
+            <div className="banner-sub">every list, one screen</div>
+          </div>
+          <div className="win banner-progress">{open} open</div>
+        </div>
+      </SceneBanner>
+      {sections.map(({ list, open: o, done }) => (
+        <div key={list.id} style={themeStyle(list.theme)}>
+          <button className="section-label everything-head" onClick={() => (sfx.tick(), setActiveList(list.id))}>
+            {list.name} · {list.type === 'supply' ? `${o.length} to buy` : `${done.length}/${o.length + done.length}`} ›
+          </button>
+          <div className="win tasks">
+            {o.length + done.length === 0 && <div className="empty">{list.type === 'supply' ? 'Nothing to buy.' : 'All clear.'}</div>}
+            {o.map((t) => (
+              <TaskRow key={t.id} task={t} done={false} onEdit={onEdit} />
+            ))}
+            {done.map((t) => (
+              <TaskRow key={t.id} task={t} done onEdit={onEdit} />
+            ))}
+          </div>
+        </div>
+      ))}
       {editTask && <TaskEditSheet taskId={editTask} onClose={closeEdit} />}
     </div>
   );

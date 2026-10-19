@@ -7,6 +7,7 @@ import UpdateBanner from './ui/components/UpdateBanner';
 import UndoBar from './ui/components/UndoBar';
 import { PushKeeper } from './ui/components/Reminders';
 import DeadlineAsk from './ui/components/DeadlineAsk';
+import WhatsNew from './ui/components/WhatsNew';
 import { playMusic, setMusicVolume, stopMusic } from './audio/music';
 import { setSfxVolume } from './audio/sfx';
 import HeroStage from './ui/stage/HeroStage';
@@ -24,7 +25,7 @@ export default function App() {
   const tab = useStore((s) => s.tab);
   const log = useStore((s) => s.log);
   const font = useStore((s) => s.settings.taskFont);
-  const corner = useStore((s) => s.settings.cornerHero ?? 'big');
+  const corner = useStore((s) => s.settings.cornerHero ?? 'bar');
   const introSeen = useStore((s) => !!s.settings.introSeen);
   const list = useStore((s) => (s.activeListId ? s.lists[s.activeListId] : undefined));
   const wide = useMedia('(min-width: 900px)');
@@ -158,6 +159,7 @@ export default function App() {
       <UndoBar />
       <PushKeeper />
       <DeadlineAsk />
+      <WhatsNew />
       {!introSeen && <Intro />}
       {newList && <ListSheet onClose={() => setNewList(false)} />}
     </div>

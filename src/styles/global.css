@@ -2610,3 +2610,40 @@ canvas.px {
   color: #140c1c;
   background: #f2c94c;
 }
+
+/* "what's new" after an update */
+.whats-new-tag {
+  font-size: 8px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.whats-new-shot {
+  display: block;
+  width: 100%;
+  max-height: 34vh;
+  object-fit: cover;
+  object-position: top;
+  margin: 10px 0 4px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--outline);
+  image-rendering: auto;
+}
+.whats-new ul {
+  margin: 10px 0 14px;
+  padding-left: 20px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.whats-new li + li {
+  margin-top: 6px;
+}
+
+/* "Everything": each list's heading opens that list */
+.everything-head {
+  width: calc(100% - 12px);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}

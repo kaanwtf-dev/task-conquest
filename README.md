@@ -56,6 +56,11 @@ It is an installable web app (PWA) that works offline:
 
 The app is a static site. Build it with `npm run build` and publish the `dist` folder: on Netlify, drag it onto the project's **Deploys** page (or connect a repository; `netlify.toml` holds the build settings). The cloud (Supabase) settings are built in from `.env.production`, so everyone who opens the site is connected without entering anything. After moving to a new address, update **Site URL** and **Redirect URLs** in Supabase (see [docs/SYNC_SETUP.md](docs/SYNC_SETUP.md)).
 
+## Releasing an update
+
+1. Add an entry at the top of `src/whatsNew.ts` (new version number, a title, a few short lines) and, if it helps, a small screenshot in `public/whats-new/`. Players who already play see it once, the next time they open the app; new players don't.
+2. `npm run build`, then publish `dist` (drag it onto the Netlify project's **Deploys** page). Open apps pick up the new version and offer to update.
+
 ## Development
 
 ```bash

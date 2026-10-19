@@ -18,6 +18,7 @@ import { applyBuffs, computeStats } from '../game/stats';
 import { claimRewards } from '../game/achievements';
 import { BAG_MAX, BAG_STEP, dyeKey, themeKey, type ShopOffer } from '../game/shop';
 import { fx } from './fx';
+import { LATEST_VERSION } from '../whatsNew';
 import { achievementCtx, bagCount, inc, questChestRewards, streakDays, taskRewards, type RewardOutcome } from './rewards';
 
 export const uid = (): string =>
@@ -29,6 +30,8 @@ export type Tab = 'quests' | 'hero' | 'shop' | 'party' | 'settings';
 
 /** Pseudo-list id for the cross-list "Today" view. */
 export const TODAY_ID = '__today';
+/** The view with every list on one screen. */
+export const ALL_ID = '__all';
 
 export const DEFAULT_SETTINGS: Settings = {
   // players who asked their device for less motion start with battle animations off (they can turn them on)
@@ -39,7 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dayStartHour: 0,
   weekStart: 1,
   taskFont: 'pixel',
-  cornerHero: 'big',
+  cornerHero: 'bar',
   introSeen: false,
 };
 
@@ -296,7 +299,8 @@ export const useStore = create<State>()(
                 return { lists: { ...get().lists, ...fresh.lists }, tasks: { ...get().tasks, ...fresh.tasks } };
               })();
           const first = Object.values(seeded.lists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
-          set((s) => ({ hero, ...seeded, items: { ...s.items, ...kit.items }, activeListId: first?.id ?? null, tab: 'quests' }));
+          // a brand-new player has nothing to compare with: no "what's new" until the next update
+          set((s) => ({ hero, ...seeded, items: { ...s.items, ...kit.items }, activeListId: first?.id ?? null, tab: 'quests', settings: { ...s.settings, seenVersion: LATEST_VERSION } }));
           log('info', `${hero.name} sets out on an adventure!`);
         },
 
