@@ -10,9 +10,10 @@
 import webpush from 'npm:web-push@3.6.7';
 import { runReminders, type Mode } from '../../../src/push/sender';
 import { makeCloud, makeSender, type WebPushLib } from '../../../src/push/backend';
+import { useZone, zonedDate } from '../../../src/push/zone';
 
 declare const Deno: {
-  env: { get(name: string): string | undefined; set(name: string, value: string): void };
+  env: { get(name: string): string | undefined };
   serve(handler: (req: Request) => Response | Promise<Response>): void;
 };
 
@@ -46,18 +47,28 @@ async function keysMatch(privateKey: string): Promise<boolean> {
   }
 }
 
-/** The reminders read each player's save in their own time zone: setting TZ must move Date's local time. */
+/**
+ * The reminders read each player's save in their own time zone. Supabase can't change TZ at run time, so a
+ * zone-aware Date (src/push/zone.ts) stands in for the real one while each player is worked out.
+ */
 function zonesWork(): boolean {
   const t = Date.UTC(2026, 0, 15, 12, 0);
-  Deno.env.set('TZ', 'Asia/Tokyo');
-  const tokyo = new Date(t).getHours();
-  Deno.env.set('TZ', 'America/New_York');
-  const newYork = new Date(t).getHours();
-  Deno.env.set('TZ', 'UTC');
-  return tokyo === 21 && newYork === 7;
+  return new (zonedDate('Asia/Tokyo'))(t).getHours() === 21 && new (zonedDate('America/New_York'))(t).getHours() === 7;
 }
 
 Deno.serve(async (req) => {
+  try {
+    return await handle(req);
+  } catch (e) {
+    useZone(null);
+    // only the error's own text (a failed request names a table and an HTTP status, never player data)
+    const error = e instanceof Error ? e.message : String(e);
+    console.error(`reminders failed: ${error}`);
+    return json(500, { error });
+  }
+});
+
+async function handle(req: Request): Promise<Response> {
   const cronSecret = Deno.env.get('CRON_SECRET') ?? '';
   if (cronSecret.length < 16 || req.headers.get('x-cron-secret') !== cronSecret) return json(401, { error: 'unauthorized' });
 
@@ -70,7 +81,7 @@ Deno.serve(async (req) => {
   if (!url || !secret) return json(500, { error: 'SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing' });
   if (!(await keysMatch(vapidPrivate)))
     return json(500, { error: 'VAPID_PRIVATE_KEY is missing or is not the private half of the app key. Paste only the bare key.' });
-  if (!zonesWork()) return json(500, { error: "this runtime can't switch time zones, so reminders would go out at the wrong hours" });
+  if (!zonesWork()) return json(500, { error: 'time zones are not available in this runtime, so reminders would go out at the wrong hours' });
 
   const started = Date.now();
   const stats = await runReminders({
@@ -81,10 +92,10 @@ Deno.serve(async (req) => {
     appUrl: APP_URL,
     key: VAPID_PUBLIC,
     deadline: started + TIME_BUDGET_MS,
-    setZone: (tz) => Deno.env.set('TZ', tz),
+    setZone: (tz) => useZone(tz),
   });
-  Deno.env.set('TZ', 'UTC');
+  useZone(null);
   console.log(`mode=${mode} devices=${stats.devices} due=${stats.due} sent=${stats.sent} gone=${stats.gone} failed=${stats.failed} config=${stats.config}${stats.cut ? ' (stopped at the time limit)' : ''}`);
   if (stats.config) return json(500, { ...stats, error: 'a push service refused the VAPID keys' });
   return json(200, stats);
-});
+}
