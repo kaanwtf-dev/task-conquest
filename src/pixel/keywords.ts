@@ -1,7 +1,7 @@
 // Keyword -> emoji (then pixelized) + grocery aisle guesses.
 // Format: "emoji aisle: word, word, multi word"
 
-import { getLang } from '../i18n';
+import { getLang, tk } from '../i18n';
 const TABLE = `
 🥛 dairy: milk, oat milk, almond milk, soy milk
 🧀 dairy: cheese, cheddar, mozzarella, parmesan, feta, brie
@@ -540,19 +540,19 @@ export function matchKeyword(text: string): string | null {
 }
 
 export const AISLES: Record<string, { name: string; order: number }> = {
-  produce: { name: 'Produce', order: 1 },
-  bakery: { name: 'Bakery', order: 2 },
-  dairy: { name: 'Dairy & Eggs', order: 3 },
-  meat: { name: 'Meat & Fish', order: 4 },
-  pantry: { name: 'Pantry', order: 5 },
-  snacks: { name: 'Snacks', order: 6 },
-  frozen: { name: 'Frozen', order: 7 },
-  drinks: { name: 'Drinks', order: 8 },
-  household: { name: 'Household', order: 9 },
-  personal: { name: 'Personal Care', order: 10 },
-  pets: { name: 'Pets', order: 11 },
-  health: { name: 'Health', order: 12 },
-  other: { name: 'Other', order: 99 },
+  produce: { name: tk('Produce'), order: 1 },
+  bakery: { name: tk('Bakery'), order: 2 },
+  dairy: { name: tk('Dairy & Eggs'), order: 3 },
+  meat: { name: tk('Meat & Fish'), order: 4 },
+  pantry: { name: tk('Pantry'), order: 5 },
+  snacks: { name: tk('Snacks'), order: 6 },
+  frozen: { name: tk('Frozen'), order: 7 },
+  drinks: { name: tk('Drinks'), order: 8 },
+  household: { name: tk('Household'), order: 9 },
+  personal: { name: tk('Personal Care'), order: 10 },
+  pets: { name: tk('Pets'), order: 11 },
+  health: { name: tk('Health'), order: 12 },
+  other: { name: tk('Other'), order: 99 },
 };
 
 export function guessAisle(text: string): string {

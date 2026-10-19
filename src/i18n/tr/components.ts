@@ -237,4 +237,15 @@ export const TR_COMPONENTS: Record<string, string> = {
     'Her kaçırma sayılıyor: üst üste ve toplamda, hem görevin üstünde hem de soruda.',
   'A notification tells you when time runs out. Leave the question unanswered for a day and it counts as missed.':
     'Süre dolunca bildirim gelir. Soruyu bir gün cevapsız bırakırsan kaçırılmış sayılır.',
+  // grocery aisles
+  Produce: 'Meyve & Sebze',
+  Bakery: 'Fırın',
+  'Dairy & Eggs': 'Süt & Yumurta',
+  'Meat & Fish': 'Et & Balık',
+  Snacks: 'Atıştırmalık',
+  Drinks: 'İçecek',
+  Household: 'Ev Gereçleri',
+  'Personal Care': 'Kişisel Bakım',
+  Pets: 'Evcil Hayvan',
+  Health: 'Sağlık',
 };
