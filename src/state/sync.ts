@@ -78,14 +78,14 @@ const kv = {
 };
 
 /** Before the store remembered its account, the last synced user was only kept here. */
-const LAST_USER_KEY = 'questlog-sync-last-user';
-const engineKey = (userId: string) => `questlog-sync:${userId}`;
+const LAST_USER_KEY = 'taskconquest-sync-last-user';
+const engineKey = (userId: string) => `taskconquest-sync:${userId}`;
 /** Hero lineage this device last settled with the account's cloud hero (adopted, merged or pushed). */
-const decidedKey = (userId: string) => `questlog-sync-adopted:${userId}`;
+const decidedKey = (userId: string) => `taskconquest-sync-adopted:${userId}`;
 const lineage = (hero: Hero | null) => (hero ? String(hero.createdAt) : 'none');
-const leavesKey = (userId: string) => `questlog-pending-leave:${userId}`;
+const leavesKey = (userId: string) => `taskconquest-pending-leave:${userId}`;
 /** Hero lineage deleted by Start over while no engine ran for this account: deleted in the cloud at the next sync. */
-const heroResetKey = (userId: string) => `questlog-hero-reset:${userId}`;
+const heroResetKey = (userId: string) => `taskconquest-hero-reset:${userId}`;
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 

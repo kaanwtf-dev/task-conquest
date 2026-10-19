@@ -1,4 +1,4 @@
-// Renders the Questlog app icons (golden sword over a parchment checklist) from one pixel grid.
+// Renders the Task Conquest app icons (golden sword over a parchment checklist) from one pixel grid.
 // Pure Node: a tiny PNG encoder on top of zlib. usage: node scripts/gen-icons.mjs [outDir=public]
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';

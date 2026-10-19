@@ -149,7 +149,7 @@ export default function CreateHero() {
   return (
     <div className="create" style={themeStyle(undefined)}>
       <div className="create-head">
-        <div className="pixel logo">QUESTLOG</div>
+        <div className="pixel logo">TASK CONQUEST</div>
         <div className="pixel" style={{ fontSize: 9, color: '#b8c0f0', marginTop: 8 }}>
           CREATE YOUR HERO
         </div>

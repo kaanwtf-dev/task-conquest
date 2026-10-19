@@ -1,6 +1,6 @@
 # Reminder notifications: one-time setup
 
-Questlog can send each player up to two reminders a day:
+Task Conquest can send each player up to two reminders a day:
 
 - **Morning:** today's plan. If they have been away for a few days, a "your hero misses you" nudge instead.
 - **Evening:** a streak about to end, a party member who got things done, dailies left, or a boss that is nearly down.
@@ -41,7 +41,7 @@ Until both secrets exist, every scheduled run does nothing and succeeds.
 
 ## 3. Check it works
 
-1. On the iPhone, open Questlog from the **Home Screen**. Reminders can't work in a Safari tab.
+1. On the iPhone, open Task Conquest from the **Home Screen**. Reminders can't work in a Safari tab.
 2. Go to **Options › Reminders**, tap **Turn on** and choose **Allow**.
 3. In GitHub, open **Actions › Reminders › Run workflow**, keep the mode on **test**, and click **Run workflow**.
 

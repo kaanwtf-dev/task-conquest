@@ -73,7 +73,7 @@ describe('reminder sender', () => {
     expect(zones).toContain('Europe/Istanbul');
     const msg = JSON.parse(sent[0]);
     expect(msg.web_push).toBe(8030);
-    expect(msg.notification).toMatchObject({ title: '⚔️ 2 quests today', navigate: 'https://app/', tag: 'questlog-plan' });
+    expect(msg.notification).toMatchObject({ title: '⚔️ 2 quests today', navigate: 'https://app/', tag: 'taskconquest-plan' });
     expect(msg.app_badge).toBe(2); // top level: WebKit ignores it inside "notification"
     expect(f.histories.get(apple('A'))?.sent?.morning).toBe('2026-10-15');
     expect((await run(MORNING + 20 * 60_000)).sent).toBe(0); // the next run in the same slot stays quiet

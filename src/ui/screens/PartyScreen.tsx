@@ -294,10 +294,10 @@ function ListParty({ list }: { list: TaskList }) {
 
   const shareLink = async () => {
     if (!invite) return;
-    const text = `Join my Questlog party list "${list.name}"! Code: ${invite.code}`;
+    const text = `Join my Task Conquest party list "${list.name}"! Code: ${invite.code}`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Questlog party', text, url: invite.url });
+        await navigator.share({ title: 'Task Conquest party', text, url: invite.url });
         return;
       } catch {
         // cancelled

@@ -14,8 +14,8 @@ export interface AuthUser {
   email: string | null;
 }
 
-const CONFIG_KEY = 'questlog-supabase';
-const AUTH_STORAGE_KEY = 'questlog-auth';
+const CONFIG_KEY = 'taskconquest-supabase';
+const AUTH_STORAGE_KEY = 'taskconquest-auth';
 
 function storage(): Storage | null {
   try {
@@ -358,7 +358,7 @@ export class SupabaseRemote implements RemoteAdapter {
     // join with the user's token, not the anon key (see getClient); it also reaches channels already joined
     void this.client.realtime?.setAuth?.();
     const ch = this.client
-      .channel(`questlog-${this.userId}-${++channelSeq}`)
+      .channel(`taskconquest-${this.userId}-${++channelSeq}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'docs' }, (p) => {
         if (p.eventType === 'DELETE') return; // docs are never hard-deleted (tombstones)
         const row = p.new as RemoteRow | undefined;

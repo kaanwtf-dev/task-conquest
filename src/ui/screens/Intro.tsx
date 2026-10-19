@@ -1,4 +1,4 @@
-// First-run walkthrough: a few short illustrated cards on what Questlog is and how it works.
+// First-run walkthrough: a few short illustrated cards on what Task Conquest is and how it works.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../../state/store';
 import { heroLook } from '../../game/look';
@@ -49,7 +49,7 @@ export default function Intro() {
   const cards: Card[] = [
     {
       title: 'Welcome, adventurer!',
-      body: 'Questlog is a to-do list that plays like a pixel RPG. Every task you finish is a monster your hero defeats.',
+      body: 'Task Conquest is a to-do list that plays like a pixel RPG. Every task you finish is a monster your hero defeats.',
       art: () => (
         <SceneBanner theme="forest" height={60} scale={2}>
           <div className="intro-duel">

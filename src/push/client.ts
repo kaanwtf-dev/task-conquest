@@ -5,7 +5,7 @@ import { DEFAULT_PUSH_PREFS, type PushPrefs } from './nudges';
 
 const VAPID = String((import.meta.env as Record<string, unknown>).VITE_VAPID_PUBLIC_KEY ?? '').trim();
 
-/** 'install': an iPhone/iPad Safari tab; reminders work once Questlog is added to the Home Screen. */
+/** 'install': an iPhone/iPad Safari tab; reminders work once Task Conquest is added to the Home Screen. */
 export type PushSupport = 'ok' | 'install' | 'unsupported';
 
 const isIOS = () =>

@@ -347,11 +347,11 @@ describe('party lists', () => {
     st().updateList(sid, { shared: true, ownerId: U });
     await app!.sync.syncNow();
     // the old persisted shape: no accountId (version 3), the last user only in the sync layer's key
-    const raw = JSON.parse(H.mem.get('questlog-v1')!);
+    const raw = JSON.parse(H.mem.get('taskconquest-v1')!);
     delete raw.state.accountId;
     raw.version = 3;
-    H.mem.set('questlog-v1', JSON.stringify(raw));
-    H.mem.set('questlog-sync-last-user', U);
+    H.mem.set('taskconquest-v1', JSON.stringify(raw));
+    H.mem.set('taskconquest-sync-last-user', U);
     emit(null);
     await launch(null); // signed out
     expect(st().accountId).toBe(U);

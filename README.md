@@ -1,4 +1,4 @@
-# Questlog
+# Task Conquest
 
 A pixel-art RPG to-do list for iPhone and Mac. Every task you complete spawns a monster, and your hero slays it for XP, gold and loot.
 

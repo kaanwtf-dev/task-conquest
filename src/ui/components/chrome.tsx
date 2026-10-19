@@ -188,7 +188,7 @@ export function Sidebar({ onNew }: { onNew: () => void }) {
     <aside className="side">
       <div style={{ padding: '18px 16px 6px' }}>
         <div className="pixel" style={{ fontSize: 16, color: '#ffd860', textShadow: '3px 3px 0 #140c1c' }}>
-          QUESTLOG
+          TASK CONQUEST
         </div>
       </div>
       <div className="side-head">Quest Lists</div>

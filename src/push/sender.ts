@@ -150,7 +150,7 @@ export function payload(n: Pick<Nudge, 'title' | 'body' | 'tag'> & { badge?: num
 /** What "Run workflow › test" sends to every device: proof the whole chain works, right now. */
 export function testNudge(state: NudgeState): Omit<Nudge, 'badge'> & { badge?: number } {
   const name = state.hero?.name ?? 'adventurer';
-  return { kind: 'plan', title: '🔔 Test reminder', body: `Hello ${name}! Reminders from Questlog reach this device.`, tag: 'questlog-test' };
+  return { kind: 'plan', title: '🔔 Test reminder', body: `Hello ${name}! Reminders from Task Conquest reach this device.`, tag: 'taskconquest-test' };
 }
 
 export async function runReminders(opts: {

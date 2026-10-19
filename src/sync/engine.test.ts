@@ -1053,14 +1053,14 @@ describe('auth from the stored session', () => {
   it('stays signed in offline when the access token expired and cannot be refreshed yet', async () => {
     const store = memoryStorage();
     setSyncConfig({ url: 'https://example.supabase.co/', anonKey: 'anon-key-for-tests' });
-    store.set('questlog-auth', JSON.stringify(saved));
+    store.set('taskconquest-auth', JSON.stringify(saved));
     auth.getSession.mockResolvedValue({ data: { session: null }, error: new AuthRetryableFetchError('Failed to fetch', 0) });
     expect(await getUser()).toEqual({ id: A, email: 'a@test' });
     // refresh token revoked / signed out: no session and no network error -> signed out
     auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
     expect(await getUser()).toBeNull();
     // a garbled stored session is not a user
-    store.set('questlog-auth', '{"user":{}}');
+    store.set('taskconquest-auth', '{"user":{}}');
     auth.getSession.mockResolvedValue({ data: { session: null }, error: new AuthRetryableFetchError('Failed to fetch', 0) });
     expect(await getUser()).toBeNull();
     auth.getSession.mockResolvedValue({ data: { session: { user: { id: B, email: null } } }, error: null });
@@ -1070,15 +1070,15 @@ describe('auth from the stored session', () => {
   it('signing out offline still forgets the session on this device', async () => {
     const store = memoryStorage();
     setSyncConfig({ url: 'https://example.supabase.co', anonKey: 'anon-key-for-tests' });
-    store.set('questlog-auth', JSON.stringify(saved));
+    store.set('taskconquest-auth', JSON.stringify(saved));
     auth.signOut.mockResolvedValue({ error: new AuthRetryableFetchError('Failed to fetch', 0) });
     await signOut();
-    expect(store.has('questlog-auth')).toBe(false);
+    expect(store.has('taskconquest-auth')).toBe(false);
     // a real server refusal is reported, not papered over
-    store.set('questlog-auth', JSON.stringify(saved));
+    store.set('taskconquest-auth', JSON.stringify(saved));
     auth.signOut.mockResolvedValue({ error: new Error('boom') });
     await expect(signOut()).rejects.toThrow();
-    expect(store.has('questlog-auth')).toBe(true);
+    expect(store.has('taskconquest-auth')).toBe(true);
   });
 
   it('a malformed project URL reads as "not set up" with a clear message instead of throwing', async () => {
@@ -1098,7 +1098,7 @@ describe('auth from the stored session', () => {
   it('the initial auth event falls back to the stored session; sign-out events do not', async () => {
     const store = memoryStorage();
     setSyncConfig({ url: 'https://example.supabase.co', anonKey: 'anon-key-for-tests' });
-    store.set('questlog-auth', JSON.stringify(saved));
+    store.set('taskconquest-auth', JSON.stringify(saved));
     let emit: (event: string, session: unknown) => void = () => {};
     const unsubscribe = vi.fn();
     auth.onAuthStateChange.mockImplementation((cb: typeof emit) => ((emit = cb), { data: { subscription: { unsubscribe } } }));

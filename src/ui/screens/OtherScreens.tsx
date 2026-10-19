@@ -131,7 +131,7 @@ export function SettingsScreen() {
               if (!f) return;
               if (!confirm('Replace everything on this device with this backup? Party lists are merged with what the party did since, never replaced.')) return;
               const ok = s.importData(await f.text());
-              alert(ok ? 'Backup restored!' : 'That file is not a Questlog backup.');
+              alert(ok ? 'Backup restored!' : 'That file is not a Task Conquest backup.');
             }}
           />
         <div className="muted small" style={{ width: '100%' }}>
@@ -159,12 +159,12 @@ export function SettingsScreen() {
 }
 
 async function exportBackup(json: string) {
-  const name = `questlog-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const name = `taskconquest-backup-${new Date().toISOString().slice(0, 10)}.json`;
   const file = new File([json], name, { type: 'application/json' });
   const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
   if (nav.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: 'Questlog backup' });
+      await navigator.share({ files: [file], title: 'Task Conquest backup' });
       return;
     } catch {
       // user cancelled or share failed: fall back to a download

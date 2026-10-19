@@ -1090,7 +1090,9 @@ canvas.px {
   margin-bottom: 16px;
 }
 .logo {
-  font-size: 26px;
+  /* "TASK CONQUEST" must fit a 320px-wide phone */
+  font-size: clamp(17px, 6.6vw, 26px);
+  white-space: nowrap;
   color: #ffd860;
   text-shadow:
     3px 3px 0 #b8501a,

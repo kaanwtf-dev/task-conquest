@@ -8,7 +8,7 @@ export default function UpdateBanner() {
   if (!update) return null;
   return (
     <div className="update-banner win" role="status">
-      <span>A new version of Questlog is ready.</span>
+      <span>A new version of Task Conquest is ready.</span>
       <button className="btn small" onClick={update}>
         Update
       </button>

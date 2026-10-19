@@ -1,6 +1,6 @@
 # Cloud sync and party lists: setup
 
-Questlog works fully offline, and you don't need any of this to play. If you want to:
+Task Conquest works fully offline, and you don't need any of this to play. If you want to:
 
 - **sync** your hero and lists between iPhone and Mac, or
 - **share** lists (groceries, chores…) with friends and family in real time,
@@ -13,7 +13,7 @@ you can connect a free [Supabase](https://supabase.com) project. Setup takes abo
 
 1. Go to **supabase.com** and sign up. The free plan is enough.
 2. Click **New project**.
-3. Name it `questlog` and choose a database password. Keep the password somewhere safe; the app never asks for it.
+3. Name it `taskconquest` and choose a database password. Keep the password somewhere safe; the app never asks for it.
 4. Pick the region closest to you and click **Create new project**.
 5. Wait a minute or two while the project starts.
 
@@ -31,7 +31,7 @@ Go to **Authentication → Sign In / Providers → Email** (older dashboards: **
 
 - Make sure **Email** is enabled.
 - **Recommended:** switch **Confirm email** off and click **Save**. New accounts then work immediately.
-- **If you keep confirmation on:** after you tap *Create account*, Supabase emails you a link. On iPhone that link opens in Safari, not the home-screen app. That's fine: open the link once, then go back to Questlog and sign in with the same email and password. The free plan only sends a few emails per hour, which is another reason to switch confirmation off.
+- **If you keep confirmation on:** after you tap *Create account*, Supabase emails you a link. On iPhone that link opens in Safari, not the home-screen app. That's fine: open the link once, then go back to Task Conquest and sign in with the same email and password. The free plan only sends a few emails per hour, which is another reason to switch confirmation off.
 - Under **Authentication → URL Configuration**, set **Site URL** to the address of your app (for example `https://yourname.github.io/TODOLIST/`), and add the same address followed by `**` under **Redirect URLs** (for example `https://yourname.github.io/TODOLIST/**`). Confirmation and password-reset links then lead back to the app instead of `localhost`.
 - **Forgot password?** on the sign-in screen emails a reset link. It opens a page where the player picks a new password, then they sign in with it as usual. These emails count toward the same hourly limit.
 
@@ -62,7 +62,7 @@ Repository secrets with the same names (**Settings → Secrets and variables →
 ## 5. Use it
 
 - **First device:** in the Party tab, tap **Create account** with your email and a password of at least 6 characters, then sign in. Your hero and lists upload.
-- **Other devices:** connect to the same project and **Sign in** with the same email and password. If that device already has its own hero, Questlog asks what to do:
+- **Other devices:** connect to the same project and **Sign in** with the same email and password. If that device already has its own hero, Task Conquest asks what to do:
   - **Use the cloud save:** this device becomes a copy of the cloud.
   - **Merge both:** keeps all lists and adds up both heroes' progress.
   - **Overwrite the cloud with this device:** this device's hero and lists replace the cloud's. Shared party lists are kept.
@@ -74,7 +74,7 @@ Repository secrets with the same names (**Settings → Secrets and variables →
 - **Leave a list:** tap **Leave party list** in the Party tab, or **Leave** in the list's **⋯** menu. The list disappears from your devices, and the others keep it. This also works offline: the server is told once you are back online.
 - **Delete vs. leave:** only the owner can delete a party list, and deleting it removes it for everyone. **Start over** (Options) and **Import save** never delete lists you joined. Start over leaves them, and an import keeps them as they are. When you import a backup of a list you share, it is merged with what the party did since, so nobody's items are lost.
 - **Start over** deletes your hero, loot and lists on all your devices, including ones that were offline or signed out at the time; they catch up at their next sync.
-- **A different account on the same device:** if someone signs in with another account on a device that holds a hero, Questlog asks whether to start fresh or bring this device's hero and lists into the new account. Nothing is uploaded until you choose. Party lists stay with the account that joined them.
+- **A different account on the same device:** if someone signs in with another account on a device that holds a hero, Task Conquest asks whether to start fresh or bring this device's hero and lists into the new account. Nothing is uploaded until you choose. Party lists stay with the account that joined them.
 - **Offline:** keep playing; you stay signed in. Changes sync automatically when the connection returns. The Party tab shows the sync status, and **Sync now** forces a sync. Signing out also works offline.
 
 ## Troubleshooting

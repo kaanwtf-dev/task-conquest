@@ -20,7 +20,7 @@ export default function PasswordReset({ link }: { link: NonNullable<RecoveryLink
       <div className="win reset-win">
         <div className="win-title">{done ? 'Password changed' : link.kind === 'error' ? 'Link problem' : 'Choose a new password'}</div>
         {done ? (
-          <p>All set. Open Questlog and sign in on the Party tab with your email and new password (on iPhone, from the Home Screen icon).</p>
+          <p>All set. Open Task Conquest and sign in on the Party tab with your email and new password (on iPhone, from the Home Screen icon).</p>
         ) : link.kind === 'error' ? (
           <p>{msg} Ask for a new one: Party tab › Sign in › Forgot password?</p>
         ) : (
@@ -56,7 +56,7 @@ export default function PasswordReset({ link }: { link: NonNullable<RecoveryLink
           </form>
         )}
         <button className="btn ghost small" style={{ marginTop: 14 }} onClick={home}>
-          Back to Questlog
+          Back to Task Conquest
         </button>
       </div>
     </div>

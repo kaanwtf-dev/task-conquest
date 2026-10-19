@@ -13,8 +13,8 @@ export default defineConfig({
       injectRegister: null,
       includeManifestIcons: false, // already precached by globPatterns; avoids duplicate entries
       manifest: {
-        name: 'Questlog',
-        short_name: 'Questlog',
+        name: 'Task Conquest',
+        short_name: 'Task Conquest',
         description: 'A pixel-art RPG to-do list: finish tasks, slay monsters, earn XP, gold and loot.',
         theme_color: '#120c1c',
         background_color: '#0c0a18',

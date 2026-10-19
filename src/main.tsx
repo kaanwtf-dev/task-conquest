@@ -23,7 +23,7 @@ trackKeyboard();
 if (!recovery) void import('./state/sync').then((m) => m.initSync());
 registerPWA(
   (update) => useAppUpdate.setState({ update }),
-  () => fx.emit({ type: 'toast', text: 'READY OFFLINE', small: 'Questlog now works without internet.' }),
+  () => fx.emit({ type: 'toast', text: 'READY OFFLINE', small: 'Task Conquest now works without internet.' }),
 );
 if (useStore.getState().hero) void requestPersistentStorage();
 else {

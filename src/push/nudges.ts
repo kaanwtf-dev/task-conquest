@@ -112,7 +112,7 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
         kind: 'comeback',
         title: '🛡️ Your hero is getting rusty',
         body: `${plural(idle, 'day')} without a quest, ${name}. ${boss.name} grows bolder. One small one to warm up?`,
-        tag: 'questlog-comeback',
+        tag: 'taskconquest-comeback',
         badge,
       };
     }
@@ -128,7 +128,7 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
       kind: 'plan',
       title: `⚔️ ${plural(left.length, 'quest')} today`,
       body: `${named.join(', ')}${more}. ${boss.name} has ${hp.toLocaleString('en-US')} HP left.`,
-      tag: 'questlog-plan',
+      tag: 'taskconquest-plan',
       badge,
     };
   }
@@ -142,7 +142,7 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
       kind: 'streak',
       title: `🔥 Your ${run}-day streak is on the line`,
       body: `Finish one quest before the day resets to keep it alive${left.length ? ` (${plural(left.length, 'quest')} waiting)` : ''}.`,
-      tag: 'questlog-evening',
+      tag: 'taskconquest-evening',
       badge,
     };
   }
@@ -163,7 +163,7 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
         kind: 'party',
         title: `👀 ${clip(top[0], 24)} finished ${plural(top[1], 'quest')} today`,
         body: `Your move, ${name}.${left.length ? ` ${plural(left.length, 'quest')} left for you.` : ''}`,
-        tag: 'questlog-evening',
+        tag: 'taskconquest-evening',
         badge,
       };
     }
@@ -179,7 +179,7 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
       kind: 'dailies',
       title: `🌙 ${plural(dailies.length, 'daily quest')} left`,
       body: `${clip(dailies[0].title, 48)}${dailies.length > 1 ? ` and ${plural(dailies.length - 1, 'other')}` : ''} reset when the day ends.`,
-      tag: 'questlog-evening',
+      tag: 'taskconquest-evening',
       badge,
     };
   }
@@ -189,7 +189,7 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
       kind: 'boss',
       title: `💀 ${boss.name} is down to ${hp.toLocaleString('en-US')} HP`,
       body: 'One more quest could finish it off.',
-      tag: 'questlog-evening',
+      tag: 'taskconquest-evening',
       badge,
     };
   }
@@ -262,7 +262,7 @@ export function partyDigest(state: NudgeState, since: number, until: number): Pi
   return {
     title: `${supply ? '🛒' : '👥'} ${names} updated ${clip(l.name, 24)}`,
     body: parts.join(' · '),
-    tag: `questlog-party-${listId}`.slice(0, 64),
+    tag: `taskconquest-party-${listId}`.slice(0, 64),
   };
 }
 

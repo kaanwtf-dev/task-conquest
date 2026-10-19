@@ -226,7 +226,7 @@ export class SyncEngine {
     this.remote = remote;
     this.kv = kv;
     this.userId = userId;
-    this.kvKey = `questlog-sync:${userId}`;
+    this.kvKey = `taskconquest-sync:${userId}`;
     this.pushDelay = opts.pushDelayMs ?? PUSH_DELAY_MS;
     this.intervalMs = opts.intervalMs ?? SYNC_INTERVAL_MS;
     this.st = this.load();

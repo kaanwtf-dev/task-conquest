@@ -1,4 +1,4 @@
--- Questlog cloud sync + party lists for Supabase.
+-- Task Conquest cloud sync + party lists for Supabase.
 -- Paste this whole file into the Supabase SQL editor and press Run. Re-running it is safe.
 --
 -- Every synced record (hero, list, task, item, potion stack) is one row in `docs`. Clients merge

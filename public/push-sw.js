@@ -13,9 +13,9 @@ self.addEventListener('push', (event) => {
   }
   const n = msg && typeof msg.notification === 'object' && msg.notification ? msg.notification : msg;
   const url = typeof n.navigate === 'string' && n.navigate.startsWith(scope) ? n.navigate : scope;
-  const shown = self.registration.showNotification(typeof n.title === 'string' && n.title ? n.title : 'Questlog', {
+  const shown = self.registration.showNotification(typeof n.title === 'string' && n.title ? n.title : 'Task Conquest', {
     body: typeof n.body === 'string' ? n.body : 'Your quests await.',
-    tag: typeof n.tag === 'string' ? n.tag : 'questlog',
+    tag: typeof n.tag === 'string' ? n.tag : 'taskconquest',
     icon: scope + 'icon-192.png',
     data: { url },
   });

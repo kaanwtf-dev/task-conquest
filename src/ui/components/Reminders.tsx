@@ -75,7 +75,7 @@ async function turnOn(account: string): Promise<boolean> {
       useStore.getState().updateSettings({ pushAskedAt: Date.now() });
       fx.emit(
         refused
-          ? { type: 'toast', text: 'Notifications are off', small: 'Turn them on in Settings › Notifications › Questlog.' }
+          ? { type: 'toast', text: 'Notifications are off', small: 'Turn them on in Settings › Notifications › Task Conquest.' }
           : { type: 'toast', text: 'No reminders yet', small: 'Tap Turn on again and choose Allow.' },
       );
       return false;
@@ -119,7 +119,7 @@ async function preview() {
     const reg = await navigator.serviceWorker.ready;
     await reg.showNotification('🔥 Your 3-day streak is on the line', {
       body: 'Finish one quest before the day resets to keep it alive. (This is a preview.)',
-      tag: 'questlog-preview',
+      tag: 'taskconquest-preview',
       icon: `${import.meta.env.BASE_URL}icon-192.png`,
     });
   } catch {
@@ -142,10 +142,10 @@ export function RemindersOption() {
   };
 
   let note: string | null = null;
-  if (support === 'install') note = 'Add Questlog to your Home Screen first (Share › Add to Home Screen), then turn reminders on there.';
+  if (support === 'install') note = 'Add Task Conquest to your Home Screen first (Share › Add to Home Screen), then turn reminders on there.';
   else if (support === 'unsupported') note = 'This browser cannot show reminders.';
   else if (userId === null) note = 'Sign in on the Party tab first: reminders come from the cloud.';
-  else if (pushPermission() === 'denied') note = 'Notifications are blocked for Questlog. Allow them in Settings › Notifications › Questlog.';
+  else if (pushPermission() === 'denied') note = 'Notifications are blocked for Task Conquest. Allow them in Settings › Notifications › Task Conquest.';
 
   return (
     <div className="reminders">

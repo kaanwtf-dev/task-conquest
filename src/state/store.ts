@@ -101,7 +101,9 @@ export const syncHooks: {
 } = {};
 
 /** Before the store remembered its account, the sync layer kept the last synced user here. */
-const LEGACY_LAST_USER_KEY = 'questlog-sync-last-user';
+/** Backups exported before the app was renamed to Task Conquest still import. */
+const LEGACY_APP_ID = 'questlog';
+const LEGACY_LAST_USER_KEY = 'taskconquest-sync-last-user';
 
 export interface State {
   deviceId: string;
@@ -769,14 +771,14 @@ export const useStore = create<State>()(
         exportData() {
           const { hero, lists, tasks, items, potions, settings, log: entries } = get();
           const { accountId } = get();
-          return JSON.stringify({ app: 'questlog', version: 3, exportedAt: now(), accountId, hero, lists, tasks, items, potions, settings, log: entries });
+          return JSON.stringify({ app: 'taskconquest', version: 3, exportedAt: now(), accountId, hero, lists, tasks, items, potions, settings, log: entries });
         },
 
         importData(json) {
           try {
             const d = JSON.parse(json);
             const isMap = (v: unknown) => !!v && typeof v === 'object' && !Array.isArray(v);
-            if (d?.app !== 'questlog' || !isMap(d.lists) || !isMap(d.tasks)) return false;
+            if ((d?.app !== 'taskconquest' && d?.app !== LEGACY_APP_ID) || !isMap(d.lists) || !isMap(d.tasks)) return false;
             const cur = get();
             const t = now();
             // whose save this is: this device's account, or on a device that never synced, the exporter's
@@ -859,7 +861,7 @@ export const useStore = create<State>()(
       };
     },
     {
-      name: 'questlog-v1',
+      name: 'taskconquest-v1',
       version: 4,
       partialize: (s) => ({
         deviceId: s.deviceId, accountId: s.accountId, hero: s.hero, lists: s.lists, tasks: s.tasks, items: s.items, potions: s.potions,
