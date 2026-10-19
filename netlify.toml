@@ -1,0 +1,17 @@
+# Netlify: build the app at the site root (BASE_PATH stays unset, so assets load from "/").
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# the service worker and the page must never be served stale, or players get stuck on an old version
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
