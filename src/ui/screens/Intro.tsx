@@ -1,5 +1,5 @@
 // First-run walkthrough: a few short illustrated cards on what Task Conquest is and how it works.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../../state/store';
 import { heroLook } from '../../game/look';
 import { CLASS_BY_ID } from '../../game/catalog';
@@ -11,6 +11,7 @@ import { spriteUrl } from '../../pixel/pix';
 import { iconFor } from '../../pixel/iconGen';
 import { BodyPortal, PxImg, SceneBanner, Ui } from '../components/common';
 import { sfx, unlockAudio } from '../../audio/sfx';
+import { t } from '../../i18n';
 
 const GUIDE: Appearance = { race: 'human', skin: 1, hair: 'short', hairColor: '#5a3a22', eyes: '#3a5a9a', beard: 'none', outfit: '#3a6ad0', pants: '#4a3a2a' };
 const FRIEND: Appearance = { race: 'elf', skin: 0, hair: 'long', hairColor: '#e8c070', eyes: '#2a8a5a', beard: 'none', outfit: '#8a4ac0', pants: '#2a2a3a' };
@@ -19,6 +20,11 @@ interface Card {
   title: string;
   body: string;
   art: () => React.ReactNode;
+}
+
+/** A translated sentence with {placeholders} replaced by elements (the on-screen button names in the install steps). */
+function withKeys(text: string, keys: Record<string, React.ReactNode>): React.ReactNode {
+  return text.split(/\{(\w+)\}/).map((part, n) => (n % 2 ? <Fragment key={n}>{keys[part]}</Fragment> : part));
 }
 
 /** Running as the Home Screen app (not in a browser tab)? */
@@ -48,8 +54,8 @@ export default function Intro() {
 
   const cards: Card[] = [
     {
-      title: 'Welcome, adventurer!',
-      body: 'Task Conquest is a to-do list that plays like a pixel RPG. Every task you finish is a monster your hero defeats.',
+      title: t('Welcome, adventurer!'),
+      body: t('Task Conquest is a to-do list that plays like a pixel RPG. Every task you finish is a monster your hero defeats.'),
       art: () => (
         <SceneBanner theme="forest" height={60} scale={2}>
           <div className="intro-duel">
@@ -61,8 +67,8 @@ export default function Intro() {
       ),
     },
     {
-      title: 'Tick a task, slay a monster',
-      body: 'Check something off and your hero attacks. You earn XP and gold, and sometimes loot. Harder tasks pay more.',
+      title: t('Tick a task, slay a monster'),
+      body: t('Check something off and your hero attacks. You earn XP and gold, and sometimes loot. Harder tasks pay more.'),
       art: () => (
         <div className="intro-mock">
           <div className="task">
@@ -71,28 +77,28 @@ export default function Intro() {
             </span>
             <PxImg className="ticon" src={iconFor('Water the plants')} size={32} />
             <div className="tmain">
-              <div className="ttitle">Water the plants</div>
+              <div className="ttitle">{t('Water the plants')}</div>
             </div>
-            <span className="intro-float">+12 XP +4g</span>
+            <span className="intro-float">{t('+12 XP +4g')}</span>
           </div>
           <div className="intro-loot">
             <PxImg src={chestUrl(2, true)} size={44} />
             <PxImg src={itemIconUrl({ slot: 'weapon', base: 'sword', palette: MATERIALS.steel })} size={36} />
-            <span className="intro-rare">Rare loot!</span>
+            <span className="intro-rare">{t('Rare loot!')}</span>
           </div>
         </div>
       ),
     },
     {
-      title: 'A list for everything',
-      body: 'Tap a task to edit it, hold and drag to reorder. Add your own lists with any name.',
+      title: t('A list for everything'),
+      body: t('Tap a task to edit it, hold and drag to reorder. Add your own lists with any name.'),
       art: () => (
         <div className="intro-lists">
           {[
-            ['☀️', 'Daily', 'resets every morning'],
-            ['📅', 'Weekly', 'resets every week'],
-            ['⚔️', 'Quests', 'one-offs, with due dates'],
-            ['🛒', 'Groceries', 'remembers items; swipe one away if you added it by mistake'],
+            ['☀️', t('Daily'), t('resets every morning')],
+            ['📅', t('Weekly'), t('resets every week')],
+            ['⚔️', t('Quests'), t('one-offs, with due dates')],
+            ['🛒', t('Groceries'), t('remembers items; swipe one away if you added it by mistake')],
           ].map(([icon, name, what]) => (
             <div key={name} className="intro-list">
               <PxImg src={iconFor('', icon)} size={28} />
@@ -105,8 +111,8 @@ export default function Intro() {
       ),
     },
     {
-      title: 'Grow forever',
-      body: 'There is no level cap. Find and upgrade gear, brew potions, shop for new looks, and every task chips away at the next boss.',
+      title: t('Grow forever'),
+      body: t('There is no level cap. Find and upgrade gear, brew potions, shop for new looks, and every task chips away at the next boss.'),
       art: () => (
         <div className="intro-grow">
           <PxImg src={bossUrl('mushroom', 0)} size={84} />
@@ -116,13 +122,13 @@ export default function Intro() {
             <PxImg src={potionIconUrl('fortune', 2)} size={36} />
             <PxImg src={itemIconUrl({ slot: 'trinket', base: 'amulet', palette: MATERIALS.infernal })} size={36} />
           </div>
-          <div className="intro-lv">No level cap</div>
+          <div className="intro-lv">{t('No level cap')}</div>
         </div>
       ),
     },
     {
-      title: 'Better together',
-      body: 'Sign in on the Party tab to sync your iPhone and Mac, and share a list with your party, like groceries with your partner.',
+      title: t('Better together'),
+      body: t('Sign in on the Party tab to sync your iPhone and Mac, and share a list with your party, like groceries with your partner.'),
       art: () => (
         <div className="intro-party">
           <div className="intro-pair">
@@ -130,14 +136,16 @@ export default function Intro() {
             <PxImg src={friend} size={72} />
           </div>
           <div className="intro-tip">
-            Tip: drag the hero window anywhere (or off the edge to hide it), and tap your hero to say hi.
+            {t('Tip: drag the hero window anywhere (or off the edge to hide it), and tap your hero to say hi.')}
           </div>
         </div>
       ),
     },
     {
-      title: "Don't lose your hero!",
-      body: 'Until you sign in, your progress lives ONLY on this phone. Delete the app, clear your browser or lose your phone and it is gone for good! Make a free account on the Party tab to keep it safe in the cloud.',
+      title: t("Don't lose your hero!"),
+      body: t(
+        'Until you sign in, your progress lives ONLY on this phone. Delete the app, clear your browser or lose your phone and it is gone for good! Make a free account on the Party tab to keep it safe in the cloud.',
+      ),
       art: () => (
         <div className="intro-backup" aria-hidden>
           <span>💾</span>
@@ -149,34 +157,29 @@ export default function Intro() {
     },
     // always shown (handy for showing friends how); worded for whether this is already the Home Screen app
     {
-      title: installed() ? "You're on the Home Screen" : 'Put it on your Home Screen',
+      title: installed() ? t("You're on the Home Screen") : t('Put it on your Home Screen'),
       body: installed()
-        ? 'The best way to play: full screen, offline, with reminders. Friends can add it the same way:'
-        : 'It then opens full screen like a real app, works offline, and can send you reminders.',
+        ? t('The best way to play: full screen, offline, with reminders. Friends can add it the same way:')
+        : t('It then opens full screen like a real app, works offline, and can send you reminders.'),
       art: () => (
         <div className="intro-install">
           <div className="intro-step">
             <b>iPhone / iPad</b> (Safari)
             <ol>
-              <li>
-                Tap <span className="intro-key">Share ⇧</span>
-              </li>
-              <li>
-                Tap <span className="intro-key">Add to Home Screen</span>
-              </li>
-              <li>
-                Tap <span className="intro-key">Add</span>
-              </li>
+              <li>{withKeys(t('Tap {key}'), { key: <span className="intro-key">{t('Share')} ⇧</span> })}</li>
+              <li>{withKeys(t('Tap {key}'), { key: <span className="intro-key">{t('Add to Home Screen')}</span> })}</li>
+              <li>{withKeys(t('Tap {key}'), { key: <span className="intro-key">{t('Add')}</span> })}</li>
             </ol>
           </div>
           <div className="intro-step">
-            <b>Android</b> (Chrome)
+            <b>{'Android'}</b> (Chrome)
             <ol>
+              <li>{withKeys(t('Tap the {key} menu'), { key: <span className="intro-key">⋮</span> })}</li>
               <li>
-                Tap the <span className="intro-key">⋮</span> menu
-              </li>
-              <li>
-                Tap <span className="intro-key">Add to Home screen</span> or <span className="intro-key">Install app</span>
+                {withKeys(t('Tap {key} or {key2}'), {
+                  key: <span className="intro-key">{t('Add to Home screen')}</span>,
+                  key2: <span className="intro-key">{t('Install app')}</span>,
+                })}
               </li>
             </ol>
           </div>
@@ -255,7 +258,7 @@ export default function Intro() {
             }}
           >
             <button className="intro-skip" onClick={finish}>
-              {last ? 'Close' : 'Skip'}
+              {last ? t('Close') : t('Skip')}
             </button>
             <div key={i} className="intro-card">
               <div className="intro-art" aria-hidden>
@@ -269,16 +272,16 @@ export default function Intro() {
               </p>
             </div>
             <div className="intro-foot">
-              <button className="btn ghost small" onClick={() => go(i - 1)} disabled={i === 0} aria-label="Previous">
+              <button className="btn ghost small" onClick={() => go(i - 1)} disabled={i === 0} aria-label={t('Previous')}>
                 ‹
               </button>
-              <div className="intro-dots" aria-label={`Card ${i + 1} of ${cards.length}`} role="img">
+              <div className="intro-dots" aria-label={t('Card {n} of {total}', { n: i + 1, total: cards.length })} role="img">
                 {cards.map((_, n) => (
                   <span key={n} className={n === i ? 'on' : ''} />
                 ))}
               </div>
               <button className="btn intro-next" onClick={() => (last ? finish() : go(i + 1))}>
-                {last ? "Let's go!" : 'Next'}
+                {last ? t("Let's go!") : t('Next')}
               </button>
             </div>
           </div>

@@ -4,6 +4,8 @@ import { useStore } from '../../state/store';
 import { sum } from '../../game/progression';
 import { FEEDBACK_URL, TIP_URL } from '../../links';
 import { useBackupDue } from './BackupWarning';
+import { rich } from './common';
+import { t } from '../../i18n';
 
 /** After this many finished quests, on at least this many days, the card asks once. */
 const TIP_AFTER_QUESTS = 25;
@@ -17,11 +19,12 @@ export function SupportBox() {
   if (!TIP_URL && !FEEDBACK_URL) return null;
   return (
     <>
-      <div className="section-label">Support &amp; feedback</div>
+      <div className="section-label">{t('Support & feedback')}</div>
       <div className="win support">
         <p>
-          Task Conquest is made by one person and is <b>free, with no ads and no subscriptions</b>. Found a bug or got an idea? Tell me!
-          Tips pay for the servers and keep new bosses, gear and features coming. ⚔️💛
+          {rich(t('Task Conquest is made by one person and is {free}. Found a bug or got an idea? Tell me! Tips pay for the servers and keep new bosses, gear and features coming. ⚔️💛'), {
+            free: <b>{t('free, with no ads and no subscriptions')}</b>,
+          })}
         </p>
         <div className="support-actions">
           {TIP_URL && (
@@ -32,12 +35,12 @@ export function SupportBox() {
                 openLink(TIP_URL);
               }}
             >
-              <span className="btn-emoji">☕</span> Tip the developer
+              <span className="btn-emoji">☕</span> {t('Tip the developer')}
             </button>
           )}
           {FEEDBACK_URL && (
             <button className="btn ghost" onClick={() => openLink(FEEDBACK_URL)}>
-              <span className="btn-emoji">💬</span> Send feedback
+              <span className="btn-emoji">💬</span> {t('Send feedback')}
             </button>
           )}
         </div>
@@ -56,13 +59,13 @@ export function TipNudge() {
   const backupDue = useBackupDue();
   if (!TIP_URL || finished || backupDue || done < TIP_AFTER_QUESTS || days < TIP_AFTER_DAYS || Date.now() - askedAt < ASK_AGAIN_MS) return null;
   return (
-    <div className="win push-invite tip-nudge" role="region" aria-label="Support the developer">
+    <div className="win push-invite tip-nudge" role="region" aria-label={t('Support the developer')}>
       <div className="push-invite-icon" aria-hidden>
         ☕
       </div>
       <div className="push-invite-text">
-        <b>Enjoying Task Conquest?</b>
-        <span>{done} quests slain! It's free and ad-free, made by one dev. A small tip keeps it that way.</span>
+        <b>{t('Enjoying Task Conquest?')}</b>
+        <span>{t("{n} quests slain! It's free and ad-free, made by one dev. A small tip keeps it that way.", { n: done })}</span>
       </div>
       <div className="push-invite-actions">
         <button
@@ -72,13 +75,13 @@ export function TipNudge() {
             openLink(TIP_URL);
           }}
         >
-          Tip <span className="btn-emoji">☕</span>
+          {t('Tip')} <span className="btn-emoji">☕</span>
         </button>
         <button className="btn ghost small" onClick={() => update({ tipAskedAt: Date.now() })}>
-          Later
+          {t('Later')}
         </button>
         <button className="link-btn" style={{ fontSize: 13 }} onClick={() => update({ tipDone: true })}>
-          No thanks
+          {t('No thanks')}
         </button>
       </div>
     </div>

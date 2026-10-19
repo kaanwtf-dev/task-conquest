@@ -1,12 +1,13 @@
 // Infinite progression curves. Levels never cap; each level takes a little longer than the last.
 import type { Counter, Difficulty, Hero, SkillId } from '../core/types';
+import { tk } from '../i18n';
 
 export const DIFFICULTY = [
-  { name: 'Trivial', mult: 0.5, stars: 1 },
-  { name: 'Easy', mult: 1, stars: 2 },
-  { name: 'Normal', mult: 1.6, stars: 3 },
-  { name: 'Hard', mult: 2.5, stars: 4 },
-  { name: 'Epic', mult: 4, stars: 5 },
+  { name: tk('Trivial'), mult: 0.5, stars: 1 },
+  { name: tk('Easy'), mult: 1, stars: 2 },
+  { name: tk('Normal'), mult: 1.6, stars: 3 },
+  { name: tk('Hard'), mult: 2.5, stars: 4 },
+  { name: tk('Epic'), mult: 4, stars: 5 },
 ] as const;
 
 export const sum = (c: Counter | undefined) => (c ? Object.values(c).reduce((a, b) => a + b, 0) : 0);
@@ -72,8 +73,13 @@ export function heroSkill(hero: Hero, id: SkillId) {
   return skillLevel(sum(hero.skillXp[id]));
 }
 
-const TITLES = ['Novice', 'Apprentice', 'Journeyman', 'Adept', 'Expert', 'Veteran', 'Master', 'Grandmaster', 'Champion', 'Hero', 'Legend', 'Mythic', 'Demigod', 'Ascendant', 'Eternal'];
+// show with titleLabel() from achievements.ts
+const TITLES = [
+  tk('Novice'), tk('Apprentice'), tk('Journeyman'), tk('Adept'), tk('Expert'), tk('Veteran'), tk('Master'), tk('Grandmaster'),
+  tk('Champion'), tk('Hero'), tk('Legend'), tk('Mythic'), tk('Demigod'), tk('Ascendant'), tk('Eternal'),
+];
 
+/** English (titles are stored and compared in English): show it with titleLabel() from achievements.ts. */
 export function levelTitle(level: number): string {
   const idx = Number.isFinite(level) && level > 1 ? Math.floor((level - 1) / 10) : 0;
   if (idx < TITLES.length) return TITLES[idx];

@@ -1,5 +1,6 @@
 // Infinite boss ladder: deterministic names and HP per index, plus the damage a completed task deals.
 import { hashStr } from '../core/rng';
+import { t, tk } from '../i18n';
 import { SLOTS } from '../core/types';
 import type { Difficulty, Hero } from '../core/types';
 import { MONSTER_BY_ID } from '../pixel/sprites/monsters';
@@ -38,11 +39,11 @@ export interface BossRankDef {
 
 /** Highest rank first. */
 export const BOSS_RANKS: readonly BossRankDef[] = [
-  { id: 'unmaker', label: 'Unmaker', every: 1000, hp: 1.25, gold: 8 },
-  { id: 'worldbreaker', label: 'Worldbreaker', every: 100, hp: 1.2, gold: 5 },
-  { id: 'calamity', label: 'Calamity', every: 50, hp: 1.15, gold: 3 },
-  { id: 'warlord', label: 'Warlord', every: 10, hp: 1.1, gold: 1.75 },
-  { id: 'boss', label: 'Boss', every: 1, hp: 1, gold: 1 },
+  { id: 'unmaker', label: tk('Unmaker'), every: 1000, hp: 1.25, gold: 8 },
+  { id: 'worldbreaker', label: tk('Worldbreaker'), every: 100, hp: 1.2, gold: 5 },
+  { id: 'calamity', label: tk('Calamity'), every: 50, hp: 1.15, gold: 3 },
+  { id: 'warlord', label: tk('Warlord'), every: 10, hp: 1.1, gold: 1.75 },
+  { id: 'boss', label: tk('Boss'), every: 1, hp: 1, gold: 1 },
 ];
 
 export function bossRankDef(index: number): BossRankDef {
@@ -145,65 +146,73 @@ const CORE_ARCHETYPES = ['slime', 'goblin', 'wolf', 'bat', 'skeleton', 'mushroom
 
 // Name stems themed per archetype; every stem is unique so compound names never collide.
 const STEMS: [string, string[]][] = [
-  ['slime', ['Goo', 'Ooze', 'Gloop', 'Slop', 'Bog', 'Mire']],
-  ['goblin', ['Snag', 'Grub', 'Sneak', 'Wart', 'Grot', 'Scrap']],
-  ['wolf', ['Howl', 'Grim', 'Moon', 'Ruff', 'Snarl', 'Prowl']],
-  ['bat', ['Flap', 'Dusk', 'Squeak', 'Night', 'Shriek', 'Vesper']],
-  ['skeleton', ['Rattle', 'Marrow', 'Clatter', 'Grave', 'Crypt', 'Rib']],
-  ['mushroom', ['Moss', 'Spore', 'Mildew', 'Truffle', 'Morel', 'Puff']],
-  ['crab', ['Pinch', 'Shell', 'Brine', 'Clack', 'Tide', 'Barnacle']],
-  ['ghost', ['Wail', 'Gloom', 'Mist', 'Murmur', 'Shroud', 'Hush']],
-  ['rat', ['Whisker', 'Gnaw', 'Scurry', 'Nibble', 'Sewer', 'Cheddar']],
-  ['spider', ['Silk', 'Skitter', 'Cobweb', 'Tangle', 'Venom', 'Lurk']],
-  ['eye', ['Glare', 'Stare', 'Squint', 'Blink', 'Gaze', 'Leer']],
-  ['golem', ['Rubble', 'Granite', 'Boulder', 'Clay', 'Crag', 'Pebble']],
-  ['imp', ['Cinder', 'Smolder', 'Brimstone', 'Mischief', 'Ember', 'Snicker']],
-  ['snake', ['Hiss', 'Coil', 'Slither', 'Sly', 'Asp', 'Viper']],
-  ['scorpion', ['Sting', 'Dune', 'Barb', 'Scuttle', 'Sirocco', 'Dust']],
-  ['frog', ['Croak', 'Ribbit', 'Lily', 'Puddle', 'Murk', 'Swamp']],
-  ['wisp', ['Flicker', 'Glimmer', 'Lantern', 'Glow', 'Wane', 'Shimmer']],
-  ['mimic', ['Lid', 'Hinge', 'Coffer', 'Latch', 'Trunk', 'Padlock']],
-  ['yeti', ['Frost', 'Rime', 'Hail', 'Sleet', 'Shiver', 'Blizzard']],
-  ['dragon', ['Scorch', 'Wyrm', 'Ash', 'Blaze', 'Char', 'Hoard']],
-  ['beetle', ['Chitin', 'Dung', 'Burrow', 'Click', 'Husk', 'Scarab']],
+  ['slime', [tk('Goo'), tk('Ooze'), tk('Gloop'), tk('Slop'), tk('Bog'), tk('Mire')]],
+  ['goblin', [tk('Snag'), tk('Grub'), tk('Sneak'), tk('Wart'), tk('Grot'), tk('Scrap')]],
+  ['wolf', [tk('Howl'), tk('Grim'), tk('Moon'), tk('Ruff'), tk('Snarl'), tk('Prowl')]],
+  ['bat', [tk('Flap'), tk('Dusk'), tk('Squeak'), tk('Night'), tk('Shriek'), tk('Vesper')]],
+  ['skeleton', [tk('Rattle'), tk('Marrow'), tk('Clatter'), tk('Grave'), tk('Crypt'), tk('Rib')]],
+  ['mushroom', [tk('Moss'), tk('Spore'), tk('Mildew'), tk('Truffle'), tk('Morel'), tk('Puff')]],
+  ['crab', [tk('Pinch'), tk('Shell'), tk('Brine'), tk('Clack'), tk('Tide'), tk('Barnacle')]],
+  ['ghost', [tk('Wail'), tk('Gloom'), tk('Mist'), tk('Murmur'), tk('Shroud'), tk('Hush')]],
+  ['rat', [tk('Whisker'), tk('Gnaw'), tk('Scurry'), tk('Nibble'), tk('Sewer'), tk('Cheddar')]],
+  ['spider', [tk('Silk'), tk('Skitter'), tk('Cobweb'), tk('Tangle'), tk('Venom'), tk('Lurk')]],
+  ['eye', [tk('Glare'), tk('Stare'), tk('Squint'), tk('Blink'), tk('Gaze'), tk('Leer')]],
+  ['golem', [tk('Rubble'), tk('Granite'), tk('Boulder'), tk('Clay'), tk('Crag'), tk('Pebble')]],
+  ['imp', [tk('Cinder'), tk('Smolder'), tk('Brimstone'), tk('Mischief'), tk('Ember'), tk('Snicker')]],
+  ['snake', [tk('Hiss'), tk('Coil'), tk('Slither'), tk('Sly'), tk('Asp'), tk('Viper')]],
+  ['scorpion', [tk('Sting'), tk('Dune'), tk('Barb'), tk('Scuttle'), tk('Sirocco'), tk('Dust')]],
+  ['frog', [tk('Croak'), tk('Ribbit'), tk('Lily'), tk('Puddle'), tk('Murk'), tk('Swamp')]],
+  ['wisp', [tk('Flicker'), tk('Glimmer'), tk('Lantern'), tk('Glow'), tk('Wane'), tk('Shimmer')]],
+  ['mimic', [tk('Lid'), tk('Hinge'), tk('Coffer'), tk('Latch'), tk('Trunk'), tk('Padlock')]],
+  ['yeti', [tk('Frost'), tk('Rime'), tk('Hail'), tk('Sleet'), tk('Shiver'), tk('Blizzard')]],
+  ['dragon', [tk('Scorch'), tk('Wyrm'), tk('Ash'), tk('Blaze'), tk('Char'), tk('Hoard')]],
+  ['beetle', [tk('Chitin'), tk('Dung'), tk('Burrow'), tk('Click'), tk('Husk'), tk('Scarab')]],
 ];
 const PAIRS: [archetype: string, stem: string][] = STEMS.flatMap(([id, stems]) => stems.map((s): [string, string] => [id, s]));
 
 const TAILS = [
-  'jaw', 'belly', 'bones', 'fang', 'tooth', 'maw', 'gut', 'tusk', 'claw', 'hide',
-  'back', 'beard', 'brow', 'nose', 'tongue', 'grin', 'snout', 'skull', 'horn', 'knuckle',
-  'toes', 'chin', 'rump', 'cheeks', 'gob', 'shanks', 'gizzard', 'wing', 'foot', 'tail',
+  tk('jaw'), tk('belly'), tk('bones'), tk('fang'), tk('tooth'), tk('maw'), tk('gut'), tk('tusk'), tk('claw'), tk('hide'),
+  tk('back'), tk('beard'), tk('brow'), tk('nose'), tk('tongue'), tk('grin'), tk('snout'), tk('skull'), tk('horn'), tk('knuckle'),
+  tk('toes'), tk('chin'), tk('rump'), tk('cheeks'), tk('gob'), tk('shanks'), tk('gizzard'), tk('wing'), tk('foot'), tk('tail'),
 ];
 
-// [honorific, regal]: regal ones may already carry a dynasty numeral on the first lap of the ladder
+// [name template, regal]: regal ones may already carry a dynasty numeral on the first lap of the ladder
 const HONORIFICS: [string, boolean][] = [
-  ['Sir', true], ['Lady', true], ['Baron', true], ['Duchess', true], ['King', true],
-  ['Queen', true], ['Count', true], ['Prince', true], ['Archduke', true], ['Empress', true],
-  ['Mother', false], ['Old', false], ['Granny', false], ['Uncle', false], ['Big', false],
-  ['Little', false], ['Captain', false], ['Mayor', false], ['Brother', false], ['Madame', false],
+  [tk('Sir {name}'), true], [tk('Lady {name}'), true], [tk('Baron {name}'), true], [tk('Duchess {name}'), true], [tk('King {name}'), true],
+  [tk('Queen {name}'), true], [tk('Count {name}'), true], [tk('Prince {name}'), true], [tk('Archduke {name}'), true], [tk('Empress {name}'), true],
+  [tk('Mother {name}'), false], [tk('Old {name}'), false], [tk('Granny {name}'), false], [tk('Uncle {name}'), false], [tk('Big {name}'), false],
+  [tk('Little {name}'), false], [tk('Captain {name}'), false], [tk('Mayor {name}'), false], [tk('Brother {name}'), false], [tk('Madame {name}'), false],
 ];
 
 const EPITHETS = [
-  'Unending', 'Unwashed', 'Overdue', 'Insatiable', 'Relentless', 'Procrastinator', 'Unbothered', 'Sleepless',
-  'Many-Chinned', 'Petty', 'Magnificent', 'Moist', 'Bottomless', 'Unyielding', 'Lingering', 'Ever-Late',
-  'Unfolded', 'Ravenous', 'Dreadful', 'Pungent', 'Undying', 'Belated', 'Smug', 'Uninvited',
-  'Tardy', 'Grumbling', 'Untidy', 'Immovable', 'Forgotten', 'Wretched', 'Snoring', 'Bloated',
-  'Accursed', 'Whispering', 'Restless', 'Sticky', 'Gloating', 'Half-Finished', 'Unread', 'Eternal',
+  tk('{name} the Unending'), tk('{name} the Unwashed'), tk('{name} the Overdue'), tk('{name} the Insatiable'), tk('{name} the Relentless'), tk('{name} the Procrastinator'), tk('{name} the Unbothered'), tk('{name} the Sleepless'),
+  tk('{name} the Many-Chinned'), tk('{name} the Petty'), tk('{name} the Magnificent'), tk('{name} the Moist'), tk('{name} the Bottomless'), tk('{name} the Unyielding'), tk('{name} the Lingering'), tk('{name} the Ever-Late'),
+  tk('{name} the Unfolded'), tk('{name} the Ravenous'), tk('{name} the Dreadful'), tk('{name} the Pungent'), tk('{name} the Undying'), tk('{name} the Belated'), tk('{name} the Smug'), tk('{name} the Uninvited'),
+  tk('{name} the Tardy'), tk('{name} the Grumbling'), tk('{name} the Untidy'), tk('{name} the Immovable'), tk('{name} the Forgotten'), tk('{name} the Wretched'), tk('{name} the Snoring'), tk('{name} the Bloated'),
+  tk('{name} the Accursed'), tk('{name} the Whispering'), tk('{name} the Restless'), tk('{name} the Sticky'), tk('{name} the Gloating'), tk('{name} the Half-Finished'), tk('{name} the Unread'), tk('{name} the Eternal'),
 ];
 
 const ROLES = [
-  'Tyrant', 'Lurker', 'Hoarder', 'Keeper', 'Terror', 'Bane', 'Scourge',
-  'Warden', 'Despot', 'Menace', 'Glutton', 'Squatter', 'Haunter', 'Gatekeeper',
+  tk('Tyrant of {place}'), tk('Lurker of {place}'), tk('Hoarder of {place}'), tk('Keeper of {place}'), tk('Terror of {place}'), tk('Bane of {place}'), tk('Scourge of {place}'),
+  tk('Warden of {place}'), tk('Despot of {place}'), tk('Menace of {place}'), tk('Glutton of {place}'), tk('Squatter of {place}'), tk('Haunter of {place}'), tk('Gatekeeper of {place}'),
 ];
 
+/** Titles of the milestone ranks ("Warlord of the Laundry Heap"). */
+const RANK_ROLES: Record<Exclude<BossRank, 'boss'>, string> = {
+  warlord: tk('Warlord of {place}'),
+  calamity: tk('Calamity of {place}'),
+  worldbreaker: tk('Worldbreaker of {place}'),
+  unmaker: tk('Unmaker of {place}'),
+};
+
 const PLACES = [
-  'the Sunken Mire', 'the Unwashed Dishes', 'the Overflowing Inbox', 'the Laundry Heap', 'the Dusty Attic',
-  'the Forgotten Errands', 'the Unpaid Bills', 'the Endless Meeting', 'the Cluttered Desk', 'the Sock Abyss',
-  'the Snooze Button', 'the Leaky Faucet', 'the Back of the Fridge', 'the Junk Drawer', 'the Tangled Cables',
-  'the Unmade Bed', 'the Gloomy Cellar', 'the Mildewed Shower', 'the Crumbling Keep', 'the Ashen Wastes',
-  'the Whispering Bog', 'the Shattered Peaks', 'the Hollow Moon', 'the Rusted Gate', 'the Long Monday',
-  'the Last Minute', 'the Pending Pile', 'the Unread Scrolls', 'the Weedy Garden', 'the Overdue Library',
-  'the Empty Pantry', 'the Lost Receipts', 'the Shadowed Stair', 'the Drafty Hall', 'the Bottomless Hamper',
+  tk('the Sunken Mire'), tk('the Unwashed Dishes'), tk('the Overflowing Inbox'), tk('the Laundry Heap'), tk('the Dusty Attic'),
+  tk('the Forgotten Errands'), tk('the Unpaid Bills'), tk('the Endless Meeting'), tk('the Cluttered Desk'), tk('the Sock Abyss'),
+  tk('the Snooze Button'), tk('the Leaky Faucet'), tk('the Back of the Fridge'), tk('the Junk Drawer'), tk('the Tangled Cables'),
+  tk('the Unmade Bed'), tk('the Gloomy Cellar'), tk('the Mildewed Shower'), tk('the Crumbling Keep'), tk('the Ashen Wastes'),
+  tk('the Whispering Bog'), tk('the Shattered Peaks'), tk('the Hollow Moon'), tk('the Rusted Gate'), tk('the Long Monday'),
+  tk('the Last Minute'), tk('the Pending Pile'), tk('the Unread Scrolls'), tk('the Weedy Garden'), tk('the Overdue Library'),
+  tk('the Empty Pantry'), tk('the Lost Receipts'), tk('the Shadowed Stair'), tk('the Drafty Hall'), tk('the Bottomless Hamper'),
 ];
 
 // a few classic palettes, kept small so boss sprites cache well
@@ -226,11 +235,12 @@ const encodeName = (pair: number, tail: number, form: number) => pair + PAIRS.le
 const FIRST = encodeName(
   Math.max(0, PAIRS.findIndex(([, s]) => s === 'Moss')),
   Math.max(0, TAILS.indexOf('belly')),
-  Math.max(0, HONORIFICS.findIndex(([h]) => h === 'Mother')),
+  Math.max(0, HONORIFICS.findIndex(([h]) => h === 'Mother {name}')),
 );
 
 const compound = (stem: string, tail: string) => (stem.endsWith(tail[0]) ? `${stem}-${tail}` : stem + tail);
 
+/** In the player's language: stems and tails are translated too ("Mossbelly"), so names make sense in Turkish. */
 function nameParts(index: number): { name: string; archetype: string } {
   const j = (index - 1) % BOSS_NAME_CYCLE;
   const generation = Math.floor((index - 1) / BOSS_NAME_CYCLE);
@@ -238,15 +248,15 @@ function nameParts(index: number): { name: string; archetype: string } {
   const [archetype, stem] = PAIRS[code % PAIRS.length];
   const tail = TAILS[Math.floor(code / PAIRS.length) % TAILS.length];
   const form = Math.floor(code / (PAIRS.length * TAILS.length));
-  const core = compound(stem, tail);
+  const core = compound(t(stem), t(tail));
   let name: string;
   let regnal = generation + 1;
   if (form < HONORIFICS.length) {
     const [hon, regal] = HONORIFICS[form];
-    name = `${hon} ${core}`;
+    name = t(hon, { name: core });
     if (regal) regnal += hashStr(`boss-dynasty|${code}`) % 4;
   } else {
-    name = `${core} the ${EPITHETS[form - HONORIFICS.length]}`;
+    name = t(EPITHETS[form - HONORIFICS.length], { name: core });
   }
   if (regnal > 1) name += ` ${numeral(regnal)}`;
   return { name, archetype };
@@ -263,8 +273,8 @@ function resolveArchetype(id: string, index: number): string {
 
 export interface Boss {
   index: number; // 1-based ladder position
-  name: string; // unique per index
-  title: string; // flavor line, e.g. "Warlord of the Laundry Heap"
+  name: string; // unique per index (in English), in the player's language
+  title: string; // flavor line, e.g. "Warlord of the Laundry Heap", in the player's language
   archetype: string; // MONSTERS id
   hue: number; // palette rotation in degrees
   maxHp: number;
@@ -277,11 +287,11 @@ export function bossFor(index: number): Boss {
   const rank = bossRankDef(i);
   const h = hashStr(`boss|${i}`);
   const place = PLACES[h % PLACES.length];
-  const role = rank.id === 'boss' ? ROLES[(h >>> 8) % ROLES.length] : rank.label;
+  const role = rank.id === 'boss' ? ROLES[(h >>> 8) % ROLES.length] : RANK_ROLES[rank.id];
   return {
     index: i,
     name,
-    title: `${role} of ${place}`,
+    title: t(role, { place: t(place) }),
     archetype: resolveArchetype(archetype, i),
     hue: i === 1 ? 0 : HUES[(h >>> 16) % HUES.length],
     maxHp: bossMaxHp(i),

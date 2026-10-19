@@ -5,6 +5,7 @@ import { BOARD_DAYS, BOARD_POINTS, DAY_CAP, rankBoard } from '../../game/leaderb
 import type { BoardMember } from '../../sync/party';
 import { memberSprite } from './PartyStrip';
 import { PxImg } from './common';
+import { t } from '../../i18n';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -26,11 +27,11 @@ export default function Leaderboard() {
           () => alive && setFailed(true),
         );
     load();
-    const t = window.setInterval(load, 60_000);
+    const timer = window.setInterval(load, 60_000);
     document.addEventListener('visibilitychange', load);
     return () => {
       alive = false;
-      clearInterval(t);
+      clearInterval(timer);
       document.removeEventListener('visibilitychange', load);
     };
   }, [me]);
@@ -40,10 +41,10 @@ export default function Leaderboard() {
   const alone = rows !== null && rows.length < 2;
   return (
     <>
-      <div className="section-label">Leaderboard · last {BOARD_DAYS} days</div>
+      <div className="section-label">{t('Leaderboard · last {days} days', { days: BOARD_DAYS })}</div>
       <div className="win board">
         {rows === null ? (
-          <div className="board-note">{failed ? 'The leaderboard needs the latest cloud setup (re-run supabase/schema.sql).' : 'Loading…'}</div>
+          <div className="board-note">{failed ? t('The leaderboard needs the latest cloud setup (re-run supabase/schema.sql).') : t('Loading…')}</div>
         ) : (
           ranked.map((r) => {
             const sprite = memberSprite(r);
@@ -54,10 +55,10 @@ export default function Leaderboard() {
                 <div className="board-who">
                   <b>
                     {r.name}
-                    {r.userId === me ? ' (you)' : ''}
+                    {r.userId === me ? t(' (you)') : ''}
                   </b>
-                  <span className="board-days" aria-label={`${r.days} of ${BOARD_DAYS} days`}>
-                    {Array.from({ length: BOARD_DAYS }, (_, i) => (i < r.days ? '■' : '□')).join('')} Lv {r.level}
+                  <span className="board-days" aria-label={t('{n} of {days} days', { n: r.days, days: BOARD_DAYS })}>
+                    {Array.from({ length: BOARD_DAYS }, (_, i) => (i < r.days ? '■' : '□')).join('')} {t('Lv {level}', { level: r.level })}
                   </span>
                 </div>
                 <span className="board-pts">{r.points}</span>
@@ -65,16 +66,16 @@ export default function Leaderboard() {
             );
           })
         )}
-        {alone && <div className="board-note">Share a list with friends (Lists → Invite) and they show up here.</div>}
+        {alone && <div className="board-note">{t('Share a list with friends (Lists → Invite) and they show up here.')}</div>}
         <button className="board-how" onClick={() => setRules((v) => !v)} aria-expanded={rules}>
-          {rules ? 'Hide the rules' : 'How points work'}
+          {rules ? t('Hide the rules') : t('How points work')}
         </button>
         {rules && (
           <div className="board-note">
-            Every quest you finish scores by difficulty: Trivial {BOARD_POINTS[0]}, Easy {BOARD_POINTS[1]}, Normal {BOARD_POINTS[2]}, Hard{' '}
-            {BOARD_POINTS[3]}, Epic {BOARD_POINTS[4]}, at most {DAY_CAP} a day. Only the last {BOARD_DAYS} days count, and a day can only be
-            scored on the day itself (or the morning after), so it's about showing up daily, not one giant grind. Groceries don't count, and
-            on shared lists you score only what you did.
+            {t(
+              "Every quest you finish scores by difficulty: Trivial {trivial}, Easy {easy}, Normal {normal}, Hard {hard}, Epic {epic}, at most {cap} a day. Only the last {days} days count, and a day can only be scored on the day itself (or the morning after), so it's about showing up daily, not one giant grind. Groceries don't count, and on shared lists you score only what you did.",
+              { trivial: BOARD_POINTS[0], easy: BOARD_POINTS[1], normal: BOARD_POINTS[2], hard: BOARD_POINTS[3], epic: BOARD_POINTS[4], cap: DAY_CAP, days: BOARD_DAYS },
+            )}
           </div>
         )}
       </div>

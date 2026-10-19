@@ -1,5 +1,6 @@
 // Zone themes: UI palette + procedurally painted pixel backdrops.
 import { Rng } from '../core/rng';
+import { tk } from '../i18n';
 import { shade } from './pix';
 
 export type ThemeId = 'tavern' | 'forest' | 'beach' | 'dungeon' | 'snow' | 'desert' | 'castle' | 'volcano';
@@ -17,7 +18,7 @@ export interface ThemeUi {
 
 export interface ThemeDef {
   id: ThemeId;
-  name: string;
+  name: string; // tk-marked English: show it with t()
   unlockLevel: number;
   ui: ThemeUi;
   monsters: string[];
@@ -77,7 +78,7 @@ const sky = (g: Painter, w: number, h: number, cols: string[]) => g.bands(0, h, 
 export const THEMES: ThemeDef[] = [
   {
     id: 'tavern',
-    name: 'Tavern',
+    name: tk('Tavern'),
     unlockLevel: 1,
     ui: { winTop: '#6b4426', winBot: '#3a2212', border: '#f0c878', accent: '#ffb84a', text: '#fff2d8', muted: '#d8b88a', page: '#24150c', page2: '#2e1c10' },
     monsters: ['rat', 'goblin', 'slime', 'bat', 'mimic'],
@@ -136,7 +137,7 @@ export const THEMES: ThemeDef[] = [
   },
   {
     id: 'forest',
-    name: 'Forest',
+    name: tk('Forest'),
     unlockLevel: 1,
     ui: { winTop: '#2f6b3c', winBot: '#163a20', border: '#e8f0c8', accent: '#a8e05a', text: '#f4ffe8', muted: '#b8d8a8', page: '#0f2414', page2: '#142e1a' },
     monsters: ['wolf', 'mushroom', 'goblin', 'slime', 'spider', 'frog', 'wisp'],
@@ -156,7 +157,7 @@ export const THEMES: ThemeDef[] = [
   },
   {
     id: 'beach',
-    name: 'Beach',
+    name: tk('Beach'),
     unlockLevel: 1,
     ui: { winTop: '#126878', winBot: '#0c4a5e', border: '#fff0c8', accent: '#ffd860', text: '#f4feff', muted: '#a8e0e8', page: '#082a36', page2: '#0c3442' },
     monsters: ['crab', 'slime', 'snake', 'bat', 'frog'],
@@ -196,7 +197,7 @@ export const THEMES: ThemeDef[] = [
   },
   {
     id: 'dungeon',
-    name: 'Dungeon',
+    name: tk('Dungeon'),
     unlockLevel: 1,
     ui: { winTop: '#4a4a62', winBot: '#20202e', border: '#c8c8d8', accent: '#ff9a3a', text: '#f0f0ff', muted: '#a8a8c0', page: '#121218', page2: '#1a1a24' },
     monsters: ['skeleton', 'bat', 'rat', 'ghost', 'slime', 'eye', 'mimic', 'spider'],
@@ -232,7 +233,7 @@ export const THEMES: ThemeDef[] = [
   },
   {
     id: 'snow',
-    name: 'Snowpeak',
+    name: tk('Snowpeak'),
     unlockLevel: 5,
     ui: { winTop: '#4a7ab8', winBot: '#22406e', border: '#ffffff', accent: '#9ae0ff', text: '#ffffff', muted: '#c8dcf0', page: '#0e1c30', page2: '#13243c' },
     monsters: ['wolf', 'ghost', 'slime', 'yeti', 'wisp', 'golem'],
@@ -258,7 +259,7 @@ export const THEMES: ThemeDef[] = [
   },
   {
     id: 'desert',
-    name: 'Desert',
+    name: tk('Desert'),
     unlockLevel: 10,
     ui: { winTop: '#8a5020', winBot: '#6e3e18', border: '#fff0c0', accent: '#ffe060', text: '#fff8e8', muted: '#f0d0a0', page: '#2a1608', page2: '#341c0c' },
     monsters: ['scorpion', 'snake', 'skeleton', 'beetle', 'golem'],
@@ -280,7 +281,7 @@ export const THEMES: ThemeDef[] = [
   },
   {
     id: 'castle',
-    name: 'Castle',
+    name: tk('Castle'),
     unlockLevel: 20,
     ui: { winTop: '#6a2a5a', winBot: '#30102a', border: '#f0d070', accent: '#ff7ab0', text: '#fff0fa', muted: '#e0b0d0', page: '#1a0814', page2: '#220c1c' },
     monsters: ['skeleton', 'ghost', 'bat', 'goblin', 'eye', 'imp'],
@@ -301,7 +302,7 @@ export const THEMES: ThemeDef[] = [
   },
   {
     id: 'volcano',
-    name: 'Volcano',
+    name: tk('Volcano'),
     unlockLevel: 30,
     ui: { winTop: '#8a2a1a', winBot: '#3a0e08', border: '#ffd060', accent: '#ff8a2a', text: '#fff0e0', muted: '#f0b090', page: '#1a0604', page2: '#240a06' },
     monsters: ['imp', 'golem', 'beetle', 'dragon', 'slime', 'wisp'],

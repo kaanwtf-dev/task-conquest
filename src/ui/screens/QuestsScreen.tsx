@@ -32,6 +32,7 @@ import PartyStrip from '../components/PartyStrip';
 import { PushInvite } from '../components/Reminders';
 import { ListSheet } from './OtherScreens';
 import { takeOffList } from '../groceries';
+import { t, locale } from '../../i18n';
 
 /** Only what the list screens read: the hero's progress changing on every kill must not re-render them. */
 const listState = (st: ReturnType<typeof useStore.getState>) => ({ activeListId: st.activeListId, lists: st.lists, tasks: st.tasks, settings: st.settings });
@@ -49,7 +50,7 @@ export default function QuestsScreen() {
   const chosen = s.activeListId ? s.lists[s.activeListId] : undefined;
   // the active list can vanish underneath us (left a party list, deleted on another device)
   const list = chosen && !chosen.deleted ? chosen : visibleLists(s)[0];
-  if (!list) return <div className="scroll"><div className="empty">No lists yet. Create one!</div></div>;
+  if (!list) return <div className="scroll"><div className="empty">{t('No lists yet. Create one!')}</div></div>;
   const tasks = listTasks(s, list.id);
   const cfg = s.settings;
   const info = LIST_TYPE_INFO[list.type];
@@ -66,10 +67,10 @@ export default function QuestsScreen() {
             {list.name}
             <div className="banner-sub">
               {list.type === 'supply'
-                ? `${tasks.filter((t) => !t.doneFor).length} to buy · ${tasks.length} remembered`
+                ? t('{buy} to buy · {known} remembered', { buy: tasks.filter((x) => !x.doneFor).length, known: tasks.length })
                 : reset != null
-                  ? `${info.label} · resets in ${fmtDuration(reset)}`
-                  : info.hint}
+                  ? t('{type} · resets in {time}', { type: t(info.label), time: fmtDuration(reset) })
+                  : t(info.hint)}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
@@ -78,7 +79,7 @@ export default function QuestsScreen() {
                 {doneCount}/{active.length}
               </div>
             )}
-            <button className="win banner-progress banner-edit" onClick={() => setEditList(true)} aria-label="Edit list">
+            <button className="win banner-progress banner-edit" onClick={() => setEditList(true)} aria-label={t('Edit list')}>
               ⋯
             </button>
           </div>
@@ -110,7 +111,7 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
   const lists = visibleLists(s).filter((l) => l.type !== 'supply');
   const { overdue, dueToday, routine, week, doneToday } = todaySections(s.lists, s.tasks, now, cfg);
   const total = overdue.length + dueToday.length + routine.length + doneToday.length;
-  const date = new Date(now).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  const date = new Date(now).toLocaleDateString(locale(), { weekday: 'long', month: 'short', day: 'numeric' });
 
   const section = (label: string, items: Task[], done = false) =>
     items.length > 0 && (
@@ -130,7 +131,7 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
       <SceneBanner theme="castle" height={wide ? 56 : 52} scale={wide ? 3 : 2}>
         <div className="banner-info">
           <div className="win banner-title">
-            Today
+            {t('Today')}
             <div className="banner-sub">{date}</div>
           </div>
           {total > 0 && (
@@ -154,14 +155,14 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
       <PushInvite />
       {overdue.length + dueToday.length + routine.length + week.length === 0 && (
         <div className="win tasks">
-          <div className="empty">Nothing due today. Go touch some grass, adventurer.</div>
+          <div className="empty">{t('Nothing due today. Go touch some grass, adventurer.')}</div>
         </div>
       )}
-      {section('Overdue', overdue)}
-      {section('Due today', dueToday)}
-      {section('Daily routine', routine)}
-      {section('This week', week)}
-      {section(`Slain today (${doneToday.length})`, doneToday, true)}
+      {section(t('Overdue'), overdue)}
+      {section(t('Due today'), dueToday)}
+      {section(t('Daily routine'), routine)}
+      {section(t('This week'), week)}
+      {section(t('Slain today ({n})', { n: doneToday.length }), doneToday, true)}
       {editTask && <TaskEditSheet taskId={editTask} onClose={closeEdit} />}
     </div>
   );
@@ -186,19 +187,19 @@ function EverythingView({ now, wide, onEdit, editTask, closeEdit }: { now: numbe
       <SceneBanner theme="castle" height={wide ? 56 : 52} scale={wide ? 3 : 2}>
         <div className="banner-info">
           <div className="win banner-title">
-            Everything
-            <div className="banner-sub">every list, one screen</div>
+            {t('Everything')}
+            <div className="banner-sub">{t('every list, one screen')}</div>
           </div>
-          <div className="win banner-progress">{open} open</div>
+          <div className="win banner-progress">{t('{n} open', { n: open })}</div>
         </div>
       </SceneBanner>
       {sections.map(({ list, open: o, done }) => (
         <div key={list.id} style={themeStyle(list.theme)}>
           <button className="section-label everything-head" onClick={() => (sfx.tick(), setActiveList(list.id))}>
-            {list.name} · {list.type === 'supply' ? `${o.length} to buy` : `${done.length}/${o.length + done.length}`} ›
+            {list.name} · {list.type === 'supply' ? t('{n} to buy', { n: o.length }) : `${done.length}/${o.length + done.length}`} ›
           </button>
           <div className="win tasks">
-            {o.length + done.length === 0 && <div className="empty">{list.type === 'supply' ? 'Nothing to buy.' : 'All clear.'}</div>}
+            {o.length + done.length === 0 && <div className="empty">{list.type === 'supply' ? t('Nothing to buy.') : t('All clear.')}</div>}
             {o.map((t) => (
               <TaskRow key={t.id} task={t} done={false} onEdit={onEdit} />
             ))}
@@ -250,13 +251,13 @@ function QuickAdd({ list, dueToday }: { list?: TaskList; dueToday?: boolean }) {
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={supply ? 'Add item… (remembers everything)' : dueToday ? `Add a quest for today → ${list.name}` : 'Add a quest…'}
+          placeholder={supply ? t('Add item… (remembers everything)') : dueToday ? t('Add a quest for today → {list}', { list: list.name }) : t('Add a quest…')}
           data-quickadd
           enterKeyHint="done"
-          aria-label="New item"
+          aria-label={t('New item')}
         />
         {text.trim() && <PxImg src={iconFor(text)} size={36} style={{ alignSelf: 'center' }} />}
-        <button className="btn" type="submit" aria-label="Add">
+        <button className="btn" type="submit" aria-label={t('Add')}>
           <Ui name="plus" size={14} />
         </button>
       </form>
@@ -301,7 +302,7 @@ const TaskRow = memo(function TaskRow({ task, done, inactive, showList, onEdit, 
       ref={sortable?.setNodeRef}
       className={`task ${done ? 'done' : ''} ${sortable?.isDragging ? 'dragging' : ''} ${task.stakes && !done ? `stakes-${task.stakes}` : ''}`}
       style={style}
-      {...(sortable ? { ...sortable.attributes, ...sortable.listeners, role: 'listitem', 'aria-roledescription': 'draggable quest' } : {})}
+      {...(sortable ? { ...sortable.attributes, ...sortable.listeners, role: 'listitem', 'aria-roledescription': t('draggable quest') } : {})}
       onClick={() => onEdit(task.id)}
       tabIndex={0}
       onKeyDown={(e) => {
@@ -331,7 +332,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
       {timed && <TimeBar task={task} />}
       <button
         className={`check ${done ? 'on' : ''}`}
-        aria-label={done ? `Mark ${task.title} not done` : `Complete ${task.title}`}
+        aria-label={done ? t('Mark {title} not done', { title: task.title }) : t('Complete {title}', { title: task.title })}
         data-check={task.id}
         onMouseDown={(e) => e.stopPropagation()}
         onTouchStart={(e) => e.stopPropagation()}
@@ -366,21 +367,21 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
             {shared && done && task.doneBy && <span className="tlist">✓ {task.doneBy}</span>}
             {rl && (
               <>
-                <Ui name="repeat" size={12} /> {rl}
+                <Ui name="repeat" size={12} /> {t(rl)}
               </>
             )}
             {task.qty && <span>×{task.qty}</span>}
             {task.due &&
               (task.due < todayKey(Date.now(), useStore.getState().settings) && !done ? (
-                <span className="overdue">Overdue {task.due}</span>
+                <span className="overdue">{t('Overdue {date}', { date: task.due })}</span>
               ) : (
-                <span>Due {task.due}</span>
+                <span>{t('Due {date}', { date: task.due })}</span>
               ))}
             {task.stakes && !done && <StakesChip stakes={task.stakes} />}
             {timed && <TimeLeft task={task} />}
-            {!done && !!task.misses && <span className="overdue">missed {task.misses}×</span>}
+            {!done && !!task.misses && <span className="overdue">{t('missed {n}×', { n: task.misses })}</span>}
             {task.notes && <span>✎</span>}
-            {inactive && <span>Not today</span>}
+            {inactive && <span>{t('Not today')}</span>}
           </div>
         )}
       </div>
@@ -393,8 +394,8 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
 /** What missing the quest costs, at a glance: "!!" must do (red), "!" flexible (amber). */
 function StakesChip({ stakes }: { stakes: NonNullable<Task['stakes']> }) {
   return (
-    <span className={`stakes ${stakes}`} title={stakes === 'must' ? 'Must do: missing it hurts' : 'Flexible: missing it costs a little'}>
-      {stakes === 'must' ? '!! MUST' : '! FLEX'}
+    <span className={`stakes ${stakes}`} title={stakes === 'must' ? t('Must do: missing it hurts') : t('Flexible: missing it costs a little')}>
+      {stakes === 'must' ? t('!! MUST') : t('! FLEX')}
     </span>
   );
 }
@@ -413,15 +414,17 @@ function TimeLeft({ task }: { task: Task }) {
   const cfg = useStore((s) => s.settings);
   const label = leftLabel(task, now, cfg);
   if (!label) return null;
-  const late = label === 'time is up';
-  const soon = !late && (windowOf(task, now, cfg)?.end ?? Infinity) - now < WARN_MS;
+  // (from the window, not the label: the label is translated)
+  const end = windowOf(task, now, cfg)?.end ?? Infinity;
+  const late = end - now <= 0;
+  const soon = !late && end - now < WARN_MS;
   // a plain daily or weekly quest only says so when time is getting short (its bar shows the rest)
   if (!soon && !late && !hasLimit(task, cfg)) return null;
   if (late && task.due && task.due < todayKey(now, cfg)) return null; // the "Overdue" chip says it already
   return (
     <span className={late || soon ? 'overdue' : ''}>
       ⏳ 
-      {label}
+      {t(label)}
     </span>
   );
 }
@@ -437,8 +440,8 @@ function AgainButton({ task }: { task: Task }) {
   return (
     <button
       className="again"
-      aria-label={`Do ${task.title} again`}
-      title="Did it again? Smaller reward each time"
+      aria-label={t('Do {title} again', { title: task.title })}
+      title={t('Did it again? Smaller reward each time')}
       onMouseDown={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
@@ -450,7 +453,7 @@ function AgainButton({ task }: { task: Task }) {
         if (repeat(task.id)) {
           if (sfxOn) sfx.check();
           if (haptics) haptic();
-        } else fx.emit({ type: 'toast', text: 'That will do for now', small: 'Come back when it resets.' });
+        } else fx.emit({ type: 'toast', text: t('That will do for now'), small: t('Come back when it resets.') });
       }}
     >
       +1{extra > 0 && <span className="again-n">×{extra + 1}</span>}
@@ -518,12 +521,12 @@ function TaskView({ tasks, now, onEdit }: { tasks: Task[]; now: number; onEdit: 
   return (
     <>
       <div className="win tasks">
-        {open.length === 0 && <div className="empty">All clear! The realm is safe… for now.</div>}
+        {open.length === 0 && <div className="empty">{t('All clear! The realm is safe… for now.')}</div>}
         {open.length > 0 && <SortableTasks tasks={open} onEdit={onEdit} />}
       </div>
       {done.length > 0 && (
         <>
-          <div className="section-label">Slain ({done.length})</div>
+          <div className="section-label">{t('Slain ({n})', { n: done.length })}</div>
           <div className="win tasks">
             {done.map((t) => (
               <TaskRow key={t.id} task={t} done onEdit={onEdit} />
@@ -533,7 +536,7 @@ function TaskView({ tasks, now, onEdit }: { tasks: Task[]; now: number; onEdit: 
       )}
       {later.length > 0 && (
         <>
-          <div className="section-label">Not scheduled today</div>
+          <div className="section-label">{t('Not scheduled today')}</div>
           <div className="win tasks">
             {later.map((t) => (
               <TaskRow key={t.id} task={t} done={isDone(t, now, cfg)} inactive onEdit={onEdit} />
@@ -560,11 +563,11 @@ function SupplyView({ list, tasks, onEdit }: { list: TaskList; tasks: Task[]; on
   return (
     <>
       <div className="win tasks">
-        {need.length === 0 && <div className="empty">Nothing to buy. Tap items below to restock.</div>}
+        {need.length === 0 && <div className="empty">{t('Nothing to buy. Tap items below to restock.')}</div>}
         {ordered.map(([aisle, items]) => (
           <div key={aisle}>
             <div className="section-label" style={{ margin: '8px 6px 2px' }}>
-              {AISLES[aisle]?.name ?? 'Other'}
+              {AISLES[aisle] ? t(AISLES[aisle].name) : t('Other')}
             </div>
             {items.map((t) => (
               <SwipeAway key={t.id} task={t}>
@@ -583,13 +586,13 @@ function SupplyView({ list, tasks, onEdit }: { list: TaskList; tasks: Task[]; on
               if (n) sfx.loot();
             }}
           >
-            ⟳ Restock staples ({staplesMissing})
+            ⟳ {t('Restock staples ({n})', { n: staplesMissing })}
           </button>
         </div>
       )}
       {pantry.length > 0 && (
         <>
-          <div className="section-label">Pantry · tap to add back · hold to edit</div>
+          <div className="section-label">{t('Pantry · tap to add back · hold to edit')}</div>
           <div className="win pantry">
             {pantry.map((t) => (
               <PantryChip key={t.id} task={t} onEdit={onEdit} />
@@ -691,7 +694,7 @@ function SwipeAway({ task, children }: { task: Task; children: React.ReactNode }
     >
       {dx !== 0 && (
         <div className={`swipe-under ${forgets ? '' : 'keep'} ${dx < 0 ? 'from-right' : ''} ${past(dx) ? 'go' : ''}`} aria-hidden>
-          {forgets ? '✕ Remove' : '↩ Pantry'}
+          {forgets ? `✕ ${t('Remove')}` : `↩ ${t('Pantry')}`}
         </div>
       )}
       <div
@@ -733,7 +736,7 @@ const PantryChip = memo(function PantryChip({ task, onEdit }: { task: Task; onEd
           onEdit(task.id);
         }
       }}
-      aria-label={`Add ${task.title} back${task.staple ? ' (staple)' : ''}`}
+      aria-label={task.staple ? t('Add {title} back (staple)', { title: task.title }) : t('Add {title} back', { title: task.title })}
       aria-keyshortcuts="Shift+Enter"
       onClick={() => {
         if (held.current) return;

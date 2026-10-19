@@ -7,8 +7,24 @@ import { useStore } from '../../state/store';
 import type { ClassId } from '../../core/types';
 import { HeroPreview, PxImg, themeStyle, useMedia } from '../components/common';
 import { sfx, unlockAudio } from '../../audio/sfx';
+import { t, tk } from '../../i18n';
 
 const PANTS = ['#4a3a2a', '#2a2a3a', '#3a4a6a', '#5a2a2a', '#2a4a2a'];
+
+/** Hair and beard style names (the ids in hero.ts), shown through t(). */
+const LOOK_WORDS: Record<string, string> = {
+  short: tk('short'),
+  long: tk('long'),
+  spiky: tk('spiky'),
+  mohawk: tk('mohawk'),
+  ponytail: tk('ponytail'),
+  bob: tk('bob'),
+  bun: tk('bun'),
+  bald: tk('bald'),
+  none: tk('none'),
+};
+/** A hair or beard style's name, for its pill. */
+export const lookWord = (id: string): string => t(LOOK_WORDS[id] ?? id);
 
 export default function CreateHero() {
   const createHero = useStore((s) => s.createHero);
@@ -48,87 +64,87 @@ export default function CreateHero() {
     <div className="win" style={{ overflow: 'hidden', padding: 0 }}>
       <HeroPreview app={app} look={look} theme="forest" w={wide ? 110 : 96} h={wide ? 74 : 60} scale={wide ? 4 : 4} />
       <div style={{ padding: '10px 12px' }}>
-        <div className="win-title">{race.name} {CLASS_BY_ID[classId].name}</div>
-        <div style={{ marginTop: 6, fontSize: 15 }}>{race.blurb}</div>
-        <div style={{ marginTop: 4, fontSize: 15, color: 'var(--accent)' }}>✦ {race.perk}</div>
+        <div className="win-title">{t(race.name)} {t(CLASS_BY_ID[classId].name)}</div>
+        <div style={{ marginTop: 6, fontSize: 15 }}>{t(race.blurb)}</div>
+        <div style={{ marginTop: 4, fontSize: 15, color: 'var(--accent)' }}>✦ {t(race.perk)}</div>
       </div>
     </div>
   );
 
   const options = (
     <>
-      <Section title="Race">
+      <Section title={t('Race')}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
           {RACES.map((r) => (
             <button key={r.id} className={`opt ${app.race === r.id ? 'sel' : ''}`} aria-pressed={app.race === r.id} onClick={() => pickRace(r.id)}>
               <PxImg src={raceThumbs[r.id]} size={64} style={{ margin: '-6px auto -8px', display: 'block' }} />
-              <span>{r.name}</span>
+              <span>{t(r.name)}</span>
             </button>
           ))}
         </div>
       </Section>
 
-      <Section title="Class">
+      <Section title={t('Class')}>
         <div className="class-grid">
           {CLASSES.map((c) => (
             <button key={c.id} className={`opt ${classId === c.id ? 'sel' : ''}`} aria-pressed={classId === c.id} onClick={() => (sfx.tick(), setClassId(c.id))}>
               <PxImg src={spriteUrl(`wicon:${c.weapon}`, () => weaponPix(c.weapon, c.look.weapon?.mat ?? MATERIALS.iron))} size={40} style={{ margin: '0 auto', display: 'block' }} />
-              <span>{c.name}</span>
+              <span>{t(c.name)}</span>
             </button>
           ))}
         </div>
-        <div style={{ fontSize: 15, marginTop: 8, color: 'var(--muted)' }}>{CLASS_BY_ID[classId].blurb}</div>
+        <div style={{ fontSize: 15, marginTop: 8, color: 'var(--muted)' }}>{t(CLASS_BY_ID[classId].blurb)}</div>
       </Section>
 
-      <Section title="Look">
-        <Row label="Skin">
+      <Section title={t('Look')}>
+        <Row label={t('Skin')}>
           {race.skins.map((c, i) => (
             <Swatch key={c} color={c} on={app.skin === i} onClick={() => patch({ skin: i })} />
           ))}
         </Row>
         {app.race !== 'lizardfolk' && (
-          <Row label="Hair">
+          <Row label={t('Hair')}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {HAIR_STYLES.map((h) => (
                 <button key={h} className={`pill ${app.hair === h ? 'sel' : ''}`} aria-pressed={app.hair === h} onClick={() => patch({ hair: h })}>
-                  {h}
+                  {lookWord(h)}
                 </button>
               ))}
             </div>
           </Row>
         )}
-        <Row label={app.race === 'lizardfolk' ? 'Crest' : 'Hair color'}>
+        <Row label={app.race === 'lizardfolk' ? t('Crest') : t('Hair color')}>
           {HAIR_COLORS.map((c) => (
             <Swatch key={c} color={c} on={app.hairColor === c} onClick={() => patch({ hairColor: c })} />
           ))}
         </Row>
         {app.race !== 'lizardfolk' && (
-          <Row label="Beard">
+          <Row label={t('Beard')}>
             {(['none', 'short', 'long'] as BeardStyle[]).map((b) => (
               <button key={b} className={`pill ${app.beard === b ? 'sel' : ''}`} aria-pressed={app.beard === b} onClick={() => patch({ beard: b })}>
-                {b}
+                {lookWord(b)}
               </button>
             ))}
           </Row>
         )}
-        <Row label="Eyes">
+        <Row label={t('Eyes')}>
           {EYE_COLORS.map((c) => (
             <Swatch key={c} color={c} on={app.eyes === c} onClick={() => patch({ eyes: c })} />
           ))}
         </Row>
-        <Row label="Outfit">
+        <Row label={t('Outfit')}>
           {OUTFIT_COLORS.map((c) => (
             <Swatch key={c} color={c} on={app.outfit === c} onClick={() => patch({ outfit: c })} />
           ))}
         </Row>
-        <Row label="Pants">
+        <Row label={t('Pants')}>
           {PANTS.map((c) => (
             <Swatch key={c} color={c} on={app.pants === c} onClick={() => patch({ pants: c })} />
           ))}
         </Row>
       </Section>
 
-      <Section title="Name">
+      <Section title={t('Name')}>
         <form
           style={{ display: 'flex', gap: 8 }}
           onSubmit={(e) => {
@@ -137,9 +153,9 @@ export default function CreateHero() {
             createHero(name, app, classId);
           }}
         >
-          <input className="text-in" value={name} maxLength={16} onChange={(e) => setName(e.target.value)} placeholder="Hero name" aria-label="Hero name" />
+          <input className="text-in" value={name} maxLength={16} onChange={(e) => setName(e.target.value)} placeholder={t('Hero name')} aria-label={t('Hero name')} />
           <button className="btn" type="submit">
-            Begin
+            {t('Begin')}
           </button>
         </form>
       </Section>
@@ -149,9 +165,9 @@ export default function CreateHero() {
   return (
     <div className="create" style={themeStyle(undefined)}>
       <div className="create-head">
-        <div className="pixel logo">TASK CONQUEST</div>
+        <div className="pixel logo">{'TASK CONQUEST' /* the app's name stays English */}</div>
         <div className="pixel" style={{ fontSize: 9, color: '#b8c0f0', marginTop: 8 }}>
-          CREATE YOUR HERO
+          {t('CREATE YOUR HERO')}
         </div>
       </div>
       {wide ? (

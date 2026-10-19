@@ -1,9 +1,10 @@
 // Monster archetypes (20x20 fill art, facing left toward the hero). Variants come from palette swaps.
+import { tk } from '../../i18n';
 import { Pix, hueRotate, shade, type Color } from '../pix';
 
 export interface MonsterArt {
   id: string;
-  name: string;
+  name: string; // tk-marked English: show it with t()
   art: string[];
   pal: Record<string, string>;
 }
@@ -13,7 +14,7 @@ const E = '#1a1022';
 export const MONSTERS: MonsterArt[] = [
   {
     id: 'slime',
-    name: 'Slime',
+    name: tk('Slime'),
     pal: { a: '#5ac85a', h: '#b8f0a8', e: E, w: '#ffffff', d: '#2a6a3a' },
     art: [
       '....................',
@@ -36,7 +37,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'goblin',
-    name: 'Goblin',
+    name: tk('Goblin'),
     pal: { a: '#7ab040', e: '#ffd23a', w: '#f4ecd0', d: E, c: '#8a5a34', k: '#6a6a6a' },
     art: [
       '....................',
@@ -60,7 +61,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'wolf',
-    name: 'Wolf',
+    name: tk('Wolf'),
     pal: { a: '#8a8a9a', c: '#d8d8e0', e: '#ffd23a', w: '#ffffff', d: E },
     art: [
       '....................',
@@ -82,7 +83,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'bat',
-    name: 'Bat',
+    name: tk('Bat'),
     pal: { a: '#6a4a8a', c: '#9a7ab8', e: '#ff4a4a', w: '#ffffff', d: E },
     art: [
       '....................',
@@ -102,7 +103,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'skeleton',
-    name: 'Skeleton',
+    name: tk('Skeleton'),
     pal: { w: '#f0eadc', d: '#3a3044', e: '#ff5a3a', k: '#9a9aa8' },
     art: [
       '....................',
@@ -125,7 +126,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'mushroom',
-    name: 'Shroom',
+    name: tk('Shroom'),
     pal: { c: '#d84a4a', w: '#ffffff', a: '#f0dcc0', e: E, d: '#8a4a3a' },
     art: [
       '....................',
@@ -146,7 +147,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'crab',
-    name: 'Crab',
+    name: tk('Crab'),
     pal: { a: '#e0603a', c: '#f08a5a', e: E, w: '#ffffff' },
     art: [
       '....................',
@@ -167,7 +168,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'ghost',
-    name: 'Ghost',
+    name: tk('Ghost'),
     pal: { a: '#d8e8ff', h: '#ffffff', e: E, d: '#8aa0d0' },
     art: [
       '....................',
@@ -189,7 +190,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'rat',
-    name: 'Rat',
+    name: tk('Rat'),
     pal: { a: '#8a7a6a', c: '#e8a0a0', e: E, w: '#ffffff' },
     art: [
       '....................',
@@ -210,7 +211,7 @@ export const MONSTERS: MonsterArt[] = [
   // ---- expansion archetypes ----
   {
     id: 'spider',
-    name: 'Spider',
+    name: tk('Spider'),
     pal: { a: '#4a3a5a', h: '#7a6a9a', c: '#d04a5a', b: '#5a4868', k: '#8a7a9a', e: '#ff4a4a', w: '#ffffff' },
     art: [
       '.......aaaaaa.......',
@@ -231,7 +232,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'eye',
-    name: 'Gazer',
+    name: tk('Gazer'),
     pal: { a: '#f0e8e0', c: '#c86a8a', h: '#f0a0b8', d: '#8a3a5a', i: '#4aa0e0', v: '#d84a4a', e: E, w: '#ffffff' },
     art: [
       '.......ccccc........',
@@ -253,7 +254,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'golem',
-    name: 'Golem',
+    name: tk('Golem'),
     pal: { a: '#8a8a7a', h: '#b8b8a8', d: '#5a5a4e', c: '#5a9a3a', e: '#5fe0f0' },
     art: [
       '.......aaaaa........',
@@ -275,7 +276,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'imp',
-    name: 'Imp',
+    name: tk('Imp'),
     pal: { a: '#d0453a', h: '#f07a5a', c: '#8a2a3a', k: '#f0e6c8', f: '#ff8a2a', F: '#fff060', e: '#ffd23a', w: '#ffffff', d: E },
     art: [
       '.....k...k..........',
@@ -296,7 +297,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'snake',
-    name: 'Snake',
+    name: tk('Snake'),
     pal: { a: '#5aa83a', h: '#9ad86a', c: '#e8d870', d: '#2e6a2a', e: '#ffd23a', k: '#e04a5a' },
     art: [
       '....aaaa............',
@@ -317,7 +318,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'scorpion',
-    name: 'Scorpion',
+    name: tk('Scorpion'),
     pal: { a: '#c08a3a', h: '#e8b868', d: '#7a5222', k: '#e04a3a', e: E },
     art: [
       '...........aaaa.....',
@@ -338,7 +339,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'frog',
-    name: 'Frog',
+    name: tk('Frog'),
     pal: { a: '#5ab84a', h: '#a0e070', c: '#e8e0a0', d: '#2e7a3a', k: '#e04a5a', e: E, w: '#ffffff' },
     art: [
       '....www....www......',
@@ -357,7 +358,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'wisp',
-    name: 'Wisp',
+    name: tk('Wisp'),
     pal: { a: '#5ab8f0', h: '#c8f0ff', d: '#3a6ad0', e: E, w: '#ffffff' },
     art: [
       '.........a..........',
@@ -380,7 +381,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'mimic',
-    name: 'Mimic',
+    name: tk('Mimic'),
     pal: { a: '#9a5a2a', h: '#c88a4a', d: '#5a3218', g: '#e0b040', m: '#4a1020', k: '#e04a6a', e: '#ffd23a', w: '#ffffff' },
     art: [
       '....aaaaaaaaaaaa....',
@@ -401,7 +402,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'yeti',
-    name: 'Yeti',
+    name: tk('Yeti'),
     pal: { a: '#e8f0f8', h: '#f8fcff', d: '#a8b8d0', c: '#5a8ac0', e: E, w: '#ffffff' },
     art: [
       '.......aaaaa........',
@@ -423,7 +424,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'dragon',
-    name: 'Drakeling',
+    name: tk('Drakeling'),
     pal: { a: '#d04a3a', h: '#f08a5a', c: '#f0d070', g: '#8a2a4a', k: '#f0e6c8', e: '#ffd23a', w: '#ffffff' },
     art: [
       '............g...g...',
@@ -443,7 +444,7 @@ export const MONSTERS: MonsterArt[] = [
   },
   {
     id: 'beetle',
-    name: 'Beetle',
+    name: tk('Beetle'),
     pal: { a: '#3a6ad0', h: '#8ab0f8', d: '#22408a', c: '#4a4a6a', k: '#c8c8d8', l: '#6a6a8a', e: '#ffd23a' },
     art: [
       '........aaaaaa......',

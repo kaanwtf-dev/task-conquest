@@ -210,6 +210,8 @@ export interface Settings {
   music: number; // 0..1
   haptics: boolean;
   dayStartHour: number;
+  /** 'auto' (or unset): from the phone's language, or Turkish in Turkey's time zone */
+  lang?: 'auto' | 'en' | 'tr';
   weekStart: number; // 0=Sun, 1=Mon
   taskFont: 'pixel' | 'clean';
   /** Phone hero window: floating (big/small, draggable), a full-width bar under the HUD, or hidden. */

@@ -8,17 +8,18 @@ import { chestPix, itemIconPix, potionIconPix } from '../../pixel/sprites/items'
 import { materialOf } from '../../game/loot';
 import { sfx } from '../../audio/sfx';
 import { haptic } from '../components/Effects';
+import { t, tk } from '../../i18n';
 
-const QUIPS = ['Hey!', 'Hehe', 'Oi!', 'Boop', 'Hm?', 'Ow!', 'Quest?', 'Yawn'];
+const QUIPS = [tk('Hey!'), tk('Hehe'), tk('Oi!'), tk('Boop'), tk('Hm?'), tk('Ow!'), tk('Quest?'), tk('Yawn')];
 const RACE_QUIPS: Record<string, string[]> = {
-  orc: ['WAAGH!', 'Smash?'],
-  undead: ['Brains', 'Creak'],
-  catfolk: ['Mrrp!', 'Nya~'],
-  imp: ['Hehehe', 'Mwah!'],
-  dwarf: ['Aye!', 'Ale?'],
-  elf: ['Hmph.', 'Rude.'],
-  lizardfolk: ['Hsss', 'Blep'],
-  human: ['Yo!', 'Again?'],
+  orc: [tk('WAAGH!'), tk('Smash?')],
+  undead: [tk('Brains'), tk('Creak')],
+  catfolk: [tk('Mrrp!'), tk('Nya~')],
+  imp: [tk('Hehehe'), tk('Mwah!')],
+  dwarf: [tk('Aye!'), tk('Ale?')],
+  elf: [tk('Hmph.'), tk('Rude.')],
+  lizardfolk: [tk('Hsss'), tk('Blep')],
+  human: [tk('Yo!'), tk('Again?')],
 };
 
 interface Props {
@@ -94,7 +95,7 @@ export default function HeroStage({ w, h, scale, heroX, monsterX, theme, classNa
       onClick={() => {
         if (!stage.current || stage.current.skip()) return;
         const lines = [...QUIPS, ...(RACE_QUIPS[hero?.appearance.race ?? ''] ?? [])];
-        stage.current.poke(lines[Math.floor(Math.random() * lines.length)]);
+        stage.current.poke(t(lines[Math.floor(Math.random() * lines.length)]));
         if (sfxVol > 0) sfx.poke();
         if (haptics) haptic();
         onTap?.();

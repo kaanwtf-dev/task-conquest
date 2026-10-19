@@ -15,9 +15,10 @@ import { hashStr } from '../core/rng';
 import { itemDisplayName, sellPrice, starterItems, upgradeCost } from '../game/loot';
 import { makeBuff, potionName, potionStackId } from '../game/potions';
 import { applyBuffs, computeStats } from '../game/stats';
-import { claimRewards } from '../game/achievements';
+import { claimRewards, titleLabel } from '../game/achievements';
 import { BAG_MAX, BAG_STEP, dyeKey, themeKey, type ShopOffer } from '../game/shop';
 import { fx } from './fx';
+import { t, tk, upper } from '../i18n';
 import { LATEST_VERSION } from '../whatsNew';
 import { achievementCtx, bagCount, inc, questChestRewards, streakDays, taskRewards, type RewardOutcome } from './rewards';
 
@@ -58,11 +59,11 @@ export function heroDefaults(): Pick<
 }
 
 export const LIST_TYPE_INFO: Record<ListType, { label: string; repeat: Repeat; hint: string }> = {
-  daily: { label: 'Daily', repeat: { kind: 'daily' }, hint: 'Resets every day' },
-  weekly: { label: 'Weekly', repeat: { kind: 'weekly' }, hint: 'Resets every week' },
-  quests: { label: 'Quests', repeat: { kind: 'none' }, hint: 'No time limit' },
-  supply: { label: 'Supply', repeat: { kind: 'none' }, hint: 'Remembers items, restock anytime' },
-  custom: { label: 'Custom', repeat: { kind: 'none' }, hint: 'Set repeat per task' },
+  daily: { label: tk('Daily'), repeat: { kind: 'daily' }, hint: tk('Resets every day') },
+  weekly: { label: tk('Weekly'), repeat: { kind: 'weekly' }, hint: tk('Resets every week') },
+  quests: { label: tk('Quests'), repeat: { kind: 'none' }, hint: tk('No time limit') },
+  supply: { label: tk('Supply'), repeat: { kind: 'none' }, hint: tk('Remembers items, restock anytime') },
+  custom: { label: tk('Custom'), repeat: { kind: 'none' }, hint: tk('Set repeat per task') },
 };
 
 /**
@@ -186,37 +187,39 @@ function aisleOf(title: string, settings: Settings): string {
   return settings.aisleMemory?.[aisleKey(title)] ?? guessAisle(title);
 }
 
+/** The starter lists and quests, written in the player's language (they become the player's own data). */
 function seedLists(): { lists: Record<string, TaskList>; tasks: Record<string, Task> } {
-  const t = now();
+  const at = now();
   const mk = (name: string, type: ListType, theme: ThemeId, skill: SkillId, icon: string, color: string, order: number): TaskList => ({
-    id: uid(), name, type, theme, skill, icon, color, order, createdAt: t, updatedAt: t,
+    id: uid(), name, type, theme, skill, icon, color, order, createdAt: at, updatedAt: at,
   });
-  const daily = mk('Daily Quests', 'daily', 'forest', 'restoration', '☀️', '#6abe30', 0);
-  const weekly = mk('Weekly Quests', 'weekly', 'dungeon', 'hearthcraft', '📅', '#5b6ee1', 1);
-  const side = mk('Side Quests', 'quests', 'beach', 'smithing', '⚔️', '#df7126', 2);
-  const groceries = mk('Groceries', 'supply', 'tavern', 'mercantile', '🛒', '#d9a066', 3);
+  const daily = mk(t('Daily Quests'), 'daily', 'forest', 'restoration', '☀️', '#6abe30', 0);
+  const weekly = mk(t('Weekly Quests'), 'weekly', 'dungeon', 'hearthcraft', '📅', '#5b6ee1', 1);
+  const side = mk(t('Side Quests'), 'quests', 'beach', 'smithing', '⚔️', '#df7126', 2);
+  const groceries = mk(t('Groceries'), 'supply', 'tavern', 'mercantile', '🛒', '#d9a066', 3);
   const lists = Object.fromEntries([daily, weekly, side, groceries].map((l) => [l.id, l]));
   const tasks: Record<string, Task> = {};
   let order = 0;
-  const add = (l: TaskList, title: string, difficulty: Difficulty, extra: Partial<Task> = {}) => {
+  // `en` is the English name (marked with tk): the aisle is guessed from it, the title is in the player's language
+  const add = (l: TaskList, en: string, difficulty: Difficulty, extra: Partial<Task> = {}) => {
     const task: Task = {
-      id: uid(), listId: l.id, title, difficulty, repeat: LIST_TYPE_INFO[l.type].repeat,
-      order: order++, createdAt: t, updatedAt: t, timesDone: 0, ...extra,
+      id: uid(), listId: l.id, title: t(en), difficulty, repeat: LIST_TYPE_INFO[l.type].repeat,
+      order: order++, createdAt: at, updatedAt: at, timesDone: 0, ...extra,
     };
-    if (l.type === 'supply') task.aisle = guessAisle(title);
+    if (l.type === 'supply') task.aisle = guessAisle(en);
     tasks[task.id] = task;
   };
-  add(daily, 'Brush teeth', 0);
-  add(daily, 'Drink water', 1);
-  add(daily, 'Workout', 3);
-  add(daily, 'Read 20 pages', 2);
-  add(weekly, 'Laundry', 2);
-  add(weekly, 'Clean the kitchen', 2);
-  add(weekly, 'Call mom', 1);
-  add(side, 'Fix the bike', 3);
-  add(side, 'Book dentist appointment', 1);
-  for (const g of ['Milk', 'Eggs', 'Bread', 'Bananas', 'Coffee']) add(groceries, g, 0, { staple: true });
-  for (const g of ['Chicken', 'Avocado', 'Toilet paper', 'Pasta', 'Cheese'])
+  add(daily, tk('Brush teeth'), 0);
+  add(daily, tk('Drink water'), 1);
+  add(daily, tk('Workout'), 3);
+  add(daily, tk('Read 20 pages'), 2);
+  add(weekly, tk('Laundry'), 2);
+  add(weekly, tk('Clean the kitchen'), 2);
+  add(weekly, tk('Call mom'), 1);
+  add(side, tk('Fix the bike'), 3);
+  add(side, tk('Book dentist appointment'), 1);
+  for (const g of [tk('Milk'), tk('Eggs'), tk('Bread'), tk('Bananas'), tk('Coffee')]) add(groceries, g, 0, { staple: true });
+  for (const g of [tk('Chicken'), tk('Avocado'), tk('Toilet paper'), tk('Pasta'), tk('Cheese')])
     add(groceries, g, 0, { doneFor: 'once', rewardedFor: 'once', timesDone: 1 });
   return { lists, tasks };
 }
@@ -258,7 +261,7 @@ export const useStore = create<State>()(
         const hero = get().hero;
         if (!hero || amount < 0) return false;
         if (sum(hero.gold) - sum(hero.goldSpent) < amount) {
-          fx.emit({ type: 'toast', text: 'Not enough gold!' });
+          fx.emit({ type: 'toast', text: t('Not enough gold!') });
           return false;
         }
         set({ hero: { ...hero, goldSpent: inc(hero.goldSpent, get().deviceId, amount), updatedAt: now() } });
@@ -283,12 +286,12 @@ export const useStore = create<State>()(
         shopDay: { date: '', bought: [] },
 
         createHero(name, appearance, classId) {
-          const t = now();
-          const kit = starterKit(classId, t);
+          const at = now();
+          const kit = starterKit(classId, at);
           const hero: Hero = {
-            id: 'hero', name: name.trim() || 'Hero', appearance, classId,
+            id: 'hero', name: name.trim() || t('Hero'), appearance, classId,
             xp: {}, gold: {}, goldSpent: {}, kills: {}, tasksDone: {}, skillXp: {}, activeDays: [],
-            createdAt: t, updatedAt: t, ...heroDefaults(), equipped: kit.equipped,
+            createdAt: at, updatedAt: at, ...heroDefaults(), equipped: kit.equipped,
           };
           // keep tombstones (they still need to sync); only seed when no live list exists
           const hasLive = Object.values(get().lists).some((l) => !l.deleted);
@@ -301,18 +304,18 @@ export const useStore = create<State>()(
           const first = Object.values(seeded.lists).filter((l) => !l.deleted).sort((a, b) => a.order - b.order)[0];
           // a brand-new player has nothing to compare with: no "what's new" until the next update
           set((s) => ({ hero, ...seeded, items: { ...s.items, ...kit.items }, activeListId: first?.id ?? null, tab: 'quests', settings: { ...s.settings, seenVersion: LATEST_VERSION } }));
-          log('info', `${hero.name} sets out on an adventure!`);
+          log('info', t('{name} sets out on an adventure!', { name: hero.name }));
         },
 
         setTab: (tab) => set({ tab }),
         setActiveList: (id) => set({ activeListId: id, tab: 'quests' }),
 
         addList(p) {
-          const t = now();
+          const at = now();
           const order = Math.max(-1, ...Object.values(get().lists).filter((l) => !l.deleted).map((l) => l.order)) + 1;
           const list: TaskList = {
-            id: uid(), name: p.name.trim() || 'New List', type: p.type, theme: p.theme, skill: p.skill,
-            icon: p.icon, color: p.color ?? '#5b6ee1', order, createdAt: t, updatedAt: t,
+            id: uid(), name: p.name.trim() || t('New List'), type: p.type, theme: p.theme, skill: p.skill,
+            icon: p.icon, color: p.color ?? '#5b6ee1', order, createdAt: at, updatedAt: at,
           };
           set((s) => ({ lists: { ...s.lists, [list.id]: list }, activeListId: list.id }));
           return list.id;
@@ -475,7 +478,9 @@ export const useStore = create<State>()(
           const gold = missPenalty(heroGold(hero), task.stakes, misses, heroLevel(hero).level);
           if (gold > 0) set({ hero: { ...hero, goldSpent: inc(hero.goldSpent, s.deviceId, gold), updatedAt: now() } });
           fx.emit({ type: 'missed', title: task.title, gold, misses, total, stakes: task.stakes });
-          log('quest', `Missed "${task.title}"${gold ? ` and lost ${gold}g` : ''} (${misses} in a row).`);
+          log('quest', gold
+            ? t('Missed "{title}" and lost {gold}g ({misses} in a row).', { title: task.title, gold, misses })
+            : t('Missed "{title}" ({misses} in a row).', { title: task.title, misses }));
         },
 
         answerDeadline(id, answer) {
@@ -606,7 +611,7 @@ export const useStore = create<State>()(
           const g = sellPrice(item);
           set({ hero: { ...hero, gold: inc(hero.gold, deviceId, g), updatedAt: now() } });
           patchItem(itemId, { deleted: true });
-          log('loot', `Sold ${itemDisplayName(item)} for ${g}g.`);
+          log('loot', t('Sold {item} for {gold}g.', { item: itemDisplayName(item), gold: g }));
           return g;
         },
 
@@ -620,7 +625,7 @@ export const useStore = create<State>()(
           if (!item || item.deleted) return false;
           if (!spend(upgradeCost(item))) return false;
           patchItem(itemId, { upgrade: item.upgrade + 1 });
-          log('loot', `The blacksmith upgraded ${itemDisplayName({ ...item, upgrade: item.upgrade + 1 })}.`);
+          log('loot', t('The blacksmith upgraded {item}.', { item: itemDisplayName({ ...item, upgrade: item.upgrade + 1 }) }));
           return true;
         },
 
@@ -628,12 +633,12 @@ export const useStore = create<State>()(
           const { hero, potions, items, settings, deviceId } = get();
           const stack = potions[stackId];
           if (!hero || !stack || stack.deleted || stack.count <= 0) return false;
-          const t = now();
-          let next: Hero = { ...hero, potionsUsed: inc(hero.potionsUsed, deviceId, 1), updatedAt: t };
+          const at = now();
+          let next: Hero = { ...hero, potionsUsed: inc(hero.potionsUsed, deviceId, 1), updatedAt: at };
           if (stack.potion === 'phoenix') {
             // fill the gap since the last active day (up to a week) so the streak survives
             const days = new Set(streakDays(hero));
-            const today = parseDateKey(todayKey(t, settings));
+            const today = parseDateKey(todayKey(at, settings));
             const missing: string[] = [];
             for (let back = 1; back <= 7; back++) {
               const d = new Date(today);
@@ -644,11 +649,11 @@ export const useStore = create<State>()(
             }
             const hadStreakBefore = missing.length < 7 && missing.length > 0;
             if (!hadStreakBefore) {
-              fx.emit({ type: 'toast', text: missing.length === 0 ? 'Your streak is not broken!' : 'No streak to save.' });
+              fx.emit({ type: 'toast', text: missing.length === 0 ? t('Your streak is not broken!') : t('No streak to save.') });
               return false;
             }
             next = { ...next, savedDays: [...(hero.savedDays ?? []), ...missing].slice(-400), streakSaves: (hero.streakSaves ?? 0) + 1 };
-            fx.emit({ type: 'toast', text: 'STREAK RESTORED!', small: 'The phoenix feather bursts into flame.' });
+            fx.emit({ type: 'toast', text: t('STREAK RESTORED!'), small: t('The phoenix feather bursts into flame.') });
           } else {
             const stats = applyBuffs(computeStats(hero, items), hero.buffs ?? []);
             const buff = makeBuff(stack.potion, stack.tier, stats.potion, uid());
@@ -658,13 +663,13 @@ export const useStore = create<State>()(
               ? hero.buffs.map((b) => (b === same ? { ...b, remaining: b.remaining + buff.remaining } : b))
               : [...(hero.buffs ?? []), buff];
             next = { ...next, buffs };
-            fx.emit({ type: 'toast', text: potionName(stack.potion, stack.tier).toUpperCase(), small: `Active for ${buff.remaining} quests` });
+            fx.emit({ type: 'toast', text: upper(potionName(stack.potion, stack.tier)), small: t('Active for {n} quests', { n: buff.remaining }) });
           }
           set((s) => ({
             hero: next,
-            potions: { ...s.potions, [stackId]: { ...stack, count: stack.count - 1, deleted: stack.count - 1 <= 0, updatedAt: t } },
+            potions: { ...s.potions, [stackId]: { ...stack, count: stack.count - 1, deleted: stack.count - 1 <= 0, updatedAt: at } },
           }));
-          log('loot', `Drank ${potionName(stack.potion, stack.tier)}.`);
+          log('loot', t('Drank {potion}.', { potion: potionName(stack.potion, stack.tier) }));
           return true;
         },
 
@@ -672,19 +677,19 @@ export const useStore = create<State>()(
           const st = get();
           const hero = st.hero;
           if (!hero) return false;
-          const t = now();
-          const day = todayKey(t, st.settings);
+          const at = now();
+          const day = todayKey(at, st.settings);
           const bought = st.shopDay.date === day ? st.shopDay.bought : [];
           if (offer.kind === 'item' && bought.includes(offer.id)) return false;
           if (offer.kind === 'item' && bagCount(st.items, hero) >= hero.bagSize) {
-            fx.emit({ type: 'toast', text: 'Your bag is full!' });
+            fx.emit({ type: 'toast', text: t('Your bag is full!') });
             return false;
           }
           if (!spend(offer.price)) return false;
           const h = get().hero!;
           switch (offer.kind) {
             case 'item': {
-              const item: Item = { ...offer.item!, id: uid(), source: 'shop', createdAt: t, updatedAt: t };
+              const item: Item = { ...offer.item!, id: uid(), source: 'shop', createdAt: at, updatedAt: at };
               set((s) => ({ items: { ...s.items, [item.id]: item }, shopDay: { date: day, bought: [...bought, offer.id] } }));
               break;
             }
@@ -693,25 +698,25 @@ export const useStore = create<State>()(
               const id = potionStackId(p.potion, p.tier);
               set((s) => {
                 const cur = s.potions[id];
-                return { potions: { ...s.potions, [id]: { id, potion: p.potion, tier: p.tier, count: (cur && !cur.deleted ? cur.count : 0) + 1, updatedAt: t } } };
+                return { potions: { ...s.potions, [id]: { id, potion: p.potion, tier: p.tier, count: (cur && !cur.deleted ? cur.count : 0) + 1, updatedAt: at } } };
               });
               break;
             }
             case 'bag':
-              set({ hero: { ...h, bagSize: Math.min(BAG_MAX, h.bagSize + BAG_STEP), updatedAt: t } });
+              set({ hero: { ...h, bagSize: Math.min(BAG_MAX, h.bagSize + BAG_STEP), updatedAt: at } });
               break;
             case 'theme':
-              set({ hero: { ...h, owned: [...new Set([...h.owned, themeKey(offer.theme!)])], updatedAt: t } });
+              set({ hero: { ...h, owned: [...new Set([...h.owned, themeKey(offer.theme!)])], updatedAt: at } });
               break;
             case 'dye': {
               const d = offer.dye!;
               const owned = [...new Set([...h.owned, dyeKey(d.target, d.color)])];
               const appearance = d.target === 'cape' ? h.appearance : { ...h.appearance, [d.target === 'hair' ? 'hairColor' : d.target]: d.color };
-              set({ hero: { ...h, owned, appearance, capeDye: d.target === 'cape' ? d.color : h.capeDye, updatedAt: t } });
+              set({ hero: { ...h, owned, appearance, capeDye: d.target === 'cape' ? d.color : h.capeDye, updatedAt: at } });
               break;
             }
           }
-          log('loot', `Bought ${offer.label} for ${offer.price}g.`);
+          log('loot', t('Bought {item} for {gold}g.', { item: t(offer.label), gold: offer.price }));
           return true;
         },
 
@@ -746,7 +751,9 @@ export const useStore = create<State>()(
           set({
             hero: { ...hero, achievements: { ...hero.achievements, ...r.tiers }, gold: inc(hero.gold, get().deviceId, r.gold), updatedAt: now() },
           });
-          log('achievement', `Claimed achievement rewards: +${r.gold}g${r.newTitles.length ? `, new titles: ${r.newTitles.join(', ')}` : ''}.`);
+          log('achievement', r.newTitles.length
+            ? t('Claimed achievement rewards: +{gold}g, new titles: {titles}.', { gold: r.gold, titles: r.newTitles.map((x) => titleLabel(x)).join(', ') })
+            : t('Claimed achievement rewards: +{gold}g.', { gold: r.gold }));
           return { gold: r.gold, newTitles: r.newTitles };
         },
 

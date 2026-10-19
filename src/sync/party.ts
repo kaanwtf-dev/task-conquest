@@ -4,6 +4,7 @@ import { HAIR_STYLES, RACE_BY_ID, type Appearance } from '../pixel/sprites/hero'
 import { BOARD_DAYS, DAY_CAP } from '../game/leaderboard';
 import { flushSync } from './engine';
 import { getClient, toRemoteError } from './supabase';
+import { t } from '../i18n';
 
 export interface PartyMember {
   userId: string;
@@ -23,7 +24,7 @@ interface RpcResult<T> {
 
 function client() {
   const c = getClient();
-  if (!c) throw new Error('Cloud sync is not set up yet.');
+  if (!c) throw new Error(t('Cloud sync is not set up yet.'));
   return c;
 }
 
@@ -43,10 +44,10 @@ export function inviteUrl(code: string): string {
 function friendly(res: RpcResult<unknown>): Error {
   const e = res.error!;
   const err = toRemoteError(e, res.status);
-  if (err.name === 'SyncOfflineError') return new Error('You are offline. Try again when connected.');
-  if (/invalid invite code/i.test(e.message)) return new Error('That invite code does not exist.');
-  if (/not a member/i.test(e.message)) return new Error('This list is not in the cloud yet. Try again in a moment.');
-  if (/sign in first/i.test(e.message)) return new Error('Sign in first.');
+  if (err.name === 'SyncOfflineError') return new Error(t('You are offline. Try again when connected.'));
+  if (/invalid invite code/i.test(e.message)) return new Error(t('That invite code does not exist.'));
+  if (/not a member/i.test(e.message)) return new Error(t('This list is not in the cloud yet. Try again in a moment.'));
+  if (/sign in first/i.test(e.message)) return new Error(t('Sign in first.'));
   return err;
 }
 
@@ -60,14 +61,14 @@ export async function createInvite(listId: string): Promise<{ code: string; url:
     await flushSync(); // a brand-new list may exist only on this device so far
     res = await rpc<string>('create_invite', { p_list_id: listId });
   }
-  if (res.error || typeof res.data !== 'string') throw friendly(res.error ? res : { ...res, error: { message: 'No invite code returned' } });
+  if (res.error || typeof res.data !== 'string') throw friendly(res.error ? res : { ...res, error: { message: t('No invite code returned') } });
   return { code: res.data, url: inviteUrl(res.data) };
 }
 
 /** Returns the joined list id; follow with SyncEngine.pullList(listId). */
 export async function joinList(code: string): Promise<string> {
   const clean = normalizeCode(code);
-  if (clean.length < 4) throw new Error('That invite code does not exist.');
+  if (clean.length < 4) throw new Error(t('That invite code does not exist.'));
   const res = await rpc<string>('join_list', { p_code: clean });
   if (res.error || typeof res.data !== 'string') throw friendly(res.error ? res : { ...res, error: { message: 'invalid invite code' } });
   return res.data;
@@ -100,7 +101,7 @@ export function toMember(r: { user_id: string; role: string; name: string | null
   return {
     userId: r.user_id,
     role: r.role,
-    name: r.name?.trim() || 'Adventurer',
+    name: r.name?.trim() || t('Adventurer'),
     level: Number.isFinite(level) && level >= 1 ? Math.floor(level) : 1,
     appearance: toAppearance(d.appearance),
     classId: typeof d.classId === 'string' ? (d.classId as ClassId) : undefined,

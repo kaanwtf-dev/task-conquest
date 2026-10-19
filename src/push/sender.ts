@@ -3,6 +3,7 @@
 // and does their save give the reminder something worth saying? Then it goes out, once per slot per day.
 // Nothing here logs player data: function logs are kept by the hosting service.
 import type { Hero, Task, TaskList } from '../core/types';
+import { locale, setLang, t } from '../i18n';
 import { fromRow } from '../sync/engine';
 import type { RemoteRow } from '../sync/types';
 import {
@@ -86,6 +87,7 @@ export function sanitizePrefs(v: unknown): PushPrefs {
     off: Array.isArray(p.off) ? NUDGE_KINDS.filter((k) => (p.off as unknown[]).includes(k)) : [],
     dayStartHour: intIn(p.dayStartHour, 0, 23, DEFAULT_PUSH_PREFS.dayStartHour),
     weekStart: intIn(p.weekStart, 0, 6, DEFAULT_PUSH_PREFS.weekStart),
+    lang: p.lang === 'tr' ? 'tr' : 'en',
   };
 }
 
@@ -141,7 +143,7 @@ export function payload(n: Pick<Nudge, 'title' | 'body' | 'tag'> & { badge?: num
   const clip = (s: string, max: number) => ([...String(s)].length > max ? `${[...String(s)].slice(0, max - 1).join('')}…` : String(s));
   return JSON.stringify({
     web_push: 8030,
-    notification: { title: clip(n.title, 120), body: clip(n.body, 400), navigate: appUrl, tag: n.tag, lang: 'en-US', dir: 'ltr' },
+    notification: { title: clip(n.title, 120), body: clip(n.body, 400), navigate: appUrl, tag: n.tag, lang: locale(), dir: 'ltr' },
     // no badge: leave the icon as it is (a test message must not wipe everyone's count)
     ...(n.badge === undefined ? {} : { app_badge: Math.max(0, Math.min(999, Math.round(Number(n.badge) || 0))) }),
   });
@@ -149,8 +151,8 @@ export function payload(n: Pick<Nudge, 'title' | 'body' | 'tag'> & { badge?: num
 
 /** What "Run workflow › test" sends to every device: proof the whole chain works, right now. */
 export function testNudge(state: NudgeState): Omit<Nudge, 'badge'> & { badge?: number } {
-  const name = state.hero?.name ?? 'adventurer';
-  return { kind: 'plan', title: '🔔 Test reminder', body: `Hello ${name}! Reminders from Task Conquest reach this device.`, tag: 'taskconquest-test' };
+  const name = state.hero?.name ?? t('adventurer');
+  return { kind: 'plan', title: t('🔔 Test reminder'), body: t('Hello {name}! Reminders from Task Conquest reach this device.', { name }), tag: 'taskconquest-test' };
 }
 
 export async function runReminders(opts: {
@@ -205,6 +207,7 @@ export async function runReminders(opts: {
       }
     } else stats.config = refused.length;
   } finally {
+    setLang('en');
     if (mode !== 'dry-run') await cloud.heartbeat(stats).catch(() => undefined);
   }
   return stats;
@@ -222,11 +225,14 @@ export async function runReminders(opts: {
     }
     setZone(validZone(sub.tz));
     const prefs = sanitizePrefs(sub.prefs);
+    setLang(prefs.lang ?? 'en'); // the reminder is written in the player's language
     const history = sanitizeHistory(sub.history);
     let nudge: (Omit<Nudge, 'badge'> & { badge?: number }) | null;
     let topic: string;
     if (mode === 'test') {
-      nudge = testNudge(await saveOf(sub.user_id));
+      const state = await saveOf(sub.user_id);
+      setLang(prefs.lang ?? 'en'); // another device's turn may have run while the save loaded
+      nudge = testNudge(state);
       topic = 'test';
     } else {
       const slot = slotAt(now, prefs);
@@ -236,6 +242,7 @@ export async function runReminders(opts: {
       if (!slot && !partyOn && !deadlinesOn) return;
       const state = await saveOf(sub.user_id);
       setZone(validZone(sub.tz)); // another device's turn may have run while the save loaded
+      setLang(prefs.lang ?? 'en');
       let next = history;
       nudge = null;
       topic = slot ?? 'party';

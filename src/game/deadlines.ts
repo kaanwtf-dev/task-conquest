@@ -1,6 +1,7 @@
 // Time-sensitive quests: a deadline (one-off quests) or a daily "by" time / the period's end (repeating
 // ones), what is at stake when it is missed ("flexible" or "must do"), and the countdown bar behind the row.
 import type { Task } from '../core/types';
+import { t } from '../i18n';
 import { isDone, logicalDate, parseDateKey, periodKey, weekStartDate, type TimeCfg } from '../core/time';
 
 export type Stakes = 'flexible' | 'must';
@@ -103,17 +104,17 @@ export function timeLeft(task: Task, now: number, cfg: TimeCfg): number | null {
   return Math.max(0, Math.min(1, (w.end - now) / Math.max(1, w.end - w.start)));
 }
 
-/** "2h 10m left", "late", for row labels. */
+/** "2h 10m left", "time is up", for row labels, in the player's language. */
 export function leftLabel(task: Task, now: number, cfg: TimeCfg): string | null {
   const w = windowOf(task, now, cfg);
   if (!w || isDone(task, now, cfg)) return null;
   const ms = w.end - now;
-  if (ms <= 0) return 'time is up';
+  if (ms <= 0) return t('time is up');
   const m = Math.ceil(ms / 60_000);
-  if (m < 60) return `${m}m left`;
+  if (m < 60) return t('{m}m left', { m });
   const h = Math.floor(m / 60);
-  if (h < 48) return m % 60 ? `${h}h ${m % 60}m left` : `${h}h left`;
-  return `${Math.floor(h / 24)}d left`;
+  if (h < 48) return m % 60 ? t('{h}h {m}m left', { h, m: m % 60 }) : t('{h}h left', { h });
+  return t('{d}d left', { d: Math.floor(h / 24) });
 }
 
 /**

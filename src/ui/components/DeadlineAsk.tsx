@@ -4,6 +4,7 @@ import { useStore } from '../../state/store';
 import { askDue, deadlineOf } from '../../game/deadlines';
 import { iconFor } from '../../pixel/iconGen';
 import { PxImg, Sheet, useNow } from './common';
+import { t } from '../../i18n';
 
 /** After an answer, the next question waits a while: overdue quests come one at a time, not in a burst. */
 const NEXT_ASK_MS = 30 * 60_000;
@@ -39,28 +40,28 @@ export default function DeadlineAsk() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <PxImg src={iconFor(task.title, task.icon)} size={44} />
         <div>
-          <div className="win-title">Did you finish it?</div>
+          <div className="win-title">{t('Did you finish it?')}</div>
           <div className="ask-title">{task.title}</div>
         </div>
       </div>
       <p className="ask-text">
-        It was due {late < 48 ? `${late}h` : `${Math.round(late / 24)} days`} ago.
+        {late < 48 ? t('It was due {n}h ago.', { n: late }) : t('It was due {n} days ago.', { n: Math.round(late / 24) })}
         {task.stakes === 'must'
-          ? ' It was a must-do: missing it costs gold, and more time costs a little too.'
+          ? ` ${t('It was a must-do: missing it costs gold, and more time costs a little too.')}`
           : task.stakes === 'flexible'
-            ? ' Missing it costs a little gold.'
+            ? ` ${t('Missing it costs a little gold.')}`
             : ''}
-        {task.misses ? ` Missed ${task.misses}× in a row already.` : ''}
+        {task.misses ? ` ${t('Missed {n}× in a row already.', { n: task.misses })}` : ''}
       </p>
       <div className="sheet-actions" style={{ flexWrap: 'wrap' }}>
         <button className="btn ghost" onClick={() => answer(task.id, 'missed')}>
-          Missed it
+          {t('Missed it')}
         </button>
         <button className="btn ghost" onClick={() => answer(task.id, 'later')}>
-          +1 day
+          {t('+1 day')}
         </button>
         <button className="btn" onClick={() => answer(task.id, 'done')}>
-          Done ✓
+          {t('Done ✓')}
         </button>
       </div>
     </Sheet>

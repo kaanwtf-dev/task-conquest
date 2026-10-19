@@ -8,6 +8,7 @@ import { equippedItems, useStore } from '../../state/store';
 import { heroGold } from '../../game/progression';
 import { PxImg, Sheet, Ui } from './common';
 import { sfx } from '../../audio/sfx';
+import { locale, t } from '../../i18n';
 
 export function rarityColor(r: number): string {
   return RARITIES[Math.max(0, Math.min(RARITIES.length - 1, r))]?.color ?? '#ffffff';
@@ -82,19 +83,19 @@ export function ItemSheet({ item: given, onClose, mode = 'owned', price, onBuy }
               {itemDisplayName(item)}
             </div>
             <div className="item-sub">
-              {RARITIES[item.rarity]?.name} {baseName(item.base)} · {mat.name} · iLvl {item.ilvl}
+              {t(RARITIES[item.rarity]?.name ?? '')} {t(baseName(item.base))} · {t(mat.name)} · {t('iLvl {n}', { n: item.ilvl })}
             </div>
           </div>
         </div>
 
         <div className="item-power">
-          <Ui name="sword" size={18} /> Power <b>{power.toLocaleString()}</b>
+          <Ui name="sword" size={18} /> {t('Power')} <b>{power.toLocaleString(locale())}</b>
           {curPower != null && (
             <span className={power >= curPower ? 'up' : 'down'}>
-              {power >= curPower ? '▲' : '▼'} {Math.abs(power - curPower).toLocaleString()} vs equipped
+              {power >= curPower ? '▲' : '▼'} {t('{diff} vs equipped', { diff: Math.abs(power - curPower).toLocaleString(locale()) })}
             </span>
           )}
-          {isEquipped && <span className="eq-tag">EQUIPPED</span>}
+          {isEquipped && <span className="eq-tag">{t('EQUIPPED')}</span>}
         </div>
 
         {item.affixes.length > 0 ? (
@@ -106,19 +107,19 @@ export function ItemSheet({ item: given, onClose, mode = 'owned', price, onBuy }
             ))}
           </div>
         ) : (
-          <div className="affixes muted">No enchantments.</div>
+          <div className="affixes muted">{t('No enchantments.')}</div>
         )}
 
         {!isEquipped && (diffs.length > 0 || powerDiff !== 0) && (
           <div className="diffs">
             <div className="pixel" style={{ fontSize: 8, color: 'var(--muted)', marginBottom: 6 }}>
-              IF EQUIPPED
+              {t('IF EQUIPPED')}
             </div>
-            {powerDiff !== 0 && <span className={powerDiff > 0 ? 'up' : 'down'}>{powerDiff > 0 ? '+' : ''}{powerDiff} Power</span>}
+            {powerDiff !== 0 && <span className={powerDiff > 0 ? 'up' : 'down'}>{t('{n} Power', { n: `${powerDiff > 0 ? '+' : ''}${powerDiff}` })}</span>}
             {diffs.map((x) => (
               <span key={x.k} className={x.d > 0 ? 'up' : 'down'}>
                 {x.d > 0 ? '+' : ''}
-                {x.d}% {STAT_INFO[x.k].short}
+                {x.d}% {t(STAT_INFO[x.k].short)}
               </span>
             ))}
           </div>
@@ -128,10 +129,10 @@ export function ItemSheet({ item: given, onClose, mode = 'owned', price, onBuy }
           {mode === 'shop' ? (
             <>
               <button className="btn ghost" onClick={onClose}>
-                Close
+                {t('Close')}
               </button>
               <button className="btn" disabled={price == null || gold < price} onClick={onBuy}>
-                Buy · {price?.toLocaleString()}g
+                {t('Buy · {gold}g', { gold: price?.toLocaleString(locale()) ?? '' })}
               </button>
             </>
           ) : (
@@ -143,21 +144,21 @@ export function ItemSheet({ item: given, onClose, mode = 'owned', price, onBuy }
                   sfx.tick();
                 }}
               >
-                {item.locked ? 'Unlock' : 'Lock'}
+                {item.locked ? t('Unlock') : t('Lock')}
               </button>
               {!isEquipped && (
                 <button
                   className="btn ghost small"
                   disabled={!!item.locked}
                   onClick={() => {
-                    if (item.rarity >= 2 && !confirm(`Sell ${itemDisplayName(item)} for ${sale}g?`)) return;
+                    if (item.rarity >= 2 && !confirm(t('Sell {item} for {gold}g?', { item: itemDisplayName(item), gold: sale }))) return;
                     if (s.sellItem(item.id)) {
                       sfx.coin();
                       onClose();
                     }
                   }}
                 >
-                  Sell {sale.toLocaleString()}g
+                  {t('Sell {gold}g', { gold: sale.toLocaleString(locale()) })}
                 </button>
               )}
               <button
@@ -169,9 +170,9 @@ export function ItemSheet({ item: given, onClose, mode = 'owned', price, onBuy }
                     setTimeout(() => sfx.loot(), 120);
                   } else sfx.error();
                 }}
-                title="Blacksmith upgrade"
+                title={t('Blacksmith upgrade')}
               >
-                ⚒ +{item.upgrade + 1} · {cost.toLocaleString()}g
+                {t('⚒ +{n} · {gold}g', { n: item.upgrade + 1, gold: cost.toLocaleString(locale()) })}
               </button>
               {isEquipped ? (
                 <button
@@ -182,7 +183,7 @@ export function ItemSheet({ item: given, onClose, mode = 'owned', price, onBuy }
                     onClose();
                   }}
                 >
-                  Unequip
+                  {t('Unequip')}
                 </button>
               ) : (
                 <button
@@ -193,7 +194,7 @@ export function ItemSheet({ item: given, onClose, mode = 'owned', price, onBuy }
                     onClose();
                   }}
                 >
-                  Equip
+                  {t('Equip')}
                 </button>
               )}
             </>

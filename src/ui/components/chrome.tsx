@@ -1,5 +1,6 @@
 // App chrome: HUD, mobile tab bar, list chips, desktop sidebar.
 import { useMemo, useState } from 'react';
+import { titleLabel } from '../../game/achievements';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, visibleLists, listTasks, TODAY_ID, ALL_ID, type Tab } from '../../state/store';
 import { useAttention } from '../../state/attention';
@@ -13,6 +14,7 @@ import { Bar, PxImg, Sheet, Ui, compact, portraitUrl, useNow } from './common';
 import type { TaskList } from '../../core/types';
 import type { UiSprite } from '../../pixel/sprites/ui';
 import { sfx } from '../../audio/sfx';
+import { t, tk } from '../../i18n';
 
 export function Hud() {
   const hero = useStore((s) => s.hero)!;
@@ -25,16 +27,16 @@ export function Hud() {
   const st = streak(streakDays(hero), now, cfg);
   return (
     <header className="hud">
-      <button className="icon-btn hud-portrait" onClick={() => setTab('hero')} aria-label="Hero">
+      <button className="icon-btn hud-portrait" onClick={() => setTab('hero')} aria-label={t('Hero')}>
         <PxImg src={portraitUrl(hero.appearance, look)} size={40} />
       </button>
       <div className="hud-mid">
         <div className="hud-name">
-          <span className="lv">Lv{level}</span>
+          <span className="lv">{t('Lv{level}', { level })}</span>
           <span className="hname" title={hero.name}>
             {hero.name}
           </span>
-          <span className="title">{hero.title ?? levelTitle(level)}</span>
+          <span className="title">{titleLabel(hero.title ?? levelTitle(level))}</span>
         </div>
         <Bar value={into} max={need} label={`${into}/${need} XP`} />
       </div>
@@ -43,7 +45,7 @@ export function Hud() {
           <Ui name="coin" size={18} />
           {compact(gold)}
         </span>
-        <span className="stat" title="Daily streak">
+        <span className="stat" title={t('Daily streak')}>
           <Ui name="flame" size={18} />
           {st}
         </span>
@@ -53,11 +55,11 @@ export function Hud() {
 }
 
 const TABS: { id: Tab; label: string; icon: UiSprite }[] = [
-  { id: 'quests', label: 'Quests', icon: 'scroll' },
-  { id: 'hero', label: 'Hero', icon: 'helm' },
-  { id: 'shop', label: 'Shop', icon: 'bag' },
-  { id: 'party', label: 'Party', icon: 'party' },
-  { id: 'settings', label: 'Options', icon: 'gear' },
+  { id: 'quests', label: tk('Quests'), icon: 'scroll' },
+  { id: 'hero', label: tk('Hero'), icon: 'helm' },
+  { id: 'shop', label: tk('Shop'), icon: 'bag' },
+  { id: 'party', label: tk('Party'), icon: 'party' },
+  { id: 'settings', label: tk('Options'), icon: 'gear' },
 ];
 
 export function TabBar() {
@@ -66,19 +68,19 @@ export function TabBar() {
   const flags = useAttention();
   return (
     <nav className="tabbar">
-      {TABS.map((t) => (
+      {TABS.map((tb) => (
         <button
-          key={t.id}
-          className={`tab ${tab === t.id ? 'active' : ''}`}
-          aria-current={tab === t.id ? 'page' : undefined}
+          key={tb.id}
+          className={`tab ${tab === tb.id ? 'active' : ''}`}
+          aria-current={tab === tb.id ? 'page' : undefined}
           onClick={() => {
             sfx.tick();
-            setTab(t.id);
+            setTab(tb.id);
           }}
         >
-          <Ui name={t.icon} size={26} />
-          {t.label}
-          {flags[t.id as keyof typeof flags] && <span className="tab-dot" role="img" aria-label="needs your attention" />}
+          <Ui name={tb.icon} size={26} />
+          {t(tb.label)}
+          {flags[tb.id as keyof typeof flags] && <span className="tab-dot" role="img" aria-label={t('needs your attention')} />}
         </button>
       ))}
     </nav>
@@ -123,7 +125,7 @@ function EverythingItem({ className, active, onPick }: { className: string; acti
   return (
     <button className={`${className} ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} style={{ ['--chip' as string]: '#3a4a8a' }} onClick={onPick}>
       <PxImg src={iconFor('', '🗺️')} size={className === 'chip' ? 24 : 26} />
-      <span>Everything</span>
+      <span>{t('Everything')}</span>
     </button>
   );
 }
@@ -133,7 +135,7 @@ function TodayItem({ className, active, onPick }: { className: string; active: b
   return (
     <button className={`${className} ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} style={{ ['--chip' as string]: '#a02a3a' }} onClick={onPick}>
       <PxImg src={iconFor('', '⭐')} size={className === 'chip' ? 24 : 26} />
-      <span>Today</span>
+      <span>{t('Today')}</span>
       <span className="count">{n === 0 ? '✓' : n}</span>
     </button>
   );
@@ -153,12 +155,12 @@ export function ListChips({ onNew }: { onNew: () => void }) {
   return (
     <div className="chips">
       {/* every list at once, top to bottom: quicker than scrolling the chips sideways */}
-      <button className="chip chip-all" onClick={() => (sfx.tick(), setAll(true))} aria-label="All lists">
+      <button className="chip chip-all" onClick={() => (sfx.tick(), setAll(true))} aria-label={t('All lists')}>
         <span aria-hidden>☰</span>
       </button>
       {all && (
         <Sheet onClose={() => setAll(false)}>
-          <div className="win-title">Your lists</div>
+          <div className="win-title">{t('Your lists')}</div>
           <div className="all-lists">
             <TodayItem className="all-item" active={s.activeListId === TODAY_ID} onPick={() => pick(TODAY_ID)} />
             <EverythingItem className="all-item" active={s.activeListId === ALL_ID} onPick={() => pick(ALL_ID)} />
@@ -173,7 +175,7 @@ export function ListChips({ onNew }: { onNew: () => void }) {
               }}
             >
               <Ui name="plus" size={20} />
-              <span>New list</span>
+              <span>{t('New list')}</span>
             </button>
           </div>
         </Sheet>
@@ -182,9 +184,9 @@ export function ListChips({ onNew }: { onNew: () => void }) {
       {lists.map((l) => (
         <ChipItem key={l.id} l={l} className="chip" active={l.id === s.activeListId} onPick={() => (sfx.tick(), s.setActiveList(l.id))} />
       ))}
-      <button className="chip" onClick={onNew} aria-label="New list">
+      <button className="chip" onClick={onNew} aria-label={t('New list')}>
         <Ui name="plus" size={14} />
-        <span>New</span>
+        <span>{t('New')}</span>
       </button>
     </div>
   );
@@ -198,10 +200,10 @@ export function Sidebar({ onNew }: { onNew: () => void }) {
     <aside className="side">
       <div style={{ padding: '18px 16px 6px' }}>
         <div className="pixel" style={{ fontSize: 16, color: '#ffd860', textShadow: '3px 3px 0 #140c1c' }}>
-          TASK CONQUEST
+          {'TASK CONQUEST'}
         </div>
       </div>
-      <div className="side-head">Quest Lists</div>
+      <div className="side-head">{t('Quest Lists')}</div>
       <div className="side-nav">
         <TodayItem className="side-item" active={s.tab === 'quests' && s.activeListId === TODAY_ID} onPick={() => (sfx.tick(), s.setActiveList(TODAY_ID))} />
         <EverythingItem className="side-item" active={s.tab === 'quests' && s.activeListId === ALL_ID} onPick={() => (sfx.tick(), s.setActiveList(ALL_ID))} />
@@ -215,15 +217,15 @@ export function Sidebar({ onNew }: { onNew: () => void }) {
           />
         ))}
         <button className="side-item" onClick={onNew}>
-          <Ui name="plus" size={16} /> New list
+          <Ui name="plus" size={16} /> {t('New list')}
         </button>
       </div>
-      <div className="side-head">Adventure</div>
+      <div className="side-head">{t('Adventure')}</div>
       <div className="side-nav">
-        {TABS.filter((t) => t.id !== 'quests').map((t) => (
-          <button key={t.id} className={`side-item ${s.tab === t.id ? 'active' : ''}`} aria-current={s.tab === t.id ? 'page' : undefined} onClick={() => (sfx.tick(), s.setTab(t.id))}>
-            <Ui name={t.icon} size={24} /> {t.label}
-            {flags[t.id as keyof typeof flags] && <span className="tab-dot" role="img" aria-label="needs your attention" />}
+        {TABS.filter((tb) => tb.id !== 'quests').map((tb) => (
+          <button key={tb.id} className={`side-item ${s.tab === tb.id ? 'active' : ''}`} aria-current={s.tab === tb.id ? 'page' : undefined} onClick={() => (sfx.tick(), s.setTab(tb.id))}>
+            <Ui name={tb.icon} size={24} /> {t(tb.label)}
+            {flags[tb.id as keyof typeof flags] && <span className="tab-dot" role="img" aria-label={t('needs your attention')} />}
           </button>
         ))}
       </div>

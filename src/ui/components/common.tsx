@@ -1,9 +1,10 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { THEME_BY_ID, sceneCanvas, Painter, type ThemeId } from '../../pixel/themes';
 import { heroPix, type Appearance, type GearLook, RACE_BY_ID } from '../../pixel/sprites/hero';
 import { Pix, spriteUrl } from '../../pixel/pix';
 import { uiUrl, type UiSprite } from '../../pixel/sprites/ui';
+import { locale, t } from '../../i18n';
 
 export function themeStyle(id: ThemeId | undefined): CSSProperties {
   const t = THEME_BY_ID[id ?? 'forest'] ?? THEME_BY_ID.forest;
@@ -170,7 +171,7 @@ export function SceneBanner({ theme, height, scale, children }: { theme: ThemeId
 
 export function Stars({ n, max = 5 }: { n: number; max?: number }) {
   return (
-    <span className="stars" aria-label={`${n} of ${max}`}>
+    <span className="stars" aria-label={t('{n} of {max}', { n, max })}>
       {Array.from({ length: max }, (_, i) => (
         <i key={i} className={i < n ? '' : 'off'} />
       ))}
@@ -272,11 +273,22 @@ function SheetBody({ onClose, children, className, style }: { onClose: () => voi
   );
 }
 
+/**
+ * A translated sentence with parts that are elements (bold text, a colored name): `{name}` placeholders in
+ * `text` are replaced by `parts[name]`. `text` comes already translated (through t).
+ */
+export function rich(text: string, parts: Record<string, React.ReactNode>): React.ReactNode[] {
+  return text.split(/(\{\w+\})/).map((s, i) => {
+    const k = /^\{(\w+)\}$/.exec(s)?.[1];
+    return k && k in parts ? <Fragment key={i}>{parts[k]}</Fragment> : s;
+  });
+}
+
 /** 1,234 below 100k; 123.4K / 12.3M / 1.2B above, so huge numbers never crush the HUD. */
 export function compact(n: number): string {
   if (!Number.isFinite(n)) return '∞';
   const a = Math.abs(n);
-  if (a < 100_000) return Math.round(n).toLocaleString('en-US');
+  if (a < 100_000) return Math.round(n).toLocaleString(locale());
   const units: [number, string][] = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
   for (const [v, u] of units) if (a >= v) return `${(n / v).toFixed(a / v >= 100 ? 0 : 1)}${u}`;
   return String(n);

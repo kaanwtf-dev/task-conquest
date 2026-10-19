@@ -10,14 +10,17 @@ import { SLOTS, type Item, type Slot, type StatId } from '../../core/types';
 import { STAT_INFO, applyBuffs, computeStats } from '../../game/stats';
 import { describePotion, potionName } from '../../game/potions';
 import { itemPower, sellPrice } from '../../game/loot';
-import { achievementStatus, unlockedTitles } from '../../game/achievements';
+import { achievementStatus, titleLabel, unlockedTitles } from '../../game/achievements';
 import { achievementCtx, streakDays } from '../../state/rewards';
 import { Bar, HeroPreview, PxImg, Sheet, Ui, useMedia } from '../components/common';
 import { ItemIcon, ItemSheet, PotionIcon } from '../components/loot';
 import { sfx } from '../../audio/sfx';
+import { t, tk, tn, locale, tc } from '../../i18n';
+import { lookWord } from './CreateHero';
 
 type Sub = 'gear' | 'bag' | 'skills' | 'feats' | 'log';
-const SLOT_LABEL: Record<Slot, string> = { weapon: 'Weapon', head: 'Head', body: 'Body', offhand: 'Offhand', cape: 'Cape', trinket: 'Trinket' };
+/** Shown through t(). */
+const SLOT_LABEL: Record<Slot, string> = { weapon: tk('Weapon'), head: tk('Head'), body: tk('Body'), offhand: tk('Offhand'), cape: tk('Cape'), trinket: tk('Trinket') };
 
 export default function HeroScreen() {
   const hero = useStore((s) => s.hero)!;
@@ -31,6 +34,8 @@ export default function HeroScreen() {
   const stats = useMemo(() => applyBuffs(computeStats(hero, items), hero.buffs ?? []), [hero, items]);
   const ctx = achievementCtx(hero);
   const claimable = achievementStatus(hero, ctx).reduce((n, a) => n + a.claimable, 0);
+  // "[n] day streak": the words around the bold number, in the language's order
+  const streakParts = t('{n} day streak').split('{n}');
 
   return (
     <div className="scroll">
@@ -38,26 +43,28 @@ export default function HeroScreen() {
         <HeroPreview app={hero.appearance} look={look} theme="tavern" w={wide ? 120 : 92} h={56} scale={4} fit />
         <div style={{ padding: 12 }}>
           <div className="win-title">
-            {hero.name} · Lv{st.level} {hero.title ?? levelTitle(st.level)}
+            {t('{name} · Lv{level} {title}', { name: hero.name, level: st.level, title: titleLabel(hero.title ?? levelTitle(st.level)) })}
           </div>
           <div style={{ fontSize: 15, marginTop: 6, color: 'var(--muted)' }}>
-            {RACE_BY_ID[hero.appearance.race].name} {CLASS_BY_ID[hero.classId].name} · ✦ {RACE_BY_ID[hero.appearance.race].perk}
+            {t(RACE_BY_ID[hero.appearance.race].name)} {t(CLASS_BY_ID[hero.classId].name)} · ✦ {t(RACE_BY_ID[hero.appearance.race].perk)}
           </div>
           <div style={{ marginTop: 10 }}>
             <Bar value={st.into} max={st.need} label={`${st.into}/${st.need} XP`} />
           </div>
           <div className="hero-quick">
             <span>
-              <Ui name="sword" size={16} /> Power <b>{Math.round(stats.power).toLocaleString()}</b>
+              <Ui name="sword" size={16} /> {t('Power')} <b>{Math.round(stats.power).toLocaleString(locale())}</b>
             </span>
             <span>
-              <Ui name="coin" size={16} /> <b>{heroGold(hero).toLocaleString()}</b>
+              <Ui name="coin" size={16} /> <b>{heroGold(hero).toLocaleString(locale())}</b>
             </span>
             <span>
-              <Ui name="flame" size={16} /> <b>{streak(streakDays(hero), Date.now(), cfg)}</b> day streak
+              <Ui name="flame" size={16} /> {streakParts[0]}
+              <b>{streak(streakDays(hero), Date.now(), cfg)}</b>
+              {streakParts[1]}
             </span>
             <button className="btn ghost small" onClick={() => setBarber(true)}>
-              ✂ Barber
+              ✂ {t('Barber')}
             </button>
           </div>
         </div>
@@ -66,11 +73,11 @@ export default function HeroScreen() {
       <div className="subtabs">
         {(
           [
-            ['gear', 'Gear'],
-            ['bag', 'Bag'],
-            ['skills', 'Skills'],
-            ['feats', claimable ? `Feats (${claimable}!)` : 'Feats'],
-            ['log', 'Log'],
+            ['gear', t('Gear')],
+            ['bag', t('Bag')],
+            ['skills', t('Skills')],
+            ['feats', claimable ? t('Feats ({n}!)', { n: claimable }) : t('Feats')],
+            ['log', t('Log')],
           ] as [Sub, string][]
         ).map(([k, label]) => (
           <button key={k} className={`subtab ${sub === k ? 'active' : ''} ${k === 'feats' && claimable ? 'glow' : ''}`} aria-pressed={sub === k} onClick={() => (sfx.tick(), setSub(k))}>
@@ -104,12 +111,12 @@ function GearTab() {
             return it ? (
               <div key={slot} className="slot filled">
                 <ItemIcon item={it} size={36} onClick={() => setOpen(it)} />
-                {SLOT_LABEL[slot]}
+                {t(SLOT_LABEL[slot])}
               </div>
             ) : (
               <div key={slot} className="slot">
                 <span style={{ opacity: 0.4 }}>—</span>
-                {SLOT_LABEL[slot]}
+                {t(SLOT_LABEL[slot])}
               </div>
             );
           })}
@@ -117,27 +124,27 @@ function GearTab() {
       </div>
       {(hero.buffs ?? []).length > 0 && (
         <>
-          <div className="section-label">Active potions</div>
+          <div className="section-label">{t('Active potions')}</div>
           <div className="win" style={{ padding: '6px 12px' }}>
             {hero.buffs.map((b) => (
               <div key={b.id} className="kv">
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <PotionIcon potion={b.potion} tier={b.tier} size={24} /> {potionName(b.potion, b.tier)}
+                  <PotionIcon potion={b.potion} tier={b.tier} size={24} /> {t(potionName(b.potion, b.tier))}
                 </span>
-                <b>{b.remaining} quests left</b>
+                <b>{t('{n} quests left', { n: b.remaining })}</b>
               </div>
             ))}
           </div>
         </>
       )}
-      <div className="section-label">Stats</div>
+      <div className="section-label">{t('Stats')}</div>
       <div className="win" style={{ padding: '6px 12px' }}>
         <div className="kv">
-          Power (boss damage) <b>{Math.round(stats.power).toLocaleString()}</b>
+          {t('Power (boss damage)')} <b>{Math.round(stats.power).toLocaleString(locale())}</b>
         </div>
         {(Object.keys(STAT_INFO) as StatId[]).map((k) => (
           <div key={k} className="kv">
-            {STAT_INFO[k].name} <b>{stats[k] > 0 ? `+${stats[k]}%` : '—'}</b>
+            {t(STAT_INFO[k].name)} <b>{stats[k] > 0 ? `+${stats[k]}%` : '—'}</b>
           </div>
         ))}
       </div>
@@ -161,17 +168,17 @@ function BagTab() {
   return (
     <>
       <div className="section-label">
-        Bag {all.length}/{hero.bagSize}
+        {t('Bag {n}/{size}', { n: all.length, size: hero.bagSize })}
       </div>
       <div className="pantry" style={{ padding: '0 0 8px' }}>
         {(['all', ...SLOTS] as const).map((f) => (
           <button key={f} className={`pill ${filter === f ? 'sel' : ''}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>
-            {f === 'all' ? 'All' : SLOT_LABEL[f]}
+            {f === 'all' ? t('All') : t(SLOT_LABEL[f])}
           </button>
         ))}
       </div>
       <div className="win bag-grid">
-        {bag.length === 0 && <div className="empty" style={{ gridColumn: '1 / -1' }}>Empty. Slay quests to find loot!</div>}
+        {bag.length === 0 && <div className="empty" style={{ gridColumn: '1 / -1' }}>{t('Empty. Slay quests to find loot!')}</div>}
         {bag.map((it) => {
           const cur = eq[it.slot];
           const better = !cur || itemPower(it) > itemPower(cur);
@@ -184,26 +191,26 @@ function BagTab() {
             className="btn ghost small"
             onClick={() => {
               const total = junk.reduce((n, i) => n + sellPrice(i), 0);
-              if (!confirm(`Sell ${junk.length} unlocked Common/Uncommon items for ${total}g?`)) return;
+              if (!confirm(t('Sell {n} unlocked Common/Uncommon items for {gold}g?', { n: junk.length, gold: total }))) return;
               junk.forEach((i) => s.sellItem(i.id));
               sfx.coin();
             }}
           >
-            Sell junk ({junk.length})
+            {t('Sell junk ({n})', { n: junk.length })}
           </button>
         </div>
       )}
-      <div className="section-label">Potions</div>
+      <div className="section-label">{t('Potions')}</div>
       <div className="win" style={{ padding: '6px 12px' }}>
-        {potions.length === 0 && <div className="empty">No potions. Monsters drop them, or visit the shop.</div>}
+        {potions.length === 0 && <div className="empty">{t('No potions. Monsters drop them, or visit the shop.')}</div>}
         {potions.map((p) => (
           <div key={p.id} className="potion-row">
             <PotionIcon potion={p.potion} tier={p.tier} size={32} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div>
-                {potionName(p.potion, p.tier)} <span className="muted">×{p.count}</span>
+                {t(potionName(p.potion, p.tier))} <span className="muted">×{p.count}</span>
               </div>
-              <div className="muted small">{describePotion(p.potion, p.tier, computeStats(hero, s.items).potion)}</div>
+              <div className="muted small">{t(describePotion(p.potion, p.tier, computeStats(hero, s.items).potion))}</div>
             </div>
             <button
               className="btn small"
@@ -212,7 +219,7 @@ function BagTab() {
                 else sfx.error();
               }}
             >
-              {p.potion === 'phoenix' ? 'Use' : 'Drink'}
+              {p.potion === 'phoenix' ? t('Use') : t('Drink')}
             </button>
           </div>
         ))}
@@ -233,7 +240,7 @@ function SkillsTab() {
             <PxImg src={iconFor(sk.name, sk.emoji)} size={28} />
             <div>
               <div className="sname">
-                {sk.name} <span className="muted small">· {sk.hint}</span>
+                {t(sk.name)} <span className="muted small">· {t(sk.hint)}</span>
               </div>
               <Bar value={s.into} max={s.need} />
             </div>
@@ -253,6 +260,7 @@ function FeatsTab() {
   const list = achievementStatus(hero, ctx);
   const titles = unlockedTitles(hero, ctx);
   const claimable = list.reduce((n, a) => n + a.claimable, 0);
+  const nextTitle = t('next title: {title}').split('{title}');
   return (
     <>
       {claimable > 0 && (
@@ -266,7 +274,7 @@ function FeatsTab() {
               }
             }}
           >
-            Claim {claimable} reward{claimable > 1 ? 's' : ''}
+            {tn(claimable, 'Claim {n} reward', 'Claim {n} rewards')}
           </button>
         </div>
       )}
@@ -276,28 +284,35 @@ function FeatsTab() {
             <PxImg src={iconFor(a.name, a.icon)} size={30} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="sname">
-                {a.name} <span className="muted small">· tier {a.tierReached}</span>
+                {t(a.name)} <span className="muted small">· {t('tier {n}', { n: a.tierReached })}</span>
               </div>
               <div className="muted small" style={{ marginBottom: 4 }}>
-                {a.description}
-                {a.nextTitle && !a.maxed && <> · next title: <i>{a.nextTitle}</i></>}
+                {t(a.description)}
+                {a.nextTitle && !a.maxed && (
+                  <>
+                    {' · '}
+                    {nextTitle[0]}
+                    <i>{t(a.nextTitle)}</i>
+                    {nextTitle[1]}
+                  </>
+                )}
               </div>
-              <Bar value={a.value - a.prevThreshold} max={Math.max(1, a.nextThreshold - a.prevThreshold)} label={`${a.value.toLocaleString()} / ${a.nextThreshold.toLocaleString()}`} kind="gold" />
+              <Bar value={a.value - a.prevThreshold} max={Math.max(1, a.nextThreshold - a.prevThreshold)} label={`${a.value.toLocaleString(locale())} / ${a.nextThreshold.toLocaleString(locale())}`} kind="gold" />
             </div>
-            {a.claimable > 0 ? <span className="claim-dot" title={`${a.pendingGold}g waiting`}>!</span> : a.maxed ? <span className="muted small">MAX</span> : null}
+            {a.claimable > 0 ? <span className="claim-dot" title={t('{gold}g waiting', { gold: a.pendingGold })}>!</span> : a.maxed ? <span className="muted small">{t('MAX')}</span> : null}
           </div>
         ))}
       </div>
-      <div className="section-label">Title</div>
+      <div className="section-label">{tc('earned', 'Title')}</div>
       <div className="win pantry">
         <button className={`pill ${!hero.title ? 'sel' : ''}`} aria-pressed={!hero.title} onClick={() => s.setTitle(undefined)}>
-          {levelTitle(level)} (level)
+          {t('{title} (level)', { title: titleLabel(levelTitle(level)) })}
         </button>
         {titles
-          .filter((t) => t !== levelTitle(level))
-          .map((t) => (
-            <button key={t} className={`pill ${hero.title === t ? 'sel' : ''}`} aria-pressed={hero.title === t} onClick={() => (sfx.tick(), s.setTitle(t))}>
-              {t}
+          .filter((ti) => ti !== levelTitle(level))
+          .map((ti) => (
+            <button key={ti} className={`pill ${hero.title === ti ? 'sel' : ''}`} aria-pressed={hero.title === ti} onClick={() => (sfx.tick(), s.setTitle(ti))}>
+              {titleLabel(ti)}
             </button>
           ))}
       </div>
@@ -309,10 +324,10 @@ function LogTab() {
   const log = useStore((s) => s.log);
   return (
     <div className="win log" style={{ maxHeight: 'none', marginTop: 12 }}>
-      {log.length === 0 && <div className="empty">Your legend is unwritten.</div>}
+      {log.length === 0 && <div className="empty">{t('Your legend is unwritten.')}</div>}
       {log.slice(0, 120).map((l) => (
         <div key={l.id} className={`lk-${l.kind}`}>
-          ▸ {l.text}
+          ▸ {t(l.text)}
         </div>
       ))}
     </div>
@@ -331,72 +346,72 @@ function BarberSheet({ onClose }: { onClose: () => void }) {
   const capeDyes = dyes('cape');
   return (
     <Sheet onClose={onClose}>
-        <div className="win-title">Barber & Tailor</div>
+        <div className="win-title">{t('Barber & Tailor')}</div>
         <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 0' }}>
           <HeroPreview app={app} look={previewLook} theme="tavern" w={64} h={48} scale={3} />
         </div>
-        <Row label="Name">
-          <input className="text-in" aria-label="Hero name" value={name} maxLength={16} onChange={(e) => setName(e.target.value)} />
+        <Row label={t('Name')}>
+          <input className="text-in" aria-label={t('Hero name')} value={name} maxLength={16} onChange={(e) => setName(e.target.value)} />
         </Row>
-        <Row label="Skin">
+        <Row label={t('Skin')}>
           {race.skins.map((c, i) => (
-            <button key={c} className={`swatch ${app.skin === i ? 'sel' : ''}`} aria-pressed={app.skin === i} aria-label={`Skin tone ${i + 1}`} style={{ background: c }} onClick={() => setApp({ ...app, skin: i })} />
+            <button key={c} className={`swatch ${app.skin === i ? 'sel' : ''}`} aria-pressed={app.skin === i} aria-label={t('Skin tone {n}', { n: i + 1 })} style={{ background: c }} onClick={() => setApp({ ...app, skin: i })} />
           ))}
         </Row>
         {app.race !== 'lizardfolk' && (
-          <Row label="Hair">
+          <Row label={t('Hair')}>
             {HAIR_STYLES.map((h) => (
               <button key={h} className={`pill ${app.hair === h ? 'sel' : ''}`} aria-pressed={app.hair === h} onClick={() => setApp({ ...app, hair: h })}>
-                {h}
+                {lookWord(h)}
               </button>
             ))}
           </Row>
         )}
-        <Row label="Hair color">
+        <Row label={t('Hair color')}>
           {[...HAIR_COLORS, ...dyes('hair')].map((c) => (
-            <button key={c} className={`swatch ${app.hairColor === c ? 'sel' : ''}`} aria-pressed={app.hairColor === c} aria-label={`Hair color ${c}`} style={{ background: c }} onClick={() => setApp({ ...app, hairColor: c })} />
+            <button key={c} className={`swatch ${app.hairColor === c ? 'sel' : ''}`} aria-pressed={app.hairColor === c} aria-label={t('Hair color {color}', { color: c })} style={{ background: c }} onClick={() => setApp({ ...app, hairColor: c })} />
           ))}
         </Row>
         {app.race !== 'lizardfolk' && (
-          <Row label="Beard">
+          <Row label={t('Beard')}>
             {(['none', 'short', 'long'] as BeardStyle[]).map((b) => (
               <button key={b} className={`pill ${app.beard === b ? 'sel' : ''}`} aria-pressed={app.beard === b} onClick={() => setApp({ ...app, beard: b })}>
-                {b}
+                {lookWord(b)}
               </button>
             ))}
           </Row>
         )}
-        <Row label="Eyes">
+        <Row label={t('Eyes')}>
           {EYE_COLORS.map((c) => (
-            <button key={c} className={`swatch ${app.eyes === c ? 'sel' : ''}`} aria-pressed={app.eyes === c} aria-label={`Eye color ${c}`} style={{ background: c }} onClick={() => setApp({ ...app, eyes: c })} />
+            <button key={c} className={`swatch ${app.eyes === c ? 'sel' : ''}`} aria-pressed={app.eyes === c} aria-label={t('Eye color {color}', { color: c })} style={{ background: c }} onClick={() => setApp({ ...app, eyes: c })} />
           ))}
         </Row>
-        <Row label="Outfit">
+        <Row label={t('Outfit')}>
           {[...OUTFIT_COLORS, ...dyes('outfit')].map((c) => (
-            <button key={c} className={`swatch ${app.outfit === c ? 'sel' : ''}`} aria-pressed={app.outfit === c} aria-label={`Outfit color ${c}`} style={{ background: c }} onClick={() => setApp({ ...app, outfit: c })} />
+            <button key={c} className={`swatch ${app.outfit === c ? 'sel' : ''}`} aria-pressed={app.outfit === c} aria-label={t('Outfit color {color}', { color: c })} style={{ background: c }} onClick={() => setApp({ ...app, outfit: c })} />
           ))}
         </Row>
-        <Row label="Pants">
+        <Row label={t('Pants')}>
           {['#4a3a2a', '#2a2a3a', '#3a4a6a', '#5a2a2a', '#2a4a2a', ...dyes('pants')].map((c) => (
-            <button key={c} className={`swatch ${app.pants === c ? 'sel' : ''}`} aria-pressed={app.pants === c} aria-label={`Pants color ${c}`} style={{ background: c }} onClick={() => setApp({ ...app, pants: c })} />
+            <button key={c} className={`swatch ${app.pants === c ? 'sel' : ''}`} aria-pressed={app.pants === c} aria-label={t('Pants color {color}', { color: c })} style={{ background: c }} onClick={() => setApp({ ...app, pants: c })} />
           ))}
         </Row>
         {capeDyes.length > 0 && (
-          <Row label="Cape dye">
+          <Row label={t('Cape dye')}>
             <button className={`pill ${!capeDye ? 'sel' : ''}`} aria-pressed={!capeDye} onClick={() => setCapeDye(undefined)}>
-              None
+              {t('None')}
             </button>
             {capeDyes.map((c) => (
-              <button key={c} className={`swatch ${capeDye === c ? 'sel' : ''}`} aria-pressed={capeDye === c} aria-label={`Cape dye ${c}`} style={{ background: c }} onClick={() => setCapeDye(c)} />
+              <button key={c} className={`swatch ${capeDye === c ? 'sel' : ''}`} aria-pressed={capeDye === c} aria-label={t('Cape dye {color}', { color: c })} style={{ background: c }} onClick={() => setCapeDye(c)} />
             ))}
           </Row>
         )}
         <div className="muted small" style={{ marginTop: 8 }}>
-          More dyes in the shop.
+          {t('More dyes in the shop.')}
         </div>
         <div className="sheet-actions" style={{ justifyContent: 'flex-end' }}>
           <button className="btn ghost" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </button>
           <button
             className="btn"
@@ -406,7 +421,7 @@ function BarberSheet({ onClose }: { onClose: () => void }) {
               onClose();
             }}
           >
-            Save
+            {t('Save')}
           </button>
         </div>
     </Sheet>

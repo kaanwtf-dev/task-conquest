@@ -2,6 +2,7 @@
 // reminder settings the scheduled sender (scripts/push) reads from the cloud. The app icon badge too.
 import type { Settings } from '../core/types';
 import { DEFAULT_PUSH_PREFS, type PushPrefs } from './nudges';
+import { resolveLang } from '../i18n';
 
 const VAPID = String((import.meta.env as Record<string, unknown>).VITE_VAPID_PUBLIC_KEY ?? '').trim();
 
@@ -31,6 +32,7 @@ export function pushPrefs(settings: Settings): PushPrefs {
     off: settings.push?.off ?? [],
     dayStartHour: settings.dayStartHour,
     weekStart: settings.weekStart,
+    lang: resolveLang(settings.lang),
   };
 }
 

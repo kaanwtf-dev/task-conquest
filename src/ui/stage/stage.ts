@@ -7,6 +7,8 @@ import { Painter, THEME_BY_ID, groundLine, sceneCanvas, type ThemeId } from '../
 import type { MonsterSpawn } from '../../game/catalog';
 import type { AnimMode } from '../../core/types';
 import { sfx } from '../../audio/sfx';
+// imported whole: `t` is a local time variable all over this file
+import * as i18n from '../../i18n';
 
 export interface KillJob {
   monster: MonsterSpawn;
@@ -128,7 +130,7 @@ export class Stage {
 
   levelUp() {
     this.levelGlowUntil = performance.now() + 1600;
-    this.floaters.push({ text: 'LEVEL UP!', short: 'LV UP!', color: '#ffd860', x: this.heroX + 20, y: 6, t0: performance.now(), dur: 1600 });
+    this.floaters.push({ text: i18n.t('LEVEL UP!'), short: i18n.t('LV UP!'), color: '#ffd860', x: this.heroX + 20, y: 6, t0: performance.now(), dur: 1600 });
     this.schedule(true);
   }
 
@@ -277,10 +279,10 @@ export class Stage {
         this.explode(b.pix, mx, monY, b.job.gold);
         if (epic) {
           this.explode(b.pix, mx, monY, b.job.gold);
-          this.floaters.push({ text: 'EPIC!', color: '#ffb84a', x: mx + 10, y: monY - 22, t0: now, dur: 1400 });
+          this.floaters.push({ text: i18n.t('EPIC!'), color: '#ffb84a', x: mx + 10, y: monY - 22, t0: now, dur: 1400 });
         }
         this.floaters.push({ text: `+${b.job.xp} XP`, short: `+${b.job.xp}`, color: '#5fcde4', x: mx + 10, y: monY - 2, t0: now, dur: 900 / Math.min(2, this.speed()) });
-        if (b.job.crit) this.floaters.push({ text: 'CRIT!', color: '#ff5a5a', x: mx + 10, y: monY - 12, t0: now, dur: 900 });
+        if (b.job.crit) this.floaters.push({ text: i18n.t('CRIT!'), color: '#ff5a5a', x: mx + 10, y: monY - 12, t0: now, dur: 900 });
         once('coin', () => sfx.coin());
       }
       if (t >= BATTLE_MS) this.battle = null;

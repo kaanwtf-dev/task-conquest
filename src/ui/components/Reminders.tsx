@@ -19,13 +19,14 @@ import {
 } from '../../push/client';
 import type { NudgeKind } from '../../push/nudges';
 import { useNow } from './common';
+import { t, tk } from '../../i18n';
 
 const KIND_LABEL: Record<NudgeKind, string> = {
-  plan: "today's plan",
-  evening: 'streak saver',
-  party: 'party news',
-  comeback: 'miss-you',
-  deadline: 'deadlines',
+  plan: tk("today's plan"),
+  evening: tk('streak saver'),
+  party: tk('party news'),
+  comeback: tk('miss-you'),
+  deadline: tk('deadlines'),
 };
 const MORNING = [7, 8, 9, 10];
 const EVENING = [18, 19, 20, 21, 22];
@@ -75,17 +76,17 @@ async function turnOn(account: string): Promise<boolean> {
       useStore.getState().updateSettings({ pushAskedAt: Date.now() });
       fx.emit(
         refused
-          ? { type: 'toast', text: 'Notifications are off', small: 'Turn them on in Settings › Notifications › Task Conquest.' }
-          : { type: 'toast', text: 'No reminders yet', small: 'Tap Turn on again and choose Allow.' },
+          ? { type: 'toast', text: t('Notifications are off'), small: t('Turn them on in Settings › Notifications › Task Conquest.') }
+          : { type: 'toast', text: t('No reminders yet'), small: t('Tap Turn on again and choose Allow.') },
       );
       return false;
     }
     useStore.getState().updateSettings({ pushAccount: account });
     sfx.loot();
-    fx.emit({ type: 'toast', text: 'REMINDERS ON', small: 'Your hero will nudge you, never more than twice a day.' });
+    fx.emit({ type: 'toast', text: t('REMINDERS ON'), small: t('Your hero will nudge you, never more than twice a day.') });
     return true;
   } catch (e) {
-    fx.emit({ type: 'toast', text: 'Could not turn reminders on', small: e instanceof Error ? e.message : undefined });
+    fx.emit({ type: 'toast', text: t('Could not turn reminders on'), small: e instanceof Error ? e.message : undefined });
     return false;
   }
 }
@@ -109,7 +110,13 @@ function useLastRun(userId: string | null | undefined): number | null | undefine
 
 function ago(ms: number): string {
   const min = Math.round(ms / 60_000);
-  return min < 2 ? 'just now' : min < 90 ? `${min} min ago` : min < 48 * 60 ? `${Math.round(min / 60)} h ago` : `${Math.round(min / 1440)} days ago`;
+  return min < 2
+    ? t('just now')
+    : min < 90
+      ? t('{n} min ago', { n: min })
+      : min < 48 * 60
+        ? t('{n} h ago', { n: Math.round(min / 60) })
+        : t('{n} days ago', { n: Math.round(min / 1440) });
 }
 
 /** Shows a sample right here, without the cloud: checks this device can display reminders at all. */
@@ -117,13 +124,13 @@ async function preview() {
   sfx.tick();
   try {
     const reg = await navigator.serviceWorker.ready;
-    await reg.showNotification('🔥 Your 3-day streak is on the line', {
-      body: 'Finish one quest before the day resets to keep it alive. (This is a preview.)',
+    await reg.showNotification(t('🔥 Your 3-day streak is on the line'), {
+      body: t('Finish one quest before the day resets to keep it alive. (This is a preview.)'),
       tag: 'taskconquest-preview',
       icon: `${import.meta.env.BASE_URL}icon-192.png`,
     });
   } catch {
-    fx.emit({ type: 'toast', text: 'Could not show a preview' });
+    fx.emit({ type: 'toast', text: t('Could not show a preview') });
   }
 }
 
@@ -142,15 +149,15 @@ export function RemindersOption() {
   };
 
   let note: string | null = null;
-  if (support === 'install') note = 'Add Task Conquest to your Home Screen first (Share › Add to Home Screen), then turn reminders on there.';
-  else if (support === 'unsupported') note = 'This browser cannot show reminders.';
-  else if (userId === null) note = 'Sign in on the Party tab first: reminders come from the cloud.';
-  else if (pushPermission() === 'denied') note = 'Notifications are blocked for Task Conquest. Allow them in Settings › Notifications › Task Conquest.';
+  if (support === 'install') note = t('Add Task Conquest to your Home Screen first (Share › Add to Home Screen), then turn reminders on there.');
+  else if (support === 'unsupported') note = t('This browser cannot show reminders.');
+  else if (userId === null) note = t('Sign in on the Party tab first: reminders come from the cloud.');
+  else if (pushPermission() === 'denied') note = t('Notifications are blocked for Task Conquest. Allow them in Settings › Notifications › Task Conquest.');
 
   return (
     <div className="reminders">
       <div className="reminders-head">
-        <span>{on ? 'Reminders are on.' : 'A morning plan and an evening streak saver from your hero, never more than twice a day.'}</span>
+        <span>{on ? t('Reminders are on.') : t('A morning plan and an evening streak saver from your hero, never more than twice a day.')}</span>
         {/* turning off always works, signed in or not; turning on needs everything in place */}
         {(on || (!note && on !== null && userId)) && (
           <button
@@ -166,7 +173,7 @@ export function RemindersOption() {
               setBusy(false);
             }}
           >
-            {on ? 'Turn off' : 'Turn on'}
+            {on ? t('Turn off') : t('Turn on')}
           </button>
         )}
       </div>
@@ -179,17 +186,17 @@ export function RemindersOption() {
               {lastRun === undefined
                 ? ''
                 : lastRun === null
-                  ? 'The reminder service has not run yet (it needs a one-time setup in Supabase).'
+                  ? t('The reminder service has not run yet (it needs a one-time setup in Supabase).')
                   : Date.now() - lastRun > 3 * 3600_000
-                    ? `The reminder service last ran ${ago(Date.now() - lastRun)}: check its schedule in Supabase.`
-                    : `Reminder service checked ${ago(Date.now() - lastRun)}.`}
+                    ? t('The reminder service last ran {ago}: check its schedule in Supabase.', { ago: ago(Date.now() - lastRun) })
+                    : t('Reminder service checked {ago}.', { ago: ago(Date.now() - lastRun) })}
             </span>
             <button className="pill" onClick={() => void preview()}>
-              preview
+              {t('preview')}
             </button>
           </div>
           <div className="reminders-row">
-            <span className="muted small">Morning</span>
+            <span className="muted small">{t('Morning')}</span>
             {MORNING.map((h) => (
               <button key={h} className={`pill ${prefs.morningHour === h ? 'sel' : ''}`} aria-pressed={prefs.morningHour === h} onClick={() => setPush({ morningHour: h })}>
                 {h}:00
@@ -197,7 +204,7 @@ export function RemindersOption() {
             ))}
           </div>
           <div className="reminders-row">
-            <span className="muted small">Evening</span>
+            <span className="muted small">{t('Evening')}</span>
             {EVENING.map((h) => (
               <button key={h} className={`pill ${prefs.eveningHour === h ? 'sel' : ''}`} aria-pressed={prefs.eveningHour === h} onClick={() => setPush({ eveningHour: h })}>
                 {h}:00
@@ -215,7 +222,7 @@ export function RemindersOption() {
                   onClick={() => setPush({ off: enabled ? [...prefs.off, k] : prefs.off.filter((x) => x !== k) })}
                 >
                   {enabled ? '✓ ' : ''}
-                  {KIND_LABEL[k]}
+                  {t(KIND_LABEL[k])}
                 </button>
               );
             })}
@@ -238,13 +245,13 @@ export function PushInvite() {
     done >= 3 && Date.now() - askedAt > ASK_AGAIN_MS && pushSupport() === 'ok' && pushPermission() === 'default' && !!userId && on === false;
   if (!show) return null;
   return (
-    <div className="win push-invite" role="region" aria-label="Reminders">
+    <div className="win push-invite" role="region" aria-label={t('Reminders')}>
       <div className="push-invite-icon" aria-hidden>
         🔔
       </div>
       <div className="push-invite-text">
-        <b>Want a nudge from your hero?</b>
-        <span>A morning plan and an evening streak saver. Never more than twice a day.</span>
+        <b>{t('Want a nudge from your hero?')}</b>
+        <span>{t('A morning plan and an evening streak saver. Never more than twice a day.')}</span>
       </div>
       <div className="push-invite-actions">
         <button
@@ -256,7 +263,7 @@ export function PushInvite() {
             setBusy(false);
           }}
         >
-          Yes!
+          {t('Yes!')}
         </button>
         <button
           className="btn ghost small"
@@ -265,7 +272,7 @@ export function PushInvite() {
             update({ pushAskedAt: Date.now() });
           }}
         >
-          Not now
+          {t('Not now')}
         </button>
       </div>
     </div>
@@ -303,13 +310,13 @@ export function PushKeeper() {
   const key = JSON.stringify(pushPrefs(settings));
   useEffect(() => {
     if (!userId) return;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       const prefs = JSON.parse(key);
       void (mine ? renewPush(prefs) : Promise.resolve(false))
         .then((renewed) => (renewed || !mine ? undefined : updatePushPrefs(prefs)))
         .catch(() => undefined);
     }, 1500);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [key, userId, mine]);
   return null;
 }

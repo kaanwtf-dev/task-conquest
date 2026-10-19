@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
 import { useStore, visibleLists, TODAY_ID } from './state/store';
+import { t } from './i18n';
 import { Hud, ListChips, Sidebar, TabBar } from './ui/components/chrome';
 import { useMedia, themeStyle } from './ui/components/common';
 import Effects from './ui/components/Effects';
@@ -67,11 +68,11 @@ export default function App() {
   useEffect(() => {
     if (!hasHero) return;
     const go = () => document.visibilityState === 'visible' && checkIn();
-    const t = setTimeout(go, 1200); // after the first sync pull had a moment to bring in today's check-in
+    const timer = setTimeout(go, 1200); // after the first sync pull had a moment to bring in today's check-in
     const every = setInterval(go, 10 * 60_000);
     document.addEventListener('visibilitychange', go);
     return () => {
-      clearTimeout(t);
+      clearTimeout(timer);
       clearInterval(every);
       document.removeEventListener('visibilitychange', go);
     };
@@ -82,11 +83,11 @@ export default function App() {
   useEffect(() => {
     if (!hasHero) return;
     const go = () => document.visibilityState === 'visible' && checkDeadlines();
-    const t = setTimeout(go, 2500);
+    const timer = setTimeout(go, 2500);
     const every = setInterval(go, 5 * 60_000);
     document.addEventListener('visibilitychange', go);
     return () => {
-      clearTimeout(t);
+      clearTimeout(timer);
       clearInterval(every);
       document.removeEventListener('visibilitychange', go);
     };
@@ -139,7 +140,7 @@ export default function App() {
           </div>
           <div className="win panel-log">
             <div className="win-title" style={{ padding: '10px 12px 0' }}>
-              Adventure log
+              {t('Adventure log')}
             </div>
             <div className="log">
               {log.slice(0, 40).map((l) => (

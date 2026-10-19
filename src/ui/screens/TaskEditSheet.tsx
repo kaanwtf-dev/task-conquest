@@ -8,9 +8,12 @@ import type { Difficulty, Repeat, Task } from '../../core/types';
 import { PxImg, Sheet, themeStyle } from '../components/common';
 import { sfx } from '../../audio/sfx';
 import { takeOffList } from '../groceries';
+import { t, getLang, locale } from '../../i18n';
 
 const QUICK_ICONS = ['⭐', '🔥', '💼', '🏠', '🧹', '🛒', '📚', '🏋️', '💊', '🐶', '🎮', '🎁', '💰', '📞', '✈️', '🍳', '🧺', '🌱'];
-const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+/** Day buttons, Sunday first: one letter in English (S M T W T F S); Turkish one-letter days clash (P P S Ç P C C), so it shows short names. */
+const dayLetters = () =>
+  [0, 1, 2, 3, 4, 5, 6].map((i) => new Date(2024, 0, 7 + i).toLocaleDateString(locale(), { weekday: getLang() === 'tr' ? 'short' : 'narrow' }));
 
 type RepeatKind = Repeat['kind'];
 
@@ -38,6 +41,9 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
           : { kind };
     patch({ repeat: r });
   };
+
+  // "Every [n] days": the words around the number box, in the language's order
+  const everyParts = t('Every {n} days').split('{n}').map((w) => w.trim());
 
   const save = () => {
     // only write fields this sheet edits and that actually changed, so a completion that synced in
@@ -78,65 +84,65 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <PxImg src={iconFor(draft.title, firstEmoji(emojiText) ?? undefined)} size={44} />
-          <div className="win-title">{supply ? 'Edit item' : 'Edit quest'}</div>
+          <div className="win-title">{supply ? t('Edit item') : t('Edit quest')}</div>
         </div>
 
-        <Field label="Title">
-          <input className="text-in" value={draft.title} onChange={(e) => patch({ title: e.target.value })} aria-label="Title" />
+        <Field label={t('Title')}>
+          <input className="text-in" value={draft.title} onChange={(e) => patch({ title: e.target.value })} aria-label={t('Title')} />
         </Field>
 
-        <Field label="Icon (auto, or pick / type any emoji)">
+        <Field label={t('Icon (auto, or pick / type any emoji)')}>
           <button type="button" className={`pill ${!emojiText ? 'sel' : ''}`} aria-pressed={!emojiText} onClick={() => setEmojiText('')}>
-            Auto
+            {t('Auto')}
           </button>
           {QUICK_ICONS.map((e) => (
             <button type="button" key={e} className={`pill ${emojiText === e ? 'sel' : ''}`} aria-pressed={emojiText === e} style={{ padding: 3 }} onClick={() => setEmojiText(e)} aria-label={e}>
               <PxImg src={iconFor('', e)} size={26} />
             </button>
           ))}
-          <input className="text-in" style={{ maxWidth: 120 }} value={emojiText} onChange={(e) => setEmojiText(e.target.value)} placeholder="😀" aria-label="Custom emoji" />
+          <input className="text-in" style={{ maxWidth: 120 }} value={emojiText} onChange={(e) => setEmojiText(e.target.value)} placeholder="😀" aria-label={t('Custom emoji')} />
         </Field>
 
         {supply ? (
           <>
-            <Field label="Quantity">
-              <input className="text-in" style={{ maxWidth: 140 }} value={draft.qty ?? ''} onChange={(e) => patch({ qty: e.target.value || undefined })} placeholder="e.g. 2, 1kg" />
+            <Field label={t('Quantity')}>
+              <input className="text-in" style={{ maxWidth: 140 }} value={draft.qty ?? ''} onChange={(e) => patch({ qty: e.target.value || undefined })} placeholder={t('e.g. 2, 1kg')} />
             </Field>
-            <Field label="Aisle">
+            <Field label={t('Aisle')}>
               {Object.entries(AISLES)
                 .sort((a, b) => a[1].order - b[1].order)
                 .map(([k, a]) => (
                   <button type="button" key={k} className={`pill ${(draft.aisle ?? 'other') === k ? 'sel' : ''}`} aria-pressed={(draft.aisle ?? 'other') === k} onClick={() => patch({ aisle: k })}>
-                    {a.name}
+                    {t(a.name)}
                   </button>
                 ))}
             </Field>
-            <Field label="Staple (restock button re-adds it)">
+            <Field label={t('Staple (restock button re-adds it)')}>
               {[true, false].map((v) => (
                 <button type="button" key={String(v)} className={`pill ${!!draft.staple === v ? 'sel' : ''}`} aria-pressed={!!draft.staple === v} onClick={() => patch({ staple: v })}>
-                  {v ? 'Staple ★' : 'No'}
+                  {v ? t('Staple ★') : t('No')}
                 </button>
               ))}
             </Field>
           </>
         ) : (
           <>
-            <Field label="Difficulty (set automatically from the name; change it if it's off)">
+            <Field label={t("Difficulty (set automatically from the name; change it if it's off)")}>
               {DIFFICULTY.map((d, i) => (
                 <button type="button" key={d.name} className={`pill ${draft.difficulty === i ? 'sel' : ''}`} aria-pressed={draft.difficulty === i} onClick={() => patch({ difficulty: i as Difficulty })}>
-                  {d.name} <span style={{ opacity: 0.7, fontSize: 13 }}>+{taskXp(level, i as Difficulty)}xp</span>
+                  {t(d.name)} <span style={{ opacity: 0.7, fontSize: 13 }}>+{taskXp(level, i as Difficulty)}xp</span>
                 </button>
               ))}
             </Field>
-            <Field label="Repeat">
+            <Field label={t('Repeat')}>
               {(
                 [
-                  ['none', 'Never'],
-                  ['daily', 'Daily'],
-                  ['days', 'Some days'],
-                  ['weekly', 'Weekly'],
-                  ['monthly', 'Monthly'],
-                  ['interval', 'Every N days'],
+                  ['none', t('Never')],
+                  ['daily', t('Daily')],
+                  ['days', t('Some days')],
+                  ['weekly', t('Weekly')],
+                  ['monthly', t('Monthly')],
+                  ['interval', t('Every N days')],
                 ] as [RepeatKind, string][]
               ).map(([k, label]) => (
                 <button type="button" key={k} className={`pill ${draft.repeat.kind === k ? 'sel' : ''}`} aria-pressed={draft.repeat.kind === k} onClick={() => setRepeat(k)}>
@@ -145,7 +151,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
               ))}
               {draft.repeat.kind === 'days' && (
                 <div style={{ display: 'flex', gap: 6, width: '100%', marginTop: 4 }}>
-                  {DAY_LETTERS.map((l, i) => {
+                  {dayLetters().map((l, i) => {
                     const r = draft.repeat as Extract<Repeat, { kind: 'days' }>;
                     const on = r.days.includes(i);
                     return (
@@ -167,7 +173,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
               )}
               {draft.repeat.kind === 'interval' && (
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', marginTop: 4, fontSize: 15 }}>
-                  Every
+                  {everyParts[0]}
                   <input
                     className="text-in"
                     type="number"
@@ -185,19 +191,19 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
                     }}
                     onBlur={() => setEveryText(null)}
                   />
-                  days
+                  {everyParts[1]}
                 </label>
               )}
             </Field>
             <DueField draft={draft} patch={patch} />
             <TimeLimit draft={draft} patch={patch} />
-            <Field label="Notes">
-              <textarea className="text-in" rows={3} aria-label="Notes" value={draft.notes ?? ''} onChange={(e) => patch({ notes: e.target.value || undefined })} style={{ width: '100%', resize: 'vertical' }} />
+            <Field label={t('Notes')}>
+              <textarea className="text-in" rows={3} aria-label={t('Notes')} value={draft.notes ?? ''} onChange={(e) => patch({ notes: e.target.value || undefined })} style={{ width: '100%', resize: 'vertical' }} />
             </Field>
           </>
         )}
 
-        <Field label="List">
+        <Field label={t('List')}>
           {lists.map((l) => (
             <button type="button" key={l.id} className={`pill ${draft.listId === l.id ? 'sel' : ''}`} aria-pressed={draft.listId === l.id} onClick={() => patch({ listId: l.id })}>
               {l.name}
@@ -216,29 +222,29 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
                 takeOffList(task);
               }}
             >
-              Remove
+              {t('Remove')}
             </button>
           ) : (
             <button
               type="button"
               className="btn ghost"
               onClick={() => {
-                if (confirm(supply ? `Forget "${task.title}" completely?` : `Delete "${task.title}"?`)) {
+                if (confirm(supply ? t('Forget "{title}" completely?', { title: task.title }) : t('Delete "{title}"?', { title: task.title }))) {
                   s.deleteTask(task.id);
                   sfx.uncheck();
                   onClose();
                 }
               }}
             >
-              {supply ? 'Forget' : 'Delete'}
+              {supply ? t('Forget') : t('Delete')}
             </button>
           )}
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="btn ghost" onClick={onClose}>
-              Cancel
+              {t('Cancel')}
             </button>
             <button className="btn" type="submit">
-              Save
+              {t('Save')}
             </button>
           </div>
         </div>
@@ -282,17 +288,17 @@ function DueField({ draft, patch }: { draft: Task; patch: (p: Partial<Task>) => 
       deadlineOutcome: undefined,
     });
   return (
-    <Field label={once ? 'Due (a countdown bar runs until then)' : 'Due date (first time only)'}>
-      <input className="text-in" type="date" aria-label="Due date" style={{ flex: '1 1 200px', minWidth: 190, maxWidth: 240 }} value={date} onChange={(e) => set(e.target.value, time)} />
+    <Field label={once ? t('Due (a countdown bar runs until then)') : t('Due date (first time only)')}>
+      <input className="text-in" type="date" aria-label={t('Due date')} style={{ flex: '1 1 200px', minWidth: 190, maxWidth: 240 }} value={date} onChange={(e) => set(e.target.value, time)} />
       {once && date && (
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 15 }}>
-          by
-          <input className="text-in" type="time" aria-label="Due time (optional)" style={{ minWidth: 130, maxWidth: 160 }} value={time} onChange={(e) => set(date, e.target.value)} />
+          {t('by')}
+          <input className="text-in" type="time" aria-label={t('Due time (optional)')} style={{ minWidth: 130, maxWidth: 160 }} value={time} onChange={(e) => set(date, e.target.value)} />
         </label>
       )}
       {date && (
         <button type="button" className="pill" onClick={() => set('', '')}>
-          Clear
+          {t('Clear')}
         </button>
       )}
     </Field>
@@ -304,33 +310,36 @@ function TimeLimit({ draft, patch }: { draft: Task; patch: (p: Partial<Task>) =>
   const once = draft.repeat.kind === 'none';
   const hasLimit = once ? !!(draft.due || draft.deadline) : true;
   const everyDay = draft.repeat.kind === 'daily' || draft.repeat.kind === 'days';
-  const period = { weekly: 'week', monthly: 'month', interval: 'period' }[draft.repeat.kind as string] ?? 'day';
+  const byEnd =
+    { weekly: t("If it isn't done by the end of the week"), monthly: t("If it isn't done by the end of the month"), interval: t("If it isn't done by the end of the period") }[
+      draft.repeat.kind as string
+    ] ?? t("If it isn't done by the end of the day");
   return (
     <>
       {everyDay && (
-        <Field label="Done by (time of day; empty = by the end of the day)">
+        <Field label={t('Done by (time of day; empty = by the end of the day)')}>
           <input
             className="text-in"
             type="time"
-            aria-label="Done by"
+            aria-label={t('Done by')}
             style={{ maxWidth: 140 }}
             value={draft.byTime ?? ''}
             onChange={(e) => patch({ byTime: e.target.value || undefined })}
           />
           {draft.byTime && (
             <button type="button" className="pill" onClick={() => patch({ byTime: undefined })}>
-              Clear
+              {t('Clear')}
             </button>
           )}
         </Field>
       )}
       {hasLimit && (
-        <Field label={once ? 'If you miss it' : `If it isn't done ${everyDay && draft.byTime ? `by ${draft.byTime}` : `by the end of the ${period}`}`}>
+        <Field label={once ? t('If you miss it') : everyDay && draft.byTime ? t("If it isn't done by {time}", { time: draft.byTime }) : byEnd}>
           {(
             [
-              [undefined, 'Nothing'],
-              ['flexible', 'Flexible · small loss'],
-              ['must', 'Must do · it hurts'],
+              [undefined, t('Nothing')],
+              ['flexible', t('Flexible · small loss')],
+              ['must', t('Must do · it hurts')],
             ] as [Task['stakes'], string][]
           ).map(([k, label]) => (
             <button type="button" key={label} className={`pill ${draft.stakes === k ? 'sel' : ''}`} aria-pressed={draft.stakes === k} onClick={() => patch({ stakes: k })}>

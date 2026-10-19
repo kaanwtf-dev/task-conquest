@@ -12,6 +12,7 @@ import { joinList, leaveList, logPoints, upsertProfile } from '../sync/party';
 import { dayPoints } from '../game/leaderboard';
 import { todayKey } from '../core/time';
 import type { LocalAdapter, LocalSnapshot } from '../sync/types';
+import { t } from '../i18n';
 
 export type SyncStatus = 'off' | 'signed-out' | 'idle' | 'syncing' | 'offline' | 'error' | 'conflict';
 
@@ -116,17 +117,23 @@ export function partyNews(before: Pick<State, 'hero' | 'lists' | 'tasks'>, patch
   const me = before.hero?.name;
   if (!patch.tasks) return [];
   const out: PartyNews[] = [];
-  for (const t of Object.values(patch.tasks) as Task[]) {
-    const prev = before.tasks[t.id];
-    const list = ((patch.lists ?? before.lists) as Record<string, TaskList>)[t.listId];
+  for (const task of Object.values(patch.tasks) as Task[]) {
+    const prev = before.tasks[task.id];
+    const list = ((patch.lists ?? before.lists) as Record<string, TaskList>)[task.listId];
     // a list this device didn't have yet (joined here or on another device) arrives whole: not news
-    if (!list?.shared || t.deleted || !before.lists[t.listId]) continue;
+    if (!list?.shared || task.deleted || !before.lists[task.listId]) continue;
     // a task this device never saw is new to us, not news: only a change we watched happen is. A real
     // completion stamps a new doneAt; a grocery put back in the pantry unbought keeps its old one
-    const completed = prev && t.doneFor && prev.doneFor !== t.doneFor && t.doneAt !== undefined && t.doneAt !== prev.doneAt;
-    if (completed && t.doneBy && t.doneBy !== me)
-      out.push({ id: `p-${t.id}-${t.updatedAt}`, text: `${t.doneBy} completed "${t.title}" in ${list.name}`, log: `${t.doneBy} completed "${t.title}" (${list.name})` });
-    else if (!prev && !t.doneFor && t.createdBy && t.createdBy !== me) out.push({ id: `a-${t.id}`, text: `${t.createdBy} added "${t.title}" to ${list.name}` });
+    const completed = prev && task.doneFor && prev.doneFor !== task.doneFor && task.doneAt !== undefined && task.doneAt !== prev.doneAt;
+    const names = { who: task.doneBy ?? task.createdBy ?? '', title: task.title, list: list.name };
+    if (completed && task.doneBy && task.doneBy !== me)
+      out.push({
+        id: `p-${task.id}-${task.updatedAt}`,
+        text: t('{who} completed "{title}" in {list}', names),
+        log: t('{who} completed "{title}" ({list})', names),
+      });
+    else if (!prev && !task.doneFor && task.createdBy && task.createdBy !== me)
+      out.push({ id: `a-${task.id}`, text: t('{who} added "{title}" to {list}', { ...names, who: task.createdBy }) });
   }
   return out;
 }
@@ -134,7 +141,7 @@ export function partyNews(before: Pick<State, 'hero' | 'lists' | 'tasks'>, patch
 function announce(news: PartyNews[]) {
   if (!news.length) return;
   // a burst (back online after a while) is one toast, not a dozen
-  if (news.length > 3) fx.emit({ type: 'party', text: `${news.length} party updates while you were away` });
+  if (news.length > 3) fx.emit({ type: 'party', text: t('{n} party updates while you were away', { n: news.length }) });
   else for (const n of news) fx.emit({ type: 'party', text: n.text });
   const logged = news.filter((n) => n.log);
   if (logged.length)
@@ -351,7 +358,7 @@ async function beginSyncing(e: SyncEngine, userId: string) {
   reportPoints();
   const code = useSync.getState().pendingJoin;
   if (code)
-    await joinByCode(code).catch((err) => useSync.setState({ pendingJoin: null, joinError: errText(err, 'Could not join with that invite link.') }));
+    await joinByCode(code).catch((err) => useSync.setState({ pendingJoin: null, joinError: errText(err, t('Could not join with that invite link.')) }));
 }
 
 function stopEngine() {
@@ -406,7 +413,7 @@ export async function joinByCode(code: string): Promise<string | null> {
   if (list) {
     useStore.getState().setActiveList(listId);
     useStore.getState().setTab('quests');
-    fx.emit({ type: 'party', text: `You joined "${list.name}"!` });
+    fx.emit({ type: 'party', text: t('You joined "{name}"!', { name: list.name }) });
   }
   return listId;
 }

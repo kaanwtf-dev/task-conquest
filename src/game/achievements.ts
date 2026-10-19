@@ -1,5 +1,6 @@
 // Infinite achievement tracks: tier thresholds forever, gold per tier and unlockable titles. All pure.
 import type { Hero } from '../core/types';
+import { getLang, t, tk } from '../i18n';
 import { SKILLS } from './catalog';
 import { levelTitle, skillXpToNext, sum } from './progression';
 
@@ -15,7 +16,7 @@ export interface AchievementCtx {
 // ---------------------------------------------------------------- number labels
 
 const groups = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-const SCALE = ['Million', 'Billion', 'Trillion', 'Quadrillion', 'Quintillion', 'Sextillion', 'Septillion', 'Octillion', 'Nonillion', 'Decillion'];
+const SCALE = [tk('Million'), tk('Billion'), tk('Trillion'), tk('Quadrillion'), tk('Quintillion'), tk('Sextillion'), tk('Septillion'), tk('Octillion'), tk('Nonillion'), tk('Decillion')];
 
 /** `mant * 10^exp` as "250", "25,000", "2.5 Million" or "5×10^40"; exact for any exponent. */
 function scaledLabel(mant: number, exp: number): string {
@@ -125,11 +126,14 @@ interface TrackSpec {
   description: string;
   ladder: Ladder;
   gold: number; // tier t pays gold * t^2
+  params?: Record<string, number>; // filled into the description
   titles: string[];
-  generated: (label: string) => string;
+  generated: string; // title template past the hand-written ones, "{n}" is the threshold label
   value: (hero: Hero, ctx: AchievementCtx) => number;
   paidByClaims?: boolean; // the metric grows by the gold that claiming pays out
 }
+
+const fillParams = (s: string, params?: Record<string, number>) => s.replace(/\{(\w+)\}/g, (m, k: string) => (params && k in params ? String(params[k]) : m));
 
 /** Gold for tiers (from, to]: gold * sum of squares, closed form so any gap stays O(1). */
 function goldBetween(gold: number, from: number, to: number): number {
@@ -137,11 +141,15 @@ function goldBetween(gold: number, from: number, to: number): number {
   return to > from ? Math.min(MAX, Math.round(gold * (sq(to) - sq(from)))) : 0;
 }
 
-const track = (s: TrackSpec): AchievementDef & { gold: number; handTitles: number; paidByClaims: boolean } => ({
+type TrackDef = AchievementDef & { gold: number; handTitles: number; paidByClaims: boolean; generated: string; descriptionText: () => string };
+
+const track = (s: TrackSpec): TrackDef => ({
   id: s.id,
   name: s.name,
   icon: s.icon,
-  description: s.description,
+  description: fillParams(s.description, s.params),
+  descriptionText: () => t(s.description, s.params),
+  generated: s.generated,
   maxTier: s.ladder.max,
   threshold: (t) => s.ladder.at(t),
   tierFor: (v) => s.ladder.tierFor(v),
@@ -149,7 +157,7 @@ const track = (s: TrackSpec): AchievementDef & { gold: number; handTitles: numbe
   title: (t) => {
     const n = tierOf(t);
     const capped = s.ladder.max ? Math.min(n, s.ladder.max) : n;
-    return capped <= s.titles.length ? s.titles[capped - 1] : s.generated(s.ladder.label(capped));
+    return capped <= s.titles.length ? s.titles[capped - 1] : s.generated.replace('{n}', () => s.ladder.label(capped));
   },
   value: s.value,
   gold: s.gold,
@@ -160,116 +168,117 @@ const track = (s: TrackSpec): AchievementDef & { gold: number; handTitles: numbe
 const DEFS = [
   track({
     id: 'slayer',
-    name: 'Monster Slayer',
+    name: tk('Monster Slayer'),
     icon: '⚔️',
-    description: 'Slay monsters by completing tasks.',
+    description: tk('Slay monsters by completing tasks.'),
     ladder: seriesLadder(10),
     gold: 20,
-    titles: ['Pest Control', 'Critter Crusher', 'Monster Masher', 'Centurion of Chores', 'Beastbane', 'Horde Breaker', 'Thousand-Blade', 'Dread of Dungeons'],
-    generated: (n) => `Slayer of ${n}`,
+    titles: [tk('Pest Control'), tk('Critter Crusher'), tk('Monster Masher'), tk('Centurion of Chores'), tk('Beastbane'), tk('Horde Breaker'), tk('Thousand-Blade'), tk('Dread of Dungeons')],
+    generated: tk('Slayer of {n}'),
     value: (h) => sum(h.kills),
   }),
   track({
     id: 'quests',
-    name: 'Quest Finisher',
+    name: tk('Quest Finisher'),
     icon: '📜',
-    description: 'Complete tasks of any kind.',
+    description: tk('Complete tasks of any kind.'),
     ladder: seriesLadder(1),
     gold: 15,
-    titles: ['First Steps', 'Errand Runner', 'Task Tackler', 'Checklist Champion', 'Done and Dusted', 'Taskmaster', 'The Unstoppable', 'Finisher of Fates'],
-    generated: (n) => `Finisher of ${n} Quests`,
+    titles: [tk('First Steps'), tk('Errand Runner'), tk('Task Tackler'), tk('Checklist Champion'), tk('Done and Dusted'), tk('Taskmaster'), tk('The Unstoppable'), tk('Finisher of Fates')],
+    generated: tk('Finisher of {n} Quests'),
     value: (h) => sum(h.tasksDone),
   }),
   track({
     id: 'treasure',
-    name: 'Treasure Hunter',
+    name: tk('Treasure Hunter'),
     icon: '💎',
-    description: 'Find gear in drops and chests.',
+    description: tk('Find gear in drops and chests.'),
     ladder: seriesLadder(5),
     gold: 20,
-    titles: ['Magpie', 'Shiny Seeker', 'Trinket Collector', 'Loot Goblin', 'Relic Wrangler', 'Vault Raider', 'Hoard Hunter', 'Keeper of a Thousand Baubles'],
-    generated: (n) => `Finder of ${n} Treasures`,
+    titles: [tk('Magpie'), tk('Shiny Seeker'), tk('Trinket Collector'), tk('Loot Goblin'), tk('Relic Wrangler'), tk('Vault Raider'), tk('Hoard Hunter'), tk('Keeper of a Thousand Baubles')],
+    generated: tk('Finder of {n} Treasures'),
     value: (h) => sum(h.itemsFound),
   }),
   track({
     id: 'bosses',
-    name: 'Boss Hunter',
+    name: tk('Boss Hunter'),
     icon: '👑',
-    description: 'Topple bosses on the endless ladder.',
+    description: tk('Topple bosses on the endless ladder.'),
     ladder: seriesLadder(1),
     gold: 30,
-    titles: ['Giant Toppler', 'Crown Cracker', 'Bossbreaker', 'Bane of Warlords', 'Tyrant Tamer', 'Calamity Ender', 'Breaker of Worldbreakers', 'Ladder Legend'],
-    generated: (n) => `Toppler of ${n} Bosses`,
+    titles: [tk('Giant Toppler'), tk('Crown Cracker'), tk('Bossbreaker'), tk('Bane of Warlords'), tk('Tyrant Tamer'), tk('Calamity Ender'), tk('Breaker of Worldbreakers'), tk('Ladder Legend')],
+    generated: tk('Toppler of {n} Bosses'),
     value: (h) => sum(h.bossesSlain),
   }),
   track({
     id: 'gold',
-    name: 'Gold Hoarder',
+    name: tk('Gold Hoarder'),
     icon: '💰',
-    description: 'Earn gold. Spending never counts against you.',
+    description: tk('Earn gold. Spending never counts against you.'),
     ladder: seriesLadder(100),
     gold: 15,
-    titles: ['Penny Pincher', 'Coin Counter', 'Purse Proud', 'Moneybags', 'Gilded Glutton', 'Merchant Prince', 'Ledger Dragon', 'Treasury Tyrant'],
-    generated: (n) => `Hoarder of ${n} Gold`,
+    titles: [tk('Penny Pincher'), tk('Coin Counter'), tk('Purse Proud'), tk('Moneybags'), tk('Gilded Glutton'), tk('Merchant Prince'), tk('Ledger Dragon'), tk('Treasury Tyrant')],
+    generated: tk('Hoarder of {n} Gold'),
     value: (h) => sum(h.gold),
     paidByClaims: true,
   }),
   track({
     id: 'streak',
-    name: 'Unbroken',
+    name: tk('Unbroken'),
     icon: '🔥',
-    description: 'Keep a daily streak alive. Your best run counts.',
+    description: tk('Keep a daily streak alive. Your best run counts.'),
     ladder: streakLadder,
     gold: 30,
-    titles: ['Kindled', 'Week Warrior', 'Fortnight Knight', 'Moonkeeper', 'Iron Habit', 'Centurion of Days', 'Half-Year Hero', 'Keeper of the Year'],
-    generated: (n) => `Unbroken for ${n} Years`,
+    titles: [tk('Kindled'), tk('Week Warrior'), tk('Fortnight Knight'), tk('Moonkeeper'), tk('Iron Habit'), tk('Centurion of Days'), tk('Half-Year Hero'), tk('Keeper of the Year')],
+    generated: tk('Unbroken for {n} Years'),
     value: (_h, ctx) => ctx.bestStreak,
   }),
   track({
     id: 'alchemist',
-    name: 'Alchemist',
+    name: tk('Alchemist'),
     icon: '⚗️',
-    description: 'Drink potions.',
+    description: tk('Drink potions.'),
     ladder: seriesLadder(1),
     gold: 20,
-    titles: ['Taste Tester', 'Fizz Sipper', 'Brew Dabbler', 'Potion Pundit', 'Cauldron Captain', 'Elixir Sage', 'Philosopher of Fizz', 'Grand Distiller'],
-    generated: (n) => `Drinker of ${n} Potions`,
+    titles: [tk('Taste Tester'), tk('Fizz Sipper'), tk('Brew Dabbler'), tk('Potion Pundit'), tk('Cauldron Captain'), tk('Elixir Sage'), tk('Philosopher of Fizz'), tk('Grand Distiller')],
+    generated: tk('Drinker of {n} Potions'),
     value: (h) => sum(h.potionsUsed),
   }),
   track({
     id: 'realms',
-    name: 'Realm Keeper',
+    name: tk('Realm Keeper'),
     icon: '🏰',
-    description: 'Clear every task in a list for its period.',
+    description: tk('Clear every task in a list for its period.'),
     ladder: seriesLadder(1),
     gold: 25,
-    titles: ['Tidy Tenant', 'Hearth Holder', 'Steward', 'Castellan', 'Warden of the Realm', 'Sovereign of Lists', 'Order Incarnate', 'Keeper of Realms'],
-    generated: (n) => `Keeper of ${n} Realms`,
+    titles: [tk('Tidy Tenant'), tk('Hearth Holder'), tk('Steward'), tk('Castellan'), tk('Warden of the Realm'), tk('Sovereign of Lists'), tk('Order Incarnate'), tk('Keeper of Realms')],
+    generated: tk('Keeper of {n} Realms'),
     value: (h) => sum(h.questsCleared),
   }),
   track({
     id: 'ascension',
-    name: 'Ascension',
+    name: tk('Ascension'),
     icon: '⭐',
-    description: 'Reach new hero levels.',
+    description: tk('Reach new hero levels.'),
     ladder: seriesLadder(5),
     gold: 25,
-    titles: ['Fledgling', 'Seasoned', 'Skybound', 'Peak Seeker', 'Centennial', 'Starwalker', 'Beyond the Clouds', 'The Thousandth Step'],
-    generated: (n) => `Ascended to Level ${n}`,
+    titles: [tk('Fledgling'), tk('Seasoned'), tk('Skybound'), tk('Peak Seeker'), tk('Centennial'), tk('Starwalker'), tk('Beyond the Clouds'), tk('The Thousandth Step')],
+    generated: tk('Ascended to Level {n}'),
     value: (_h, ctx) => ctx.level,
   }),
   track({
     id: 'polymath',
-    name: 'Polymath',
+    name: tk('Polymath'),
     icon: '🎓',
-    description: `Raise different skills to level ${POLYMATH_LEVEL}.`,
+    description: tk('Raise different skills to level {n}.'),
+    params: { n: POLYMATH_LEVEL },
     ladder: cappedLadder(SKILLS.length),
     gold: 50,
     titles: [
-      'Dabbler', 'Two-Trick Pony', 'Jack of Trades', 'Well-Rounded', 'Renaissance Soul',
-      'Many-Handed', 'Sage of Seven Arts', 'Eightfold Adept', 'Ninefold Master', 'Master of All Trades',
+      tk('Dabbler'), tk('Two-Trick Pony'), tk('Jack of Trades'), tk('Well-Rounded'), tk('Renaissance Soul'),
+      tk('Many-Handed'), tk('Sage of Seven Arts'), tk('Eightfold Adept'), tk('Ninefold Master'), tk('Master of All Trades'),
     ],
-    generated: (n) => `Master of ${n} Skills`,
+    generated: tk('Master of {n} Skills'),
     value: (h) =>
       SKILLS.filter((s) => {
         const xp: unknown = sum(h.skillXp?.[s.id]); // a corrupt counter can sum to a string
@@ -282,6 +291,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = DEFS;
 
 // ---------------------------------------------------------------- status + claiming
 
+/** Name, description and titles are in the player's language. */
 export interface AchievementStatus {
   id: string;
   name: string;
@@ -304,7 +314,7 @@ export interface AchievementStatus {
  * Titles unlocked by claiming tiers 1..claimed: every hand-written one, plus only the highest generated one
  * (it supersedes the lower numbers and keeps the list short forever).
  */
-function titlesUpTo(def: (typeof DEFS)[number], claimed: number): string[] {
+function titlesUpTo(def: TrackDef, claimed: number): string[] {
   const n = def.maxTier ? Math.min(claimed, def.maxTier) : claimed;
   const out: string[] = [];
   for (let t = 1; t <= Math.min(n, def.handTitles); t++) out.push(def.title(t));
@@ -327,9 +337,9 @@ export function achievementStatus(hero: Hero, ctx: AchievementCtx): AchievementS
     const maxed = def.maxTier !== undefined && reached >= def.maxTier;
     return {
       id: def.id,
-      name: def.name,
+      name: t(def.name),
       icon: def.icon,
-      description: def.description,
+      description: def.descriptionText(),
       value,
       tierReached: reached,
       tierClaimed: claimed,
@@ -338,8 +348,8 @@ export function achievementStatus(hero: Hero, ctx: AchievementCtx): AchievementS
       claimable: Math.max(0, reached - claimed),
       nextReward: maxed ? 0 : def.reward(reached + 1),
       pendingGold: goldBetween(def.gold, claimed, reached),
-      titles: titlesUpTo(def, claimed),
-      nextTitle: maxed ? null : def.title(reached + 1),
+      titles: titlesUpTo(def, claimed).map(titleLabel),
+      nextTitle: maxed ? null : titleLabel(def.title(reached + 1)),
       maxed,
     };
   });
@@ -350,6 +360,7 @@ export function achievementStatus(hero: Hero, ctx: AchievementCtx): AchievementS
  * Claimed gold is earned gold, so Gold Hoarder tiers it unlocks are settled in the same claim; claiming again
  * after the store applies the result yields nothing.
  */
+/** Unlocked titles are stored and compared in English; show them with titleLabel. */
 export function claimRewards(hero: Hero, ctx: AchievementCtx): { gold: number; tiers: Record<string, number>; newTitles: string[] } {
   const c = safeCtx(ctx);
   const values = DEFS.map((def) => count(def.value(hero, c)));
@@ -389,4 +400,32 @@ export function unlockedTitles(hero: Hero, ctx: AchievementCtx): string[] {
   out.push(levelTitle(c.level));
   for (const def of DEFS) out.push(...titlesUpTo(def, claimedTier(hero, def.id)));
   return [...new Set(out)];
+}
+
+// ---------------------------------------------------------------- titles in the player's language
+
+const SCALE_WORD = new RegExp(`\\b(${SCALE.join('|')})\\b`, 'g');
+
+/** A threshold label ("25,000", "2.5 Million") in the player's language. */
+function numberLabel(label: string): string {
+  const marks = getLang() === 'tr' ? label.replace(/[.,]/g, (c) => (c === '.' ? ',' : '.')) : label;
+  return marks.replace(SCALE_WORD, (w) => t(w));
+}
+
+/**
+ * A title (hero.title, levelTitle(), unlockedTitles(), claimRewards().newTitles: all English) in the player's
+ * language. Titles it doesn't know (a party member's from a newer version) are shown as they are.
+ */
+export function titleLabel(title: string): string {
+  if (!title || getLang() === 'en') return title;
+  if (t(title) !== title) return t(title);
+  for (const def of DEFS) {
+    const [before, after] = def.generated.split('{n}');
+    if (title.length > before.length + after.length && title.startsWith(before) && title.endsWith(after))
+      return t(def.generated, { n: numberLabel(title.slice(before.length, title.length - after.length)) });
+  }
+  // level titles past the last bracket: "Eternal II"
+  const m = /^(.+) ([IVXLCDM]+|[\d,]+)$/.exec(title);
+  if (m && t(m[1]) !== m[1]) return t('{title} {numeral}', { title: t(m[1]), numeral: numberLabel(m[2]) });
+  return title;
 }

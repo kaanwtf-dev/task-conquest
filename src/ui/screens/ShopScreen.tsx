@@ -12,14 +12,18 @@ import { PxImg, Ui, themeStyle, useNow } from '../components/common';
 import { ItemIcon, ItemSheet, PotionIcon, rarityColor } from '../components/loot';
 import { sfx } from '../../audio/sfx';
 import { fx } from '../../state/fx';
+import { t, tk, locale } from '../../i18n';
 
+/** Shown through t(). */
 const GREETINGS = [
-  'Welcome, traveler! Gold for goods, goods for gold.',
-  'Fresh steel today! Mostly fresh. Some of it.',
-  'You look like someone who finishes their quests.',
-  "Potions! Potions! Don't ask what's in them.",
-  'Back again? Your to-do list must fear you.',
+  tk('Welcome, traveler! Gold for goods, goods for gold.'),
+  tk('Fresh steel today! Mostly fresh. Some of it.'),
+  tk('You look like someone who finishes their quests.'),
+  tk("Potions! Potions! Don't ask what's in them."),
+  tk('Back again? Your to-do list must fear you.'),
 ];
+/** What a dye colors, shown through t(). */
+const DYE_TARGET: Record<string, string> = { outfit: tk('outfit'), hair: tk('hair'), pants: tk('pants'), cape: tk('cape') };
 
 export default function ShopScreen() {
   const s = useStore();
@@ -39,7 +43,7 @@ export default function ShopScreen() {
     if (s.buyOffer(o)) {
       sfx.coin();
       setTimeout(() => sfx.loot(), 90);
-      fx.emit({ type: 'toast', text: 'PURCHASED', small: o.kind === 'dye' ? `${o.label} — applied! Change it any time at the barber.` : o.label });
+      fx.emit({ type: 'toast', text: t('PURCHASED'), small: o.kind === 'dye' ? t('{label} — applied! Change it any time at the barber.', { label: t(o.label) }) : t(o.label) });
       return true;
     }
     sfx.error();
@@ -57,15 +61,15 @@ export default function ShopScreen() {
       <div className="win shop-head">
         <PxImg src={merchantUrl()} size={96} />
         <div style={{ flex: 1 }}>
-          <div className="win-title">Merchant</div>
-          <div className="speech">{greeting}</div>
+          <div className="win-title">{t('Merchant')}</div>
+          <div className="speech">{t(greeting)}</div>
           <div className="stat" style={{ marginTop: 8, fontFamily: 'var(--font-pixel)', fontSize: 11 }}>
-            <Ui name="coin" size={18} /> {gold.toLocaleString()}
+            <Ui name="coin" size={18} /> {gold.toLocaleString(locale())}
           </div>
         </div>
       </div>
 
-      <div className="section-label">Today's wares · restocks daily</div>
+      <div className="section-label">{t("Today's wares · restocks daily")}</div>
       <div className="win" style={{ padding: 8 }}>
         {gear.map((o) => {
           const sold = bought.includes(o.id);
@@ -73,42 +77,42 @@ export default function ShopScreen() {
             <div key={o.id} className={`offer ${sold ? 'sold' : ''}`} onClick={() => !sold && setOpen(o)}>
               <ItemIcon item={o.item!} size={32} />
               <div className="offer-main">
-                <div style={{ color: rarityColor(o.item!.rarity) }}>{itemDisplayName(o.item!)}</div>
-                <div className="muted small">iLvl {o.item!.ilvl}</div>
+                <div style={{ color: rarityColor(o.item!.rarity) }}>{t(itemDisplayName(o.item!))}</div>
+                <div className="muted small">{t('iLvl {n}', { n: o.item!.ilvl })}</div>
               </div>
-              <div className="price">{sold ? 'SOLD' : `${o.price.toLocaleString()}g`}</div>
+              <div className="price">{sold ? t('SOLD') : t('{n}g', { n: o.price.toLocaleString(locale()) })}</div>
             </div>
           );
         })}
       </div>
 
-      <div className="section-label">Potions</div>
+      <div className="section-label">{t('Potions')}</div>
       <div className="win" style={{ padding: 8 }}>
         {potions.map((o) => (
           <div key={o.id} className="offer">
             <PotionIcon potion={o.potion!.potion} tier={o.potion!.tier} size={32} />
             <div className="offer-main">
-              <div>{potionName(o.potion!.potion, o.potion!.tier)}</div>
-              <div className="muted small">{describePotion(o.potion!.potion, o.potion!.tier, stats.potion)}</div>
+              <div>{t(potionName(o.potion!.potion, o.potion!.tier))}</div>
+              <div className="muted small">{t(describePotion(o.potion!.potion, o.potion!.tier, stats.potion))}</div>
             </div>
             <button className="btn small" disabled={gold < o.price} onClick={() => buy(o)}>
-              {o.price.toLocaleString()}g
+              {t('{n}g', { n: o.price.toLocaleString(locale()) })}
             </button>
           </div>
         ))}
       </div>
 
-      <div className="section-label">Upgrades</div>
+      <div className="section-label">{t('Upgrades')}</div>
       <div className="win" style={{ padding: 8 }}>
         {bag.map((o) => (
           <div key={o.id} className="offer">
             <Ui name="bag" size={32} />
             <div className="offer-main">
-              <div>{o.label}</div>
-              <div className="muted small">Currently {hero.bagSize} slots</div>
+              <div>{t(o.label)}</div>
+              <div className="muted small">{t('Currently {n} slots', { n: hero.bagSize })}</div>
             </div>
             <button className="btn small" disabled={gold < o.price} onClick={() => buy(o)}>
-              {o.price.toLocaleString()}g
+              {t('{n}g', { n: o.price.toLocaleString(locale()) })}
             </button>
           </div>
         ))}
@@ -116,11 +120,11 @@ export default function ShopScreen() {
           <div key={o.id} className="offer">
             <span className="theme-swatch" style={themeStyle(o.theme)} />
             <div className="offer-main">
-              <div>{o.label}</div>
-              <div className="muted small">Unlocks free at level {THEME_BY_ID[o.theme!].unlockLevel}</div>
+              <div>{t(o.label)}</div>
+              <div className="muted small">{t('Unlocks free at level {n}', { n: THEME_BY_ID[o.theme!].unlockLevel })}</div>
             </div>
             <button className="btn small" disabled={gold < o.price} onClick={() => buy(o)}>
-              {o.price.toLocaleString()}g
+              {t('{n}g', { n: o.price.toLocaleString(locale()) })}
             </button>
           </div>
         ))}
@@ -128,12 +132,12 @@ export default function ShopScreen() {
 
       {dyes.length > 0 && (
         <>
-          <div className="section-label">Dyes · applied on purchase, swap at the barber</div>
+          <div className="section-label">{t('Dyes · applied on purchase, swap at the barber')}</div>
           <div className="win pantry">
             {dyes.map((o) => (
-              <button key={o.id} className="pchip" disabled={gold < o.price} onClick={() => buy(o)} title={o.label}>
+              <button key={o.id} className="pchip" disabled={gold < o.price} onClick={() => buy(o)} title={t(o.label)}>
                 <span className="dye" style={{ background: o.dye!.color }} />
-                {o.dye!.target} · {o.price.toLocaleString()}g
+                {t(DYE_TARGET[o.dye!.target] ?? o.dye!.target)} · {t('{n}g', { n: o.price.toLocaleString(locale()) })}
               </button>
             ))}
           </div>

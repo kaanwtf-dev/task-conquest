@@ -1,5 +1,6 @@
 // Potions: timed buffs counted in completed tasks. Tiers follow hero level forever.
 import type { Buff, PotionId, StatId } from '../core/types';
+import { getLang, t, tk, tn } from '../i18n';
 import { roman } from './progression';
 
 export interface PotionDef {
@@ -9,68 +10,74 @@ export interface PotionDef {
   baseTasks: number; // duration in completed tasks (0 = instant use)
   stats: StatId[]; // stats the buff adds `value` to
   price: number; // tier-1 shop price
+  /** In the player's language. */
   describe: (value: number, tasks: number) => string;
 }
 
-const pct = (v: number) => `${Number.isInteger(v) ? v : v.toFixed(1)}%`;
-const forTasks = (n: number) => `for ${n} task${n === 1 ? '' : 's'}`;
+/** "1.5" (English) or "1,5" (Turkish). */
+const dec = (v: number) => {
+  const s = Number.isInteger(v) ? String(v) : v.toFixed(1);
+  return getLang() === 'tr' ? s.replace('.', ',') : s;
+};
+const pct = (v: number) => t('{v}%', { v: dec(v) });
 
 export const POTION_IDS: PotionId[] = ['insight', 'fortune', 'luck', 'fury', 'giant', 'phoenix'];
 
 export const POTIONS: Record<PotionId, PotionDef> = {
   insight: {
-    name: 'Insight',
+    name: tk('Insight'),
     color: '#5aa8ff',
     baseValue: 20,
     baseTasks: 10,
     stats: ['xp'],
     price: 40,
-    describe: (v, n) => `+${pct(v)} XP ${forTasks(n)}`,
+    describe: (v, n) => tn(n, '+{pct} XP for {n} task', '+{pct} XP for {n} tasks', { pct: pct(v) }),
   },
   fortune: {
-    name: 'Fortune',
+    name: tk('Fortune'),
     color: '#f2c94c',
     baseValue: 25,
     baseTasks: 10,
     stats: ['gold'],
     price: 40,
-    describe: (v, n) => `+${pct(v)} gold ${forTasks(n)}`,
+    describe: (v, n) => tn(n, '+{pct} gold for {n} task', '+{pct} gold for {n} tasks', { pct: pct(v) }),
   },
   luck: {
-    name: 'Luck',
+    name: tk('Luck'),
     color: '#5ee06a',
     baseValue: 20,
     baseTasks: 8,
     stats: ['find', 'luck'],
     price: 50,
-    describe: (v, n) => `+${pct(v)} loot find and +${Number.isInteger(v) ? v : v.toFixed(1)} luck ${forTasks(n)}`,
+    describe: (v, n) =>
+      tn(n, '+{pct} loot find and +{v} luck for {n} task', '+{pct} loot find and +{v} luck for {n} tasks', { pct: pct(v), v: dec(v) }),
   },
   fury: {
-    name: 'Fury',
+    name: tk('Fury'),
     color: '#e04a3a',
     baseValue: 10,
     baseTasks: 6,
     stats: ['crit'],
     price: 45,
-    describe: (v, n) => `+${pct(v)} critical chance ${forTasks(n)}`,
+    describe: (v, n) => tn(n, '+{pct} critical chance for {n} task', '+{pct} critical chance for {n} tasks', { pct: pct(v) }),
   },
   giant: {
-    name: 'Giant Strength',
+    name: tk('Giant Strength'),
     color: '#c070ff',
     baseValue: 30,
     baseTasks: 6,
     stats: ['boss'],
     price: 45,
-    describe: (v, n) => `+${pct(v)} boss damage ${forTasks(n)}`,
+    describe: (v, n) => tn(n, '+{pct} boss damage for {n} task', '+{pct} boss damage for {n} tasks', { pct: pct(v) }),
   },
   phoenix: {
-    name: 'Phoenix Feather',
+    name: tk('Phoenix Feather'),
     color: '#ff8a3a',
     baseValue: 0,
     baseTasks: 0,
     stats: [],
     price: 150,
-    describe: () => 'Rekindles a broken streak as if no day was missed.',
+    describe: () => t('Rekindles a broken streak as if no day was missed.'),
   },
 };
 
@@ -88,11 +95,12 @@ export function potionTierFor(potion: PotionId, level: number): number {
   return potion === 'phoenix' ? 1 : potionTier(level);
 }
 
+/** In the player's language. */
 export function potionName(potion: PotionId, tier: number): string {
   const def = POTIONS[potion];
-  if (!def) return 'Strange Potion';
-  if (potion === 'phoenix') return def.name;
-  return `Potion of ${def.name} ${numeral(tierOf(tier))}`;
+  if (!def) return t('Strange Potion');
+  if (potion === 'phoenix') return t(def.name);
+  return t('Potion of {name} {tier}', { name: t(def.name), tier: numeral(tierOf(tier)) });
 }
 
 export function potionValue(potion: PotionId, tier: number): number {
@@ -111,6 +119,7 @@ export function potionDuration(potion: PotionId, potionStat: number): number {
   return Math.round(def.baseTasks * (1 + bonus / 100));
 }
 
+/** In the player's language. */
 export function describePotion(potion: PotionId, tier: number, potionStat = 0): string {
   const def = POTIONS[potion];
   return def ? def.describe(potionValue(potion, tier), potionDuration(potion, potionStat)) : '';

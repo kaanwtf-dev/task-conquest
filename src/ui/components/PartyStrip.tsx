@@ -9,6 +9,7 @@ import type { TaskList } from '../../core/types';
 import type { PartyMember } from '../../sync/party';
 import { partyRoster } from '../partyRoster';
 import { PxImg } from './common';
+import { t } from '../../i18n';
 
 /** How often an open shared list checks who is in its party. */
 const REFRESH_MS = 60_000;
@@ -96,11 +97,11 @@ export default function PartyStrip({ list }: { list: TaskList }) {
       : m,
   );
   return (
-    <div className="win party-strip" role="group" aria-label={`Party: ${shown.map((m) => m.name).join(', ')}`}>
+    <div className="win party-strip" role="group" aria-label={t('Party: {names}', { names: shown.map((m) => m.name).join(', ') })}>
       {shown.map((m, i) => {
         const sprite = memberSprite(m);
         return (
-          <div key={m.userId} className="pmember" title={`${m.name} · Lv${m.level}${m.role === 'owner' ? ' · leader' : ''}`}>
+          <div key={m.userId} className="pmember" title={m.role === 'owner' ? t('{name} · Lv{level} · leader', { name: m.name, level: m.level }) : t('{name} · Lv{level}', { name: m.name, level: m.level })}>
             <div className="pmember-sprite" style={{ animationDelay: `${(i % 4) * -0.35}s` }}>
               {sprite ? <PxImg src={sprite} size={48} /> : <div style={{ width: 48, height: 48 }} />}
             </div>
@@ -108,14 +109,14 @@ export default function PartyStrip({ list }: { list: TaskList }) {
               {m.role === 'owner' && <span aria-hidden>♛ </span>}
               {m.name}
             </div>
-            <div className="pmember-lv">Lv{m.level}</div>
+            <div className="pmember-lv">{t('Lv{level}', { level: m.level })}</div>
           </div>
         );
       })}
       {shown.length < 2 && (
-        <button className="pmember pmember-invite" onClick={() => setTab('party')} aria-label="Invite someone to this list">
+        <button className="pmember pmember-invite" onClick={() => setTab('party')} aria-label={t('Invite someone to this list')}>
           <div className="pmember-sprite">+</div>
-          <div className="pmember-name">Invite</div>
+          <div className="pmember-name">{t('Invite')}</div>
         </button>
       )}
     </div>

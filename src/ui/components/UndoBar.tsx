@@ -1,6 +1,7 @@
 // A short-lived "Undo" bar for quick, forgiving actions (like swiping a grocery off the list).
 import { useEffect } from 'react';
 import { create } from 'zustand';
+import { t } from '../../i18n';
 
 interface Offer {
   key: number;
@@ -44,7 +45,7 @@ export default function UndoBar() {
           <span>{offer.text}</span>
           {/* no focus change on press: closing the keyboard would move the bar out from under the finger */}
           <button className="btn small" onMouseDown={(e) => e.preventDefault()} onClick={() => run(offer)}>
-            Undo
+            {t('Undo')}
           </button>
         </div>
       )}

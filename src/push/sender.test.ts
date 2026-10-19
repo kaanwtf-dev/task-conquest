@@ -220,7 +220,7 @@ describe('sender resilience', () => {
 describe('sender input hygiene', () => {
   it('falls back to defaults for anything malformed', () => {
     expect(sanitizePrefs({ morningHour: 7, eveningHour: 30, off: ['party', 'nope'], dayStartHour: 4, weekStart: '1' })).toEqual({
-      morningHour: 7, eveningHour: 20, off: ['party'], dayStartHour: 4, weekStart: 1,
+      morningHour: 7, eveningHour: 20, off: ['party'], dayStartHour: 4, weekStart: 1, lang: 'en',
     });
     expect(sanitizePrefs(null).morningHour).toBe(9);
     expect(sanitizeHistory({ sent: { morning: '2026-10-15', evening: 'yesterday' }, comebacks: -1 })).toEqual({ sent: { morning: '2026-10-15' }, comebacks: 0 });

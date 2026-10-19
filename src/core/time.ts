@@ -1,5 +1,6 @@
 // Period keys decide whether a repeating task counts as "done" right now — no reset jobs needed.
 import type { Repeat, Task } from './types';
+import { t, tk } from '../i18n';
 
 export interface TimeCfg {
   dayStartHour: number;
@@ -103,25 +104,28 @@ export function fmtDuration(ms: number): string {
   const m = Math.max(0, Math.floor(ms / 60000));
   const d = Math.floor(m / 1440);
   const h = Math.floor((m % 1440) / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m % 60}m`;
-  return `${m % 60}m`;
+  if (d > 0) return t('{d}d {h}h', { d, h });
+  if (h > 0) return t('{h}h {m}m', { h, m: m % 60 });
+  return t('{m}m', { m: m % 60 });
 }
+
+/** Short weekday names, Sunday first (shown through t()). */
+const DAY_SHORT = [tk('Su'), tk('Mo'), tk('Tu'), tk('We'), tk('Th'), tk('Fr'), tk('Sa')];
 
 export function repeatLabel(r: Repeat): string {
   switch (r.kind) {
     case 'none':
       return '';
     case 'daily':
-      return 'Daily';
+      return t('Daily');
     case 'weekly':
-      return 'Weekly';
+      return t('Weekly');
     case 'monthly':
-      return 'Monthly';
+      return t('Monthly');
     case 'days':
-      return r.days.length === 7 ? 'Daily' : r.days.map((x) => ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'][x]).join(' ');
+      return r.days.length === 7 ? t('Daily') : r.days.map((x) => t(DAY_SHORT[x])).join(' ');
     case 'interval':
-      return `Every ${r.every}d`;
+      return t('Every {n}d', { n: r.every });
   }
 }
 

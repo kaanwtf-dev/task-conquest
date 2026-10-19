@@ -7,6 +7,7 @@ import { HOME_DOCK, settle } from '../heroDock';
 import type { ThemeId } from '../../pixel/themes';
 import { themeStyle, useMedia } from './common';
 import { sfx } from '../../audio/sfx';
+import { t } from '../../i18n';
 
 const MARGIN = 10;
 /** Landscape phones: the window is drawn at 0.6 (see .corner-hero in global.css). */
@@ -153,7 +154,7 @@ export function FloatingHero({ theme, small }: { theme: ThemeId; small: boolean 
           className={`hero-handle hero-handle-${saved.side}`}
           style={{ bottom: `calc(var(--tabbar-h) + var(--safe-bot) + ${MARGIN + lift + 20}px)`, ...themeStyle(theme) }}
           onClick={untuck}
-          aria-label="Show the hero window"
+          aria-label={t('Show the hero window')}
         >
           {saved.side === 'left' ? '›' : '‹'}
         </button>

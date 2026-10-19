@@ -8,20 +8,22 @@ import type { Appearance } from '../../pixel/sprites/hero';
 import { memberSprite } from '../components/PartyStrip';
 import { partyRoster } from '../partyRoster';
 import type { ClassId, TaskList } from '../../core/types';
-import { PxImg, Sheet, themeStyle } from '../components/common';
+import { PxImg, Sheet, rich, themeStyle } from '../components/common';
 import { Field } from './TaskEditSheet';
 import Leaderboard from '../components/Leaderboard';
 import { sfx } from '../../audio/sfx';
+import { locale, t } from '../../i18n';
 
 export default function PartyScreen() {
   const sync = useSync();
   return (
     <div className="scroll">
       <div className="win" style={{ padding: 12 }}>
-        <div className="win-title">Party & Cloud</div>
+        <div className="win-title">{t('Party & Cloud')}</div>
         <p style={{ fontSize: 16, lineHeight: 1.4, margin: '8px 0 0' }}>
-          Sync your adventure between iPhone and Mac, and share lists (groceries, chores…) with friends and family. Everyone sees checks
-          instantly, and whoever completes a quest gets the XP.
+          {t(
+            'Sync your adventure between iPhone and Mac, and share lists (groceries, chores…) with friends and family. Everyone sees checks instantly, and whoever completes a quest gets the XP.',
+          )}
         </p>
       </div>
       {sync.status !== 'off' && sync.userId && <Leaderboard />}
@@ -37,19 +39,19 @@ function SetupCard() {
   const [key, setKey] = useState(cfg?.anonKey ?? '');
   return (
     <>
-      <div className="section-label">Connect a cloud (free)</div>
+      <div className="section-label">{t('Connect a cloud (free)')}</div>
       <div className="win" style={{ padding: 12 }}>
         <ol style={{ margin: '0 0 10px', paddingLeft: 20, fontSize: 15, lineHeight: 1.5 }}>
-          <li>Create a free project at supabase.com.</li>
-          <li>Open its SQL editor and run the file supabase/schema.sql from this app's repo.</li>
-          <li>In Authentication → Providers → Email, turn off "Confirm email" (or confirm via the email link).</li>
-          <li>Copy the Project URL and the anon public key from Project Settings → API into the boxes below.</li>
+          <li>{t('Create a free project at supabase.com.')}</li>
+          <li>{t("Open its SQL editor and run the file supabase/schema.sql from this app's repo.")}</li>
+          <li>{t('In Authentication → Providers → Email, turn off "Confirm email" (or confirm via the email link).')}</li>
+          <li>{t('Copy the Project URL and the anon public key from Project Settings → API into the boxes below.')}</li>
         </ol>
-        <Field label="Project URL">
-          <input className="text-in" aria-label="Project URL" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://xxxx.supabase.co" autoCapitalize="off" autoCorrect="off" />
+        <Field label={t('Project URL')}>
+          <input className="text-in" aria-label={t('Project URL')} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://xxxx.supabase.co" autoCapitalize="off" autoCorrect="off" />
         </Field>
-        <Field label="Anon public key">
-          <input className="text-in" aria-label="Anon public key" value={key} onChange={(e) => setKey(e.target.value)} placeholder="eyJhbGciOi…" autoCapitalize="off" autoCorrect="off" />
+        <Field label={t('Anon public key')}>
+          <input className="text-in" aria-label={t('Anon public key')} value={key} onChange={(e) => setKey(e.target.value)} placeholder="eyJhbGciOi…" autoCapitalize="off" autoCorrect="off" />
         </Field>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
           <button
@@ -61,7 +63,7 @@ function SetupCard() {
               sfx.loot();
             }}
           >
-            Connect
+            {t('Connect')}
           </button>
         </div>
       </div>
@@ -89,12 +91,12 @@ function AuthCard() {
   const pending = useSync((s) => s.pendingJoin);
   return (
     <>
-      <div className="section-label">Sign in</div>
+      <div className="section-label">{t('Sign in')}</div>
       <div className="win" style={{ padding: 12 }}>
-        {pending && <p style={{ color: 'var(--accent)', marginTop: 0 }}>Sign in to join party list {pending}.</p>}
+        {pending && <p style={{ color: 'var(--accent)', marginTop: 0 }}>{t('Sign in to join party list {code}.', { code: pending })}</p>}
         <p className="backup-note">
-          ⚠️ <b>Not backed up!</b> Right now your save lives only on this device. A free account keeps it safe in the cloud and lets you play on
-          your other devices too.
+          ⚠️ <b>{t('Not backed up!')}</b>{' '}
+          {t('Right now your save lives only on this device. A free account keeps it safe in the cloud and lets you play on your other devices too.')}
         </p>
         <form
           onSubmit={(e) => {
@@ -102,11 +104,11 @@ function AuthCard() {
             run(() => signIn(email.trim(), password));
           }}
         >
-          <Field label="Email">
-            <input className="text-in" type="email" aria-label="Email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Field label={t('Email')}>
+            <input className="text-in" type="email" aria-label={t('Email')} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>
-          <Field label="Password">
-            <input className="text-in" type="password" aria-label="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Field label={t('Password')}>
+            <input className="text-in" type="password" aria-label={t('Password')} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
           {msg && <p style={{ fontSize: 15 }}>{msg}</p>}
           <button
@@ -115,23 +117,23 @@ function AuthCard() {
             disabled={busy}
             onClick={() =>
               email.trim()
-                ? run(() => requestPasswordReset(email.trim()), `Sent! Open the email to ${email.trim()}, choose a new password, then sign in here with it.`)
-                : setMsg('Type your email above first, then tap "Forgot password?".')
+                ? run(() => requestPasswordReset(email.trim()), t('Sent! Open the email to {email}, choose a new password, then sign in here with it.', { email: email.trim() }))
+                : setMsg(t('Type your email above first, then tap "Forgot password?".'))
             }
           >
-            Forgot password?
+            {t('Forgot password?')}
           </button>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12, flexWrap: 'wrap' }}>
             <button
               type="button"
               className="btn ghost"
               disabled={busy || !email || password.length < 6}
-              onClick={() => run(() => signUp(email.trim(), password), 'Account created! If email confirmation is on, confirm it, then sign in here.')}
+              onClick={() => run(() => signUp(email.trim(), password), t('Account created! If email confirmation is on, confirm it, then sign in here.'))}
             >
-              Create account
+              {t('Create account')}
             </button>
             <button className="btn" type="submit" disabled={busy || !email || !password}>
-              Sign in
+              {t('Sign in')}
             </button>
           </div>
         </form>
@@ -140,13 +142,13 @@ function AuthCard() {
             className="btn ghost small"
             style={{ marginTop: 12 }}
             onClick={() => {
-              if (confirm('Disconnect this cloud project from the app?')) {
+              if (confirm(t('Disconnect this cloud project from the app?'))) {
                 setSyncConfig(null);
                 restartSync();
               }
             }}
           >
-            Change cloud project
+            {t('Change cloud project')}
           </button>
         )}
       </div>
@@ -161,33 +163,33 @@ function SignedIn() {
   const [code, setCode] = useState(sync.pendingJoin ?? '');
   const [busy, setBusy] = useState(false);
   const statusText: Record<string, string> = {
-    idle: 'All synced',
-    syncing: 'Syncing…',
-    offline: 'Offline — will sync when back online',
-    error: 'Sync error — retrying',
-    'signed-out': 'Signed out',
-    conflict: 'Paused — waiting for your choice',
-    off: 'Off',
+    idle: t('All synced'),
+    syncing: t('Syncing…'),
+    offline: t('Offline — will sync when back online'),
+    error: t('Sync error — retrying'),
+    'signed-out': t('Signed out'),
+    conflict: t('Paused — waiting for your choice'),
+    off: t('Off'),
   };
   const [signingOut, setSigningOut] = useState(false);
   return (
     <>
-      <div className="section-label">Account</div>
+      <div className="section-label">{t('Account')}</div>
       <div className="win" style={{ padding: 12 }}>
         <div className="kv">
-          Signed in <b>{sync.email}</b>
+          {t('Signed in')} <b>{sync.email}</b>
         </div>
         <div className="kv">
-          Status <b>{statusText[sync.status] ?? sync.status}</b>
+          {t('Status')} <b>{statusText[sync.status] ?? sync.status}</b>
         </div>
         {sync.lastSync && (
           <div className="kv">
-            Last sync <b>{new Date(sync.lastSync).toLocaleTimeString()}</b>
+            {t('Last sync')} <b>{new Date(sync.lastSync).toLocaleTimeString(locale())}</b>
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           <button className="btn small" onClick={() => syncNow()}>
-            Sync now
+            {t('Sync now')}
           </button>
           <button
             className="btn ghost small"
@@ -197,26 +199,26 @@ function SignedIn() {
               try {
                 await signOutHere();
               } catch (e) {
-                alert(e instanceof Error ? e.message : 'Could not sign out. Try again.');
+                alert(e instanceof Error ? e.message : t('Could not sign out. Try again.'));
               } finally {
                 setSigningOut(false);
               }
             }}
           >
-            Sign out
+            {t('Sign out')}
           </button>
         </div>
       </div>
       {sync.joinError && (
         <div className="win" style={{ padding: 12 }} role="alert">
-          <div>The invite link didn't work: {sync.joinError}</div>
+          <div>{t("The invite link didn't work: {error}", { error: sync.joinError })}</div>
           <button className="btn ghost small" style={{ marginTop: 8 }} onClick={() => useSync.setState({ joinError: null })}>
-            OK
+            {t('OK')}
           </button>
         </div>
       )}
 
-      <div className="section-label">Join a party list</div>
+      <div className="section-label">{t('Join a party list')}</div>
       <form
         className="win quick-add"
         onSubmit={async (e) => {
@@ -228,19 +230,19 @@ function SignedIn() {
             setCode('');
             sfx.questComplete();
           } catch (err) {
-            alert(err instanceof Error ? err.message : 'Could not join — check the code.');
+            alert(err instanceof Error ? err.message : t('Could not join — check the code.'));
           } finally {
             setBusy(false);
           }
         }}
       >
-        <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Invite code, e.g. K7QX2M" autoCapitalize="characters" aria-label="Invite code" />
+        <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder={t('Invite code, e.g. K7QX2M')} autoCapitalize="characters" aria-label={t('Invite code')} />
         <button className="btn" type="submit" disabled={busy || code.trim().length < 4}>
-          Join
+          {t('Join')}
         </button>
       </form>
 
-      <div className="section-label">Your lists</div>
+      <div className="section-label">{t('Your lists')}</div>
       {lists.map((l) => (
         <ListParty key={l.id} list={l} />
       ))}
@@ -286,7 +288,7 @@ function ListParty({ list }: { list: TaskList }) {
       s.updateList(list.id, { shared: true, ownerId: list.ownerId ?? myId ?? undefined });
       sfx.loot();
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Could not create an invite. Is this list synced yet?');
+      alert(e instanceof Error ? e.message : t('Could not create an invite. Is this list synced yet?'));
     } finally {
       setBusy(false);
     }
@@ -294,17 +296,17 @@ function ListParty({ list }: { list: TaskList }) {
 
   const shareLink = async () => {
     if (!invite) return;
-    const text = `Join my Task Conquest party list "${list.name}"! Code: ${invite.code}`;
+    const text = t('Join my Task Conquest party list "{name}"! Code: {code}', { name: list.name, code: invite.code });
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Task Conquest party', text, url: invite.url });
+        await navigator.share({ title: t('Task Conquest party'), text, url: invite.url });
         return;
       } catch {
         // cancelled
       }
     }
     await navigator.clipboard?.writeText(`${text}\n${invite.url}`);
-    alert('Invite copied!');
+    alert(t('Invite copied!'));
   };
 
   const mine = !isForeignList(list, s.accountId ?? myId);
@@ -314,28 +316,28 @@ function ListParty({ list }: { list: TaskList }) {
         <PxImg src={iconFor(list.name, list.icon)} size={30} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div>{list.name}</div>
-          <div className="muted small">{list.shared ? `Party list · ${members?.length ?? '…'} members` : 'Private'}</div>
+          <div className="muted small">{list.shared ? t('Party list · {n} members', { n: members?.length ?? '…' }) : t('Private')}</div>
         </div>
         <button className="btn small" disabled={busy} onClick={share}>
-          {list.shared ? 'Invite' : 'Share'}
+          {list.shared ? t('Invite') : t('Share')}
         </button>
       </div>
       {invite && (
         <div className="invite">
           <div className="pixel invite-code">{invite.code}</div>
           <button className="btn small" onClick={shareLink}>
-            Send link
+            {t('Send link')}
           </button>
         </div>
       )}
       {members && members.length > 0 && (
         <div className="members">
           {members.map((m) => (
-            <div key={m.userId} className="member" title={`${m.name} · Lv${m.level}`}>
+            <div key={m.userId} className="member" title={t('{name} · Lv{level}', { name: m.name, level: m.level })}>
               {memberSprite(m) ? <PxImg src={memberSprite(m)!} size={56} /> : <div style={{ width: 56, height: 56 }} />}
               <div className="small">{m.name}</div>
               <div className="muted" style={{ fontSize: 12 }}>
-                Lv{m.level} {m.role === 'owner' ? '♛' : ''}
+                {t('Lv{level}', { level: m.level })} {m.role === 'owner' ? '♛' : ''}
               </div>
             </div>
           ))}
@@ -347,13 +349,13 @@ function ListParty({ list }: { list: TaskList }) {
           style={{ marginTop: 8 }}
           onClick={() => {
             // removed here at once; the server is told now, or when this device is back online
-            if (confirm(`Leave "${list.name}"? It is removed from this device; the rest of the party keeps it.`)) {
+            if (confirm(t('Leave "{name}"? It is removed from this device; the rest of the party keeps it.', { name: list.name }))) {
               partyRoster.drop(list.id);
               s.leaveList(list.id);
             }
           }}
         >
-          Leave party list
+          {t('Leave party list')}
         </button>
       )}
     </div>
@@ -373,7 +375,7 @@ function ConflictSheet() {
     try {
       await fn();
     } catch (e) {
-      setErr(e instanceof Error && e.message ? e.message : 'Could not reach the cloud. Check your connection and try again.');
+      setErr(e instanceof Error && e.message ? e.message : t('Could not reach the cloud. Check your connection and try again.'));
     } finally {
       setBusy(false);
     }
@@ -386,35 +388,40 @@ function ConflictSheet() {
   const inner =
     c.kind === 'account' ? (
       <>
-        <div className="win-title">Different account</div>
+        <div className="win-title">{t('Different account')}</div>
         <p style={{ fontSize: 16, lineHeight: 1.4 }}>
-          This device was last synced with another account. Its hero and lists ({hero?.name ?? 'no hero'}) belong to that account.
+          {t('This device was last synced with another account. Its hero and lists ({name}) belong to that account.', {
+            name: hero?.name ?? t('no hero'),
+          })}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button className="btn" disabled={busy} onClick={choose(() => resolveAccountSwitch('fresh'))}>
-            Start fresh with this account
+            {t('Start fresh with this account')}
           </button>
           <button className="btn ghost" disabled={busy} onClick={choose(() => resolveAccountSwitch('bring'))}>
-            Bring this device's data into this account
+            {t("Bring this device's data into this account")}
           </button>
         </div>
         {errLine}
       </>
     ) : (
       <>
-        <div className="win-title">Two heroes found</div>
+        <div className="win-title">{t('Two heroes found')}</div>
         <p style={{ fontSize: 16, lineHeight: 1.4 }}>
-          The cloud already has <b>{c.cloudName}</b> (Lv{c.cloudLevel}). This device has <b>{hero?.name}</b>. What should happen?
+          {rich(t('The cloud already has {cloud} (Lv{level}). This device has {hero}. What should happen?', { level: c.cloudLevel }), {
+            cloud: <b>{c.cloudName}</b>,
+            hero: <b>{hero?.name}</b>,
+          })}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button className="btn" disabled={busy} onClick={choose(() => resolveConflict('cloud'))}>
-            Use the cloud save on this device
+            {t('Use the cloud save on this device')}
           </button>
           <button className="btn ghost" disabled={busy} onClick={choose(() => resolveConflict('merge'))}>
-            Merge both (keep all lists, combine progress)
+            {t('Merge both (keep all lists, combine progress)')}
           </button>
           <button className="btn ghost" disabled={busy} onClick={choose(() => resolveConflict('local'))}>
-            Overwrite the cloud with this device
+            {t('Overwrite the cloud with this device')}
           </button>
         </div>
         {errLine}

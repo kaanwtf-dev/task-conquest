@@ -1,5 +1,6 @@
 // Merchant: a daily rotating stock (deterministic per day + level bracket) plus permanent unlocks.
 import { Rng, hashStr } from '../core/rng';
+import { t, tk } from '../i18n';
 import { SLOTS } from '../core/types';
 import type { Hero, Item, PotionId } from '../core/types';
 import { THEMES, THEME_BY_ID, type ThemeDef, type ThemeId } from '../pixel/themes';
@@ -12,7 +13,7 @@ export type DyeTarget = 'outfit' | 'hair' | 'pants' | 'cape';
 export interface ShopOffer {
   id: string;
   kind: 'item' | 'potion' | 'bag' | 'theme' | 'dye';
-  label: string;
+  label: string; // in the player's language
   price: number;
   item?: Item;
   potion?: { potion: PotionId; tier: number };
@@ -104,7 +105,7 @@ export interface DyeDef {
   price: number;
 }
 
-export const DYE_TARGET_NAMES: Record<DyeTarget, string> = { outfit: 'Outfit', hair: 'Hair', pants: 'Pants', cape: 'Cape' };
+export const DYE_TARGET_NAMES: Record<DyeTarget, string> = { outfit: tk('Outfit'), hair: tk('Hair'), pants: tk('Pants'), cape: tk('Cape') };
 
 const dyes = (target: DyeTarget, price: number, list: [string, string][]): DyeDef[] =>
   list.map(([name, color], i) => ({ target, color, name, price: price + i * 20 }));
@@ -112,36 +113,36 @@ const dyes = (target: DyeTarget, price: number, list: [string, string][]): DyeDe
 /** Extra colors beyond the free creator palettes in pixel/sprites/hero.ts. */
 export const DYES: DyeDef[] = [
   ...dyes('outfit', 120, [
-    ['Royal Purple', '#5a2a9a'],
-    ['Midnight', '#1e2a4a'],
-    ['Rose Gold', '#e0907a'],
-    ['Emerald', '#1a9a5a'],
-    ['Sunflower', '#f0d040'],
-    ['Obsidian', '#1a1418'],
+    [tk('Royal Purple'), '#5a2a9a'],
+    [tk('Midnight'), '#1e2a4a'],
+    [tk('Rose Gold'), '#e0907a'],
+    [tk('Emerald'), '#1a9a5a'],
+    [tk('Sunflower'), '#f0d040'],
+    [tk('Obsidian'), '#1a1418'],
   ]),
   ...dyes('hair', 80, [
-    ['Platinum', '#f4f4f0'],
-    ['Flame', '#ff6a1a'],
-    ['Mint', '#7ae0b0'],
-    ['Lilac', '#b090e0'],
-    ['Teal', '#2a9aa0'],
-    ['Cherry', '#d02050'],
+    [tk('Platinum'), '#f4f4f0'],
+    [tk('Flame'), '#ff6a1a'],
+    [tk('Mint'), '#7ae0b0'],
+    [tk('Lilac'), '#b090e0'],
+    [tk('Teal'), '#2a9aa0'],
+    [tk('Cherry'), '#d02050'],
   ]),
   ...dyes('pants', 60, [
-    ['Navy', '#2a3a6a'],
-    ['Charcoal', '#3a3a40'],
-    ['Forest', '#2e5a2e'],
-    ['Burgundy', '#6a1a2a'],
-    ['Khaki', '#b8a070'],
-    ['Snow', '#e8ecf0'],
+    [tk('Navy'), '#2a3a6a'],
+    [tk('Charcoal'), '#3a3a40'],
+    [tk('Forest'), '#2e5a2e'],
+    [tk('Burgundy'), '#6a1a2a'],
+    [tk('Khaki'), '#b8a070'],
+    [tk('Snow'), '#e8ecf0'],
   ]),
   ...dyes('cape', 100, [
-    ['Crimson', '#b02030'],
-    ['Night Blue', '#1a2a6a'],
-    ['Gold', '#e0b030'],
-    ['Violet', '#7a3ab0'],
-    ['Frost', '#a8e0f0'],
-    ['Shadow', '#2a2a30'],
+    [tk('Crimson'), '#b02030'],
+    [tk('Night Blue'), '#1a2a6a'],
+    [tk('Gold'), '#e0b030'],
+    [tk('Violet'), '#7a3ab0'],
+    [tk('Frost'), '#a8e0f0'],
+    [tk('Shadow'), '#2a2a30'],
   ]),
 ];
 
@@ -156,16 +157,16 @@ export function permanentOffers(hero: Pick<Hero, 'bagSize' | 'owned' | 'xp'>): S
   const offers: ShopOffer[] = [];
   if (bag < BAG_MAX) {
     const next = Math.min(BAG_MAX, bag + BAG_STEP);
-    offers.push({ id: `bag:${next}`, kind: 'bag', label: `Bigger Bag (+${next - bag} slots)`, price: bagUpgradePrice(bag) });
+    offers.push({ id: `bag:${next}`, kind: 'bag', label: t('Bigger Bag (+{n} slots)', { n: next - bag }), price: bagUpgradePrice(bag) });
   }
-  for (const t of THEMES) {
-    if (t.unlockLevel <= 1 || level >= t.unlockLevel || owned.has(themeKey(t.id))) continue;
-    offers.push({ id: themeKey(t.id), kind: 'theme', label: `${t.name} Theme`, price: themeUnlockPrice(t), theme: t.id });
+  for (const th of THEMES) {
+    if (th.unlockLevel <= 1 || level >= th.unlockLevel || owned.has(themeKey(th.id))) continue;
+    offers.push({ id: themeKey(th.id), kind: 'theme', label: t('{name} Theme', { name: t(th.name) }), price: themeUnlockPrice(th), theme: th.id });
   }
   for (const d of DYES) {
     const id = dyeKey(d.target, d.color);
     if (owned.has(id)) continue;
-    offers.push({ id, kind: 'dye', label: `${d.name} ${DYE_TARGET_NAMES[d.target]} Dye`, price: d.price, dye: { target: d.target, color: d.color } });
+    offers.push({ id, kind: 'dye', label: t('{color} {target} Dye', { color: t(d.name), target: t(DYE_TARGET_NAMES[d.target]) }), price: d.price, dye: { target: d.target, color: d.color } });
   }
   return offers;
 }

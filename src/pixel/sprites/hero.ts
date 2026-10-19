@@ -1,4 +1,5 @@
 // Layered, palette-driven hero sprite (front-facing chibi), 40x40 frame.
+import { tk } from '../../i18n';
 import { Pix, shade } from '../pix';
 import { MATERIALS, WEAPON_GRIP, heldBowPix, shieldPix, weaponPix, type MaterialPalette } from './gear';
 
@@ -29,6 +30,7 @@ export interface GearLook {
 
 export type Pose = 'idle' | 'windup' | 'swing';
 
+/** name, blurb and perk are tk-marked English: show them with t(). */
 export interface RaceDef {
   id: RaceId;
   name: string;
@@ -40,19 +42,31 @@ export interface RaceDef {
 }
 
 export const RACES: RaceDef[] = [
-  { id: 'human', name: 'Human', skins: ['#f6d3b3', '#e8b48a', '#c98b5c', '#8d5a3b', '#5a3a26'], ty: 17, defaultEyes: '#3a5a9a', blurb: 'Adaptable and driven.', perk: '+10% XP from every task' },
-  { id: 'elf', name: 'Elf', skins: ['#fbe3cc', '#eac4a0', '#c9b2e0', '#8fa3c9'], ty: 16, defaultEyes: '#2a8a5a', blurb: 'Keen-eyed and ancient.', perk: '+15% loot find' },
-  { id: 'dwarf', name: 'Dwarf', skins: ['#f6d3b3', '#e8b48a', '#c98b5c', '#8d5a3b'], ty: 19, defaultEyes: '#4a3020', blurb: 'Stout, stubborn, rich.', perk: '+15% gold' },
-  { id: 'orc', name: 'Orc', skins: ['#7aa33a', '#5f8a3a', '#8a9a5a', '#4f6b2f'], ty: 17, defaultEyes: '#c03020', blurb: 'Raw strength and fury.', perk: '+8% critical hit chance' },
-  { id: 'imp', name: 'Imp', skins: ['#d0453a', '#e0703a', '#9a4ab0', '#4a5a8a'], ty: 18, defaultEyes: '#ffd23a', blurb: 'Small, sly, magical.', perk: 'Potions last 30% longer' },
-  { id: 'undead', name: 'Undead', skins: ['#b5c4a8', '#c8c8c0', '#9aa8a0', '#a8b0c8'], ty: 17, defaultEyes: '#5ff0f0', blurb: 'Death was just a setback.', perk: 'Streak survives 1 missed day per week' },
-  { id: 'catfolk', name: 'Catfolk', skins: ['#e8a050', '#b8b0a8', '#f0e0c8', '#5a4a40'], ty: 17, defaultEyes: '#7ad040', blurb: 'Nimble and lucky.', perk: '+Luck: rarer loot drops' },
-  { id: 'lizardfolk', name: 'Lizardfolk', skins: ['#4aa860', '#3a9a9a', '#7a9a3a', '#8a6ac0'], ty: 17, defaultEyes: '#f0b020', blurb: 'Patient and resilient.', perk: '+20% XP on daily tasks' },
+  { id: 'human', name: tk('Human'), skins: ['#f6d3b3', '#e8b48a', '#c98b5c', '#8d5a3b', '#5a3a26'], ty: 17, defaultEyes: '#3a5a9a', blurb: tk('Adaptable and driven.'), perk: tk('+10% XP from every task') },
+  { id: 'elf', name: tk('Elf'), skins: ['#fbe3cc', '#eac4a0', '#c9b2e0', '#8fa3c9'], ty: 16, defaultEyes: '#2a8a5a', blurb: tk('Keen-eyed and ancient.'), perk: tk('+15% loot find') },
+  { id: 'dwarf', name: tk('Dwarf'), skins: ['#f6d3b3', '#e8b48a', '#c98b5c', '#8d5a3b'], ty: 19, defaultEyes: '#4a3020', blurb: tk('Stout, stubborn, rich.'), perk: tk('+15% gold') },
+  { id: 'orc', name: tk('Orc'), skins: ['#7aa33a', '#5f8a3a', '#8a9a5a', '#4f6b2f'], ty: 17, defaultEyes: '#c03020', blurb: tk('Raw strength and fury.'), perk: tk('+8% critical hit chance') },
+  { id: 'imp', name: tk('Imp'), skins: ['#d0453a', '#e0703a', '#9a4ab0', '#4a5a8a'], ty: 18, defaultEyes: '#ffd23a', blurb: tk('Small, sly, magical.'), perk: tk('Potions last 30% longer') },
+  { id: 'undead', name: tk('Undead'), skins: ['#b5c4a8', '#c8c8c0', '#9aa8a0', '#a8b0c8'], ty: 17, defaultEyes: '#5ff0f0', blurb: tk('Death was just a setback.'), perk: tk('Streak survives 1 missed day per week') },
+  { id: 'catfolk', name: tk('Catfolk'), skins: ['#e8a050', '#b8b0a8', '#f0e0c8', '#5a4a40'], ty: 17, defaultEyes: '#7ad040', blurb: tk('Nimble and lucky.'), perk: tk('+Luck: rarer loot drops') },
+  { id: 'lizardfolk', name: tk('Lizardfolk'), skins: ['#4aa860', '#3a9a9a', '#7a9a3a', '#8a6ac0'], ty: 17, defaultEyes: '#f0b020', blurb: tk('Patient and resilient.'), perk: tk('+20% XP on daily tasks') },
 ];
 
 export const RACE_BY_ID: Record<RaceId, RaceDef> = Object.fromEntries(RACES.map((r) => [r.id, r])) as Record<RaceId, RaceDef>;
 
 export const HAIR_STYLES: HairStyle[] = ['short', 'long', 'spiky', 'mohawk', 'ponytail', 'bob', 'bun', 'bald'];
+/** Labels for the hair and beard pickers (tk-marked English: show them with t()). */
+export const HAIR_STYLE_NAMES: Record<HairStyle, string> = {
+  short: tk('short'),
+  long: tk('long'),
+  spiky: tk('spiky'),
+  mohawk: tk('mohawk'),
+  ponytail: tk('ponytail'),
+  bob: tk('bob'),
+  bun: tk('bun'),
+  bald: tk('bald'),
+};
+export const BEARD_STYLE_NAMES: Record<BeardStyle, string> = { none: tk('none'), short: tk('short'), long: tk('long') };
 export const HAIR_COLORS = ['#2a1e1a', '#5a3a22', '#8a5a2a', '#d8a040', '#f0e0a0', '#c04a2a', '#e8e8e8', '#5a6ad0', '#c050a0', '#40a070'];
 export const EYE_COLORS = ['#3a5a9a', '#2a8a5a', '#4a3020', '#c03020', '#ffd23a', '#5ff0f0', '#9a4ad0', '#1a1022'];
 export const OUTFIT_COLORS = ['#3a6ad0', '#c0392b', '#2e8b57', '#8a4ac0', '#e0a030', '#3a3a4a', '#e8e0d0', '#d06a9a', '#1a8a9a', '#7a4a2a'];

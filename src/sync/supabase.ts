@@ -3,6 +3,7 @@
 import { createClient, isAuthRetryableFetchError, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { SyncOfflineError } from './types';
 import type { PushResult, RemoteAdapter, RemoteRow } from './types';
+import { t } from '../i18n';
 
 export interface SyncConfig {
   url: string;
@@ -98,10 +99,10 @@ function need(): SupabaseClient {
   if (!c)
     throw new Error(
       !getSyncConfig()
-        ? 'Cloud sync is not set up yet.'
+        ? t('Cloud sync is not set up yet.')
         : cloudIsBuiltIn()
-          ? "This site's cloud address is wrong; whoever runs the site needs to fix it."
-          : 'The Project URL looks wrong. Fix it under Change cloud project.',
+          ? t("This site's cloud address is wrong; whoever runs the site needs to fix it.")
+          : t('The Project URL looks wrong. Fix it under Change cloud project.'),
     );
   return c;
 }
@@ -109,9 +110,9 @@ function need(): SupabaseClient {
 const toUser = (u: User): AuthUser => ({ id: u.id, email: u.email ?? null });
 
 function authMessage(msg: string): string {
-  if (/invalid login credentials/i.test(msg)) return 'Wrong email or password.';
-  if (/email not confirmed/i.test(msg)) return 'Confirm your email first (check your inbox), then sign in.';
-  if (/failed to fetch|network|load failed/i.test(msg)) return 'Could not reach the cloud. Check your connection.';
+  if (/invalid login credentials/i.test(msg)) return t('Wrong email or password.');
+  if (/email not confirmed/i.test(msg)) return t('Confirm your email first (check your inbox), then sign in.');
+  if (/failed to fetch|network|load failed/i.test(msg)) return t('Could not reach the cloud. Check your connection.');
   return msg;
 }
 
@@ -133,16 +134,16 @@ export async function requestPasswordReset(email: string): Promise<void> {
   const env = import.meta.env as Record<string, unknown>;
   const base = typeof env.BASE_URL === 'string' ? env.BASE_URL : '/';
   const { error } = await need().auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}${base}` });
-  if (error) throw new Error(/rate limit/i.test(error.message) ? 'Too many emails were sent just now. Try again in an hour.' : authMessage(error.message));
+  if (error) throw new Error(/rate limit/i.test(error.message) ? t('Too many emails were sent just now. Try again in an hour.') : authMessage(error.message));
 }
 
 /** Sets the password of the account a reset link signed in (see sync/recovery.ts). */
 export async function setNewPassword(password: string): Promise<void> {
   const c = need();
   const { data } = await c.auth.getSession(); // (also waits for the client to read the link's session)
-  if (!data.session) throw new Error('This reset link has expired. Ask for a new one on the sign-in screen.');
+  if (!data.session) throw new Error(t('This reset link has expired. Ask for a new one on the sign-in screen.'));
   const { error } = await c.auth.updateUser({ password });
-  if (error) throw new Error(/different from the old/i.test(error.message) ? 'That is your current password. Pick a new one.' : authMessage(error.message));
+  if (error) throw new Error(/different from the old/i.test(error.message) ? t('That is your current password. Pick a new one.') : authMessage(error.message));
 }
 
 /**
@@ -276,8 +277,8 @@ export class SupabaseRemote implements RemoteAdapter {
     };
     let since: string | null = null;
     if (sinceIso) {
-      const t = Date.parse(sinceIso);
-      since = Number.isFinite(t) ? new Date(t - OVERLAP_MS).toISOString() : null;
+      const at = Date.parse(sinceIso);
+      since = Number.isFinite(at) ? new Date(at - OVERLAP_MS).toISOString() : null;
     }
     let strict = false;
     for (;;) {

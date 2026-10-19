@@ -7,6 +7,7 @@ import { bossProgress } from '../game/bosses';
 import { todaySections, todayRemaining } from '../state/today';
 import { undeadSave } from '../state/rewards';
 import { WARN_MS, hasLimit, windowOf } from '../game/deadlines';
+import { locale, t, tn } from '../i18n';
 
 export type Slot = 'morning' | 'evening';
 /** What a player can switch off, one by one. */
@@ -21,6 +22,8 @@ export interface PushPrefs {
   off: NudgeKind[];
   dayStartHour: number;
   weekStart: number;
+  /** the language the reminders are written in */
+  lang?: 'en' | 'tr';
 }
 export const DEFAULT_PUSH_PREFS: PushPrefs = { morningHour: 9, eveningHour: 20, off: [], dayStartHour: 0, weekStart: 1 };
 
@@ -67,7 +70,6 @@ export function slotAt(now: number, prefs: PushPrefs): Slot | null {
   return null;
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 /** Player-written text (quest titles, hero names) shortened to fit a notification line. */
 const clip = (s: unknown, max: number) => {
   const chars = [...String(s ?? '')];
@@ -110,8 +112,13 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
       const { boss } = bossProgress(hero);
       return {
         kind: 'comeback',
-        title: '🛡️ Your hero is getting rusty',
-        body: `${plural(idle, 'day')} without a quest, ${name}. ${boss.name} grows bolder. One small one to warm up?`,
+        title: t('🛡️ Your hero is getting rusty'),
+        body: tn(
+          idle,
+          '{n} day without a quest, {name}. {boss} grows bolder. One small one to warm up?',
+          '{n} days without a quest, {name}. {boss} grows bolder. One small one to warm up?',
+          { name, boss: t(boss.name) },
+        ),
         tag: 'taskconquest-comeback',
         badge,
       };
@@ -122,12 +129,12 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
       .slice()
       .sort((a, b) => b.difficulty - a.difficulty)
       .slice(0, 2)
-      .map((t) => clip(t.title, 48));
-    const more = left.length > named.length ? ` +${left.length - named.length} more` : '';
+      .map((x) => clip(x.title, 48));
+    const plan = { quests: named.join(', '), more: left.length - named.length, boss: t(boss.name), hp: hp.toLocaleString(locale()) };
     return {
       kind: 'plan',
-      title: `⚔️ ${plural(left.length, 'quest')} today`,
-      body: `${named.join(', ')}${more}. ${boss.name} has ${hp.toLocaleString('en-US')} HP left.`,
+      title: tn(left.length, '⚔️ {n} quest today', '⚔️ {n} quests today'),
+      body: plan.more > 0 ? t('{quests} +{more} more. {boss} has {hp} HP left.', plan) : t('{quests}. {boss} has {hp} HP left.', plan),
       tag: 'taskconquest-plan',
       badge,
     };
@@ -140,8 +147,14 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
   if (on('evening') && !playedToday && run >= 2) {
     return {
       kind: 'streak',
-      title: `🔥 Your ${run}-day streak is on the line`,
-      body: `Finish one quest before the day resets to keep it alive${left.length ? ` (${plural(left.length, 'quest')} waiting)` : ''}.`,
+      title: t('🔥 Your {run}-day streak is on the line', { run }),
+      body: left.length
+        ? tn(
+            left.length,
+            'Finish one quest before the day resets to keep it alive ({n} quest waiting).',
+            'Finish one quest before the day resets to keep it alive ({n} quests waiting).',
+          )
+        : t('Finish one quest before the day resets to keep it alive.'),
       tag: 'taskconquest-evening',
       badge,
     };
@@ -150,19 +163,21 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
   if (on('party') && !playedToday) {
     // what the rest of the party finished today on shared lists
     const byWho = new Map<string, number>();
-    for (const t of live) {
-      const l = lists.get(t.listId)!;
+    for (const x of live) {
+      const l = lists.get(x.listId)!;
       // still done (a mistaken tick that was undone is not news)
-      if (!l.shared || !t.doneBy || t.doneBy === hero.name || !t.doneAt || !isDone(t, now, cfg)) continue;
-      if (todayKey(t.doneAt, cfg) !== today) continue;
-      byWho.set(t.doneBy, (byWho.get(t.doneBy) ?? 0) + 1);
+      if (!l.shared || !x.doneBy || x.doneBy === hero.name || !x.doneAt || !isDone(x, now, cfg)) continue;
+      if (todayKey(x.doneAt, cfg) !== today) continue;
+      byWho.set(x.doneBy, (byWho.get(x.doneBy) ?? 0) + 1);
     }
     const top = [...byWho.entries()].sort((a, b) => b[1] - a[1])[0];
     if (top) {
       return {
         kind: 'party',
-        title: `👀 ${clip(top[0], 24)} finished ${plural(top[1], 'quest')} today`,
-        body: `Your move, ${name}.${left.length ? ` ${plural(left.length, 'quest')} left for you.` : ''}`,
+        title: tn(top[1], '👀 {who} finished {n} quest today', '👀 {who} finished {n} quests today', { who: clip(top[0], 24) }),
+        body: left.length
+          ? tn(left.length, 'Your move, {name}. {n} quest left for you.', 'Your move, {name}. {n} quests left for you.', { name })
+          : t('Your move, {name}.', { name }),
         tag: 'taskconquest-evening',
         badge,
       };
@@ -173,12 +188,17 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
   // the routine ones whose period ends tonight ('every 3 days' ones mostly do not): those are worth a nudge
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const dailies = s.routine.filter((t) => periodKey(t.repeat, now, cfg) !== periodKey(t.repeat, tomorrow.getTime(), cfg));
+  const dailies = s.routine.filter((x) => periodKey(x.repeat, now, cfg) !== periodKey(x.repeat, tomorrow.getTime(), cfg));
   if (playedToday && dailies.length) {
     return {
       kind: 'dailies',
-      title: `🌙 ${plural(dailies.length, 'daily quest')} left`,
-      body: `${clip(dailies[0].title, 48)}${dailies.length > 1 ? ` and ${plural(dailies.length - 1, 'other')}` : ''} reset when the day ends.`,
+      title: tn(dailies.length, '🌙 {n} daily quest left', '🌙 {n} daily quests left'),
+      body:
+        dailies.length > 1
+          ? tn(dailies.length - 1, '{title} and {n} other reset when the day ends.', '{title} and {n} others reset when the day ends.', {
+              title: clip(dailies[0].title, 48),
+            })
+          : t('{title} reset when the day ends.', { title: clip(dailies[0].title, 48) }),
       tag: 'taskconquest-evening',
       badge,
     };
@@ -187,8 +207,8 @@ export function pickNudge(state: NudgeState, now: number, slot: Slot, prefs: Pus
   if (hp > 0 && hp <= boss.maxHp * 0.15) {
     return {
       kind: 'boss',
-      title: `💀 ${boss.name} is down to ${hp.toLocaleString('en-US')} HP`,
-      body: 'One more quest could finish it off.',
+      title: t('💀 {boss} is down to {hp} HP', { boss: t(boss.name), hp: hp.toLocaleString(locale()) }),
+      body: t('One more quest could finish it off.'),
       tag: 'taskconquest-evening',
       badge,
     };
@@ -234,17 +254,17 @@ export function partyDigest(state: NudgeState, since: number, until: number): Pi
     if (!a) byList.set(id, (a = { done: [], added: [], who: new Set() }));
     return a;
   };
-  for (const t of Object.values(state.tasks)) {
-    const l = state.lists[t.listId];
-    if (!l || l.deleted || !l.shared || t.deleted) continue;
-    if (t.doneFor && t.doneBy && t.doneBy !== me && t.doneAt && t.doneAt > since && t.doneAt <= until) {
+  for (const x of Object.values(state.tasks)) {
+    const l = state.lists[x.listId];
+    if (!l || l.deleted || !l.shared || x.deleted) continue;
+    if (x.doneFor && x.doneBy && x.doneBy !== me && x.doneAt && x.doneAt > since && x.doneAt <= until) {
       const a = acts(l.id);
-      a.done.push(clip(t.title, 24));
-      a.who.add(t.doneBy);
-    } else if (!t.doneFor && t.createdBy && t.createdBy !== me && t.createdAt > since && t.createdAt <= until) {
+      a.done.push(clip(x.title, 24));
+      a.who.add(x.doneBy);
+    } else if (!x.doneFor && x.createdBy && x.createdBy !== me && x.createdAt > since && x.createdAt <= until) {
       const a = acts(l.id);
-      a.added.push(clip(t.title, 24));
-      a.who.add(t.createdBy);
+      a.added.push(clip(x.title, 24));
+      a.who.add(x.createdBy);
     }
   }
   const busiest = [...byList.entries()].sort((a, b) => b[1].done.length + b[1].added.length - (a[1].done.length + a[1].added.length))[0];
@@ -252,15 +272,17 @@ export function partyDigest(state: NudgeState, since: number, until: number): Pi
   const [listId, a] = busiest;
   const l = state.lists[listId];
   const who = [...a.who];
-  const names = who.length === 1 ? clip(who[0], 20) : `${clip(who[0], 20)} & co.`;
-  const list3 = (xs: string[]) => xs.slice(0, 3).join(', ') + (xs.length > 3 ? ` +${xs.length - 3} more` : '');
+  const names = who.length === 1 ? clip(who[0], 20) : t('{name} & co.', { name: clip(who[0], 20) });
+  const list3 = (xs: string[]) =>
+    xs.length > 3 ? t('{items} +{n} more', { items: xs.slice(0, 3).join(', '), n: xs.length - 3 }) : xs.join(', ');
   const supply = l.type === 'supply';
   const parts = [
-    ...(a.done.length ? [`${supply ? 'Bought' : 'Done'}: ${list3(a.done)}`] : []),
-    ...(a.added.length ? [`Added: ${list3(a.added)}`] : []),
+    ...(a.done.length ? [supply ? t('Bought: {items}', { items: list3(a.done) }) : t('Done: {items}', { items: list3(a.done) })] : []),
+    ...(a.added.length ? [t('Added: {items}', { items: list3(a.added) })] : []),
   ];
+  const upd = { who: names, list: clip(l.name, 24) };
   return {
-    title: `${supply ? '🛒' : '👥'} ${names} updated ${clip(l.name, 24)}`,
+    title: supply ? t('🛒 {who} updated {list}', upd) : t('👥 {who} updated {list}', upd),
     body: parts.join(' · '),
     tag: `taskconquest-party-${listId}`.slice(0, 64),
   };
@@ -275,31 +297,31 @@ export function deadlineNudge(state: NudgeState, now: number, prefs: PushPrefs, 
   const cfg: TimeCfg = { dayStartHour: prefs.dayStartHour, weekStart: prefs.weekStart };
   const warned = new Set(history.warned ?? []);
   let best: { task: Task; end: number; key: string } | null = null;
-  for (const t of Object.values(state.tasks)) {
-    const l = state.lists[t.listId];
-    if (t.deleted || !l || l.deleted || l.shared || l.type === 'supply') continue;
-    if (!hasLimit(t, cfg)) continue;
-    const w = windowOf(t, now, cfg);
-    if (!w || w.end <= now || w.end - now > WARN_MS || isDone(t, now, cfg)) continue;
-    const key = `${t.id}@${w.end}`;
+  for (const x of Object.values(state.tasks)) {
+    const l = state.lists[x.listId];
+    if (x.deleted || !l || l.deleted || l.shared || l.type === 'supply') continue;
+    if (!hasLimit(x, cfg)) continue;
+    const w = windowOf(x, now, cfg);
+    if (!w || w.end <= now || w.end - now > WARN_MS || isDone(x, now, cfg)) continue;
+    const key = `${x.id}@${w.end}`;
     if (warned.has(key)) continue;
-    if (!best || w.end < best.end) best = { task: t, end: w.end, key };
+    if (!best || w.end < best.end) best = { task: x, end: w.end, key };
   }
   if (!best) return null;
   const { task, end } = best;
   const mins = Math.max(1, Math.round((end - now) / 60_000));
-  const left = mins < 60 ? `${mins} min` : `${Math.round(mins / 60)}h`;
-  const at = new Date(end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const left = mins < 60 ? t('{n} min', { n: mins }) : t('{n}h', { n: Math.round(mins / 60) });
+  const at = new Date(end).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' });
   const name = clip(task.title, 60);
-  const title = task.stakes === 'must' ? `⚠️ ${left} left: ${name}` : `⏳ ${left} left: ${name}`;
+  const title = task.stakes === 'must' ? t('⚠️ {left} left: {name}', { left, name }) : t('⏳ {left} left: {name}', { left, name });
   const misses = task.misses ?? 0;
   const body =
     misses > 0
-      ? `Missed ${misses}× in a row already. Don't make it ${misses + 1}. Due ${at}.`
+      ? t("Missed {misses}× in a row already. Don't make it {next}. Due {at}.", { misses, next: misses + 1, at })
       : task.stakes === 'must'
-        ? `A must-do, due ${at}. Missing it costs gold.`
+        ? t('A must-do, due {at}. Missing it costs gold.', { at })
         : task.stakes === 'flexible'
-          ? `Due ${at}. Missing it costs a little gold.`
-          : `Due ${at}.`;
+          ? t('Due {at}. Missing it costs a little gold.', { at })
+          : t('Due {at}.', { at });
   return { nudge: { kind: 'deadline', title, body, tag: `deadline-${task.id}`, badge: 0 }, key: best.key };
 }

@@ -2,6 +2,7 @@
 import { SLOTS } from '../core/types';
 import type { Buff, ClassId, Hero, HeroStats, Item, StatId } from '../core/types';
 import type { RaceId } from '../pixel/sprites/hero';
+import { getLang, t, tk } from '../i18n';
 import { STAT_IDS, itemPower } from './loot';
 import { buffBonus } from './potions';
 
@@ -79,20 +80,25 @@ export function applyBuffs(stats: HeroStats, buffs: readonly Buff[]): HeroStats 
   return out;
 }
 
-const num = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
-
-export const STAT_INFO: Record<StatId, { name: string; short: string; describe: (v: number) => string }> = {
-  xp: { name: 'Wisdom', short: 'XP', describe: (v) => `+${num(v)}% XP from tasks` },
-  gold: { name: 'Greed', short: 'GOLD', describe: (v) => `+${num(v)}% gold from tasks` },
-  find: { name: 'Loot Find', short: 'FIND', describe: (v) => `+${num(v)}% chance to find loot` },
-  crit: { name: 'Critical', short: 'CRIT', describe: (v) => `${num(v)}% chance for double rewards` },
-  boss: { name: 'Boss Damage', short: 'BOSS', describe: (v) => `+${num(v)}% damage to bosses` },
-  luck: { name: 'Luck', short: 'LUCK', describe: (v) => `+${num(v)} luck: rarer loot` },
-  skill: { name: 'Skill Gain', short: 'SKILL', describe: (v) => `+${num(v)}% skill XP` },
-  potion: { name: 'Brewing', short: 'BREW', describe: (v) => `Potions last ${num(v)}% longer` },
+/** "1.5" (English) or "1,5" (Turkish). */
+const num = (v: number) => {
+  const s = Number.isInteger(v) ? String(v) : v.toFixed(1);
+  return getLang() === 'tr' ? s.replace('.', ',') : s;
 };
 
-/** Short affix label for item tooltips, e.g. "+12% XP". */
+/** name and short are tk-marked English (show them with t()); describe() is in the player's language. */
+export const STAT_INFO: Record<StatId, { name: string; short: string; describe: (v: number) => string }> = {
+  xp: { name: tk('Wisdom'), short: tk('XP'), describe: (v) => t('+{v}% XP from tasks', { v: num(v) }) },
+  gold: { name: tk('Greed'), short: tk('GOLD'), describe: (v) => t('+{v}% gold from tasks', { v: num(v) }) },
+  find: { name: tk('Loot Find'), short: tk('FIND'), describe: (v) => t('+{v}% chance to find loot', { v: num(v) }) },
+  crit: { name: tk('Critical'), short: tk('CRIT'), describe: (v) => t('{v}% chance for double rewards', { v: num(v) }) },
+  boss: { name: tk('Boss Damage'), short: tk('BOSS'), describe: (v) => t('+{v}% damage to bosses', { v: num(v) }) },
+  luck: { name: tk('Luck'), short: tk('LUCK'), describe: (v) => t('+{v} luck: rarer loot', { v: num(v) }) },
+  skill: { name: tk('Skill Gain'), short: tk('SKILL'), describe: (v) => t('+{v}% skill XP', { v: num(v) }) },
+  potion: { name: tk('Brewing'), short: tk('BREW'), describe: (v) => t('Potions last {v}% longer', { v: num(v) }) },
+};
+
+/** Short affix label for item tooltips, e.g. "+12% XP", in the player's language. */
 export function affixLabel(stat: StatId, value: number): string {
-  return stat === 'luck' ? `+${num(value)} Luck` : `+${num(value)}% ${STAT_INFO[stat]?.short ?? stat}`;
+  return stat === 'luck' ? t('+{v} Luck', { v: num(value) }) : t('+{v}% {stat}', { v: num(value), stat: t(STAT_INFO[stat]?.short ?? stat) });
 }

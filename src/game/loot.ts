@@ -3,6 +3,7 @@
 import { Rng, hashStr } from '../core/rng';
 import { BASES, SLOTS } from '../core/types';
 import type { Affix, BaseId, ClassId, HeroStats, Item, PotionId, Rarity, Slot, StatId } from '../core/types';
+import { getLang, t, tk } from '../i18n';
 import { hueRotate, shade } from '../pixel/pix';
 import { MATERIALS, type MaterialPalette } from '../pixel/sprites/gear';
 import type { BodyKind, GearLook, HeadKind } from '../pixel/sprites/hero';
@@ -30,13 +31,13 @@ export interface RarityDef {
 }
 
 export const RARITIES: readonly RarityDef[] = [
-  { name: 'Common', color: '#f4f4f4', affixCount: 0, powerMult: 1, weight: 55 },
-  { name: 'Uncommon', color: '#5ee06a', affixCount: 1, powerMult: 1.15, weight: 28 },
-  { name: 'Rare', color: '#5aa8ff', affixCount: 2, powerMult: 1.35, weight: 12 },
-  { name: 'Epic', color: '#c77dff', affixCount: 3, powerMult: 1.6, weight: 4 },
-  { name: 'Legendary', color: '#ff9f2e', affixCount: 4, powerMult: 2, weight: 0.9 },
-  { name: 'Mythic', color: '#ff5050', affixCount: 5, powerMult: 2.5, weight: 0.1 },
-  { name: 'Divine', color: '#5ff0f0', affixCount: 6, powerMult: 3.2, weight: 0 },
+  { name: tk('Common'), color: '#f4f4f4', affixCount: 0, powerMult: 1, weight: 55 },
+  { name: tk('Uncommon'), color: '#5ee06a', affixCount: 1, powerMult: 1.15, weight: 28 },
+  { name: tk('Rare'), color: '#5aa8ff', affixCount: 2, powerMult: 1.35, weight: 12 },
+  { name: tk('Epic'), color: '#c77dff', affixCount: 3, powerMult: 1.6, weight: 4 },
+  { name: tk('Legendary'), color: '#ff9f2e', affixCount: 4, powerMult: 2, weight: 0.9 },
+  { name: tk('Mythic'), color: '#ff5050', affixCount: 5, powerMult: 2.5, weight: 0.1 },
+  { name: tk('Divine'), color: '#5ff0f0', affixCount: 6, powerMult: 3.2, weight: 0 },
 ];
 
 /** Divine only drops naturally from item level 100 on, and only rarely. */
@@ -49,7 +50,8 @@ export function clampRarity(r: number): Rarity {
 
 export const rarityDef = (r: number): RarityDef => RARITIES[clampRarity(r)];
 export const rarityOf = (item: Pick<Item, 'rarity'>): RarityDef => rarityDef(item.rarity);
-export const rarityName = (r: number): string => rarityDef(r).name;
+/** Translated. */
+export const rarityName = (r: number): string => t(rarityDef(r).name);
 export const rarityColor = (r: number): string => rarityDef(r).color;
 
 /** Multiplier applied per rarity step: 1 at luck 0, approaching 2 as luck grows. */
@@ -77,45 +79,46 @@ export function rollRarity(rng: Rng, luck = 0, minRarity: number = 0, ilvl = 1):
 // ---------------------------------------------------------------- bases
 
 export const BASE_NAMES: Record<BaseId, string> = {
-  sword: 'Sword',
-  axe: 'Axe',
-  dagger: 'Dagger',
-  staff: 'Staff',
-  bow: 'Bow',
-  mace: 'Mace',
-  spear: 'Spear',
-  hammer: 'Warhammer',
-  wand: 'Wand',
-  helm: 'Helm',
-  hood: 'Hood',
-  hat: 'Hat',
-  crown: 'Crown',
-  circlet: 'Circlet',
-  horned: 'Horned Helm',
-  leather: 'Leather Armor',
-  chain: 'Chainmail',
-  plate: 'Plate Armor',
-  robe: 'Robe',
-  shield: 'Shield',
-  buckler: 'Buckler',
-  tome: 'Tome',
-  orb: 'Orb',
-  cape: 'Cape',
-  ring: 'Ring',
-  amulet: 'Amulet',
-  charm: 'Charm',
+  sword: tk('Sword'),
+  axe: tk('Axe'),
+  dagger: tk('Dagger'),
+  staff: tk('Staff'),
+  bow: tk('Bow'),
+  mace: tk('Mace'),
+  spear: tk('Spear'),
+  hammer: tk('Warhammer'),
+  wand: tk('Wand'),
+  helm: tk('Helm'),
+  hood: tk('Hood'),
+  hat: tk('Hat'),
+  crown: tk('Crown'),
+  circlet: tk('Circlet'),
+  horned: tk('Horned Helm'),
+  leather: tk('Leather Armor'),
+  chain: tk('Chainmail'),
+  plate: tk('Plate Armor'),
+  robe: tk('Robe'),
+  shield: tk('Shield'),
+  buckler: tk('Buckler'),
+  tome: tk('Tome'),
+  orb: tk('Orb'),
+  cape: tk('Cape'),
+  ring: tk('Ring'),
+  amulet: tk('Amulet'),
+  charm: tk('Charm'),
 };
 
 export const SLOT_NAMES: Record<Slot, string> = {
-  weapon: 'Weapon',
-  head: 'Head',
-  body: 'Body',
-  offhand: 'Off-hand',
-  cape: 'Cape',
-  trinket: 'Trinket',
+  weapon: tk('Weapon'),
+  head: tk('Head'),
+  body: tk('Body'),
+  offhand: tk('Off-hand'),
+  cape: tk('Cape'),
+  trinket: tk('Trinket'),
 };
 
-export const baseName = (base: BaseId): string => BASE_NAMES[base] ?? 'Relic';
+/** English (it is part of stored item names); show it with t(baseName(b)). */
+export const baseName = (base: BaseId): string => BASE_NAMES[base] ?? tk('Relic');
 
 const SLOT_OF_BASE = Object.fromEntries(SLOTS.flatMap((s) => BASES[s].map((b) => [b, s]))) as Record<BaseId, Slot>;
 export const slotOfBase = (base: BaseId): Slot | undefined => SLOT_OF_BASE[base];
@@ -186,92 +189,92 @@ export const MATERIAL_TABLES: Record<MaterialFamily, MaterialTier[]> = {
   metal: tiers(
     [1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 92, 108, 126, 146, 170],
     [
-      ['Rusty', P('#a0745a', '#c89878', '#6a4636', '#5a4030', '#8a8a8a')],
-      ['Iron', MATERIALS.iron],
-      ['Steel', MATERIALS.steel],
-      ['Silver', P('#dfe6f0', '#ffffff', '#8e9bb0', '#5b6ee1', '#99e5ff')],
-      ['Elven', MATERIALS.elven],
-      ['Dwarven', P('#d9a066', '#f6d29a', '#8a5a2a', '#5a3a28', '#d95763')],
-      ['Orcish', P('#7a8a5a', '#a8b884', '#4a5636', '#5a3a28', '#d95763')],
-      ['Glass', MATERIALS.glass],
-      ['Ebony', MATERIALS.ebony],
-      ['Infernal', MATERIALS.infernal],
-      ['Dragonbone', P('#e8dcc0', '#fffaf0', '#a89a78', '#8a3a2a', '#ff6a3a')],
-      ['Stormsilver', P('#c8e8ff', '#ffffff', '#7aa0c8', '#e8e8f8', '#5fcde4')],
-      ['Adamant', P('#4a9a8a', '#7ad0b8', '#2a5a5a', '#c8a040', '#d95763')],
-      ['Celestial', P('#fff2a8', '#ffffff', '#d0a040', '#5fcde4', '#ffffff')],
+      [tk('Rusty'), P('#a0745a', '#c89878', '#6a4636', '#5a4030', '#8a8a8a')],
+      [tk('Iron'), MATERIALS.iron],
+      [tk('Steel'), MATERIALS.steel],
+      [tk('Silver'), P('#dfe6f0', '#ffffff', '#8e9bb0', '#5b6ee1', '#99e5ff')],
+      [tk('Elven'), MATERIALS.elven],
+      [tk('Dwarven'), P('#d9a066', '#f6d29a', '#8a5a2a', '#5a3a28', '#d95763')],
+      [tk('Orcish'), P('#7a8a5a', '#a8b884', '#4a5636', '#5a3a28', '#d95763')],
+      [tk('Glass'), MATERIALS.glass],
+      [tk('Ebony'), MATERIALS.ebony],
+      [tk('Infernal'), MATERIALS.infernal],
+      [tk('Dragonbone'), P('#e8dcc0', '#fffaf0', '#a89a78', '#8a3a2a', '#ff6a3a')],
+      [tk('Stormsilver'), P('#c8e8ff', '#ffffff', '#7aa0c8', '#e8e8f8', '#5fcde4')],
+      [tk('Adamant'), P('#4a9a8a', '#7ad0b8', '#2a5a5a', '#c8a040', '#d95763')],
+      [tk('Celestial'), P('#fff2a8', '#ffffff', '#d0a040', '#5fcde4', '#ffffff')],
       // the last three names repeat forever with rotated hues, so their colors (gems too) must be saturated
-      ['Voidsteel', P('#3a2a5a', '#6a4aa0', '#1a1030', '#a050ff', '#ff50ff')],
-      ['Astral', P('#5a6ae0', '#a0b0ff', '#2a2a8a', '#fff2a8', '#ff6ad8')],
-      ['Primordial', P('#40d0b0', '#b0fff0', '#1a6a6a', '#ff5a8a', '#ffe040')],
+      [tk('Voidsteel'), P('#3a2a5a', '#6a4aa0', '#1a1030', '#a050ff', '#ff50ff')],
+      [tk('Astral'), P('#5a6ae0', '#a0b0ff', '#2a2a8a', '#fff2a8', '#ff6ad8')],
+      [tk('Primordial'), P('#40d0b0', '#b0fff0', '#1a6a6a', '#ff5a8a', '#ffe040')],
     ],
   ),
   wood: tiers(
     [1, 4, 9, 15, 22, 30, 40, 52, 66, 82, 100],
     [
-      ['Wooden', MATERIALS.wood],
-      ['Oak', P('#9a6a3a', '#c08a50', '#5a3a1e', '#b8c0c8', '#99e550')],
-      ['Yew', P('#c08a5a', '#e0b080', '#7a5030', '#c8a040', '#d95763')],
-      ['Ironwood', P('#6a5a4a', '#8a7a6a', '#3a2e26', '#b8c0c8', '#5fcde4')],
-      ['Elderwood', P('#7a8a4a', '#a8b870', '#4a5228', '#e0b040', '#99e550')],
-      ['Moonwood', P('#b0b8d8', '#e8ecff', '#6a7098', '#d6e2ea', '#5fcde4')],
-      ['Ghostwood', P('#d8e0d8', '#ffffff', '#8a9a90', '#5ff0f0', '#5ff0f0')],
-      ['Bloodwood', P('#8a2a2a', '#c04a3a', '#4a1218', '#e0b040', '#ff6a3a')],
-      ['Wyrmwood', P('#3a7a5a', '#5aa87a', '#1e4a34', '#e0b040', '#ffcc33')],
-      ['Starwood', P('#3a3a8a', '#6a6ad0', '#1e1e4a', '#fff2a8', '#ffd84a')],
-      ['Worldroot', P('#c8a060', '#fff0b0', '#7a5a2a', '#5fcde4', '#99e550')],
+      [tk('Wooden'), MATERIALS.wood],
+      [tk('Oak'), P('#9a6a3a', '#c08a50', '#5a3a1e', '#b8c0c8', '#99e550')],
+      [tk('Yew'), P('#c08a5a', '#e0b080', '#7a5030', '#c8a040', '#d95763')],
+      [tk('Ironwood'), P('#6a5a4a', '#8a7a6a', '#3a2e26', '#b8c0c8', '#5fcde4')],
+      [tk('Elderwood'), P('#7a8a4a', '#a8b870', '#4a5228', '#e0b040', '#99e550')],
+      [tk('Moonwood'), P('#b0b8d8', '#e8ecff', '#6a7098', '#d6e2ea', '#5fcde4')],
+      [tk('Ghostwood'), P('#d8e0d8', '#ffffff', '#8a9a90', '#5ff0f0', '#5ff0f0')],
+      [tk('Bloodwood'), P('#8a2a2a', '#c04a3a', '#4a1218', '#e0b040', '#ff6a3a')],
+      [tk('Wyrmwood'), P('#3a7a5a', '#5aa87a', '#1e4a34', '#e0b040', '#ffcc33')],
+      [tk('Starwood'), P('#3a3a8a', '#6a6ad0', '#1e1e4a', '#fff2a8', '#ffd84a')],
+      [tk('Worldroot'), P('#c8a060', '#fff0b0', '#7a5a2a', '#5fcde4', '#99e550')],
     ],
   ),
   cloth: tiers(
     [1, 4, 9, 15, 22, 30, 40, 52, 66, 82, 100],
     [
-      ['Linen', P('#d8ccb0', '#f4ecd8', '#9a8a6a', '#7a4a2a', '#5fcde4')],
-      ['Wool', P('#8a6a4a', '#b08a64', '#5a4030', '#d8ccb0', '#d95763')],
-      ['Silk', P('#c84a5a', '#f07a8a', '#7a2030', '#e0b040', '#5fcde4')],
-      ['Velvet', P('#6a2a8a', '#9a4ac0', '#3a1450', '#e0b040', '#ffcc33')],
-      ['Spidersilk', P('#e8e8f0', '#ffffff', '#9a9ab0', '#5a5a6a', '#c050a0')],
-      ['Duskweave', P('#3a3a6a', '#5a5a9a', '#1e1e3a', '#d06a9a', '#ff8a5c')],
-      ['Moonsilk', P('#a8c8f0', '#e8f4ff', '#5a7aa8', '#f4f4f4', '#5ff0f0')],
-      ['Dawnsilk', P('#f0c040', '#fff2a8', '#b07a20', '#c0392b', '#ff6a3a')],
-      ['Starweave', P('#2a2a6a', '#5a5ac0', '#14143a', '#fff2a8', '#ffd84a')],
-      ['Voidweave', P('#2a1a3a', '#5a3a7a', '#140a1e', '#a050ff', '#ff50ff')],
-      ['Aetherweave', P('#5ff0d0', '#d0fff4', '#2a8a7a', '#fff2a8', '#ff8ad0')],
+      [tk('Linen'), P('#d8ccb0', '#f4ecd8', '#9a8a6a', '#7a4a2a', '#5fcde4')],
+      [tk('Wool'), P('#8a6a4a', '#b08a64', '#5a4030', '#d8ccb0', '#d95763')],
+      [tk('Silk'), P('#c84a5a', '#f07a8a', '#7a2030', '#e0b040', '#5fcde4')],
+      [tk('Velvet'), P('#6a2a8a', '#9a4ac0', '#3a1450', '#e0b040', '#ffcc33')],
+      [tk('Spidersilk'), P('#e8e8f0', '#ffffff', '#9a9ab0', '#5a5a6a', '#c050a0')],
+      [tk('Duskweave'), P('#3a3a6a', '#5a5a9a', '#1e1e3a', '#d06a9a', '#ff8a5c')],
+      [tk('Moonsilk'), P('#a8c8f0', '#e8f4ff', '#5a7aa8', '#f4f4f4', '#5ff0f0')],
+      [tk('Dawnsilk'), P('#f0c040', '#fff2a8', '#b07a20', '#c0392b', '#ff6a3a')],
+      [tk('Starweave'), P('#2a2a6a', '#5a5ac0', '#14143a', '#fff2a8', '#ffd84a')],
+      [tk('Voidweave'), P('#2a1a3a', '#5a3a7a', '#140a1e', '#a050ff', '#ff50ff')],
+      [tk('Aetherweave'), P('#5ff0d0', '#d0fff4', '#2a8a7a', '#fff2a8', '#ff8ad0')],
     ],
   ),
   leather: tiers(
     [1, 4, 8, 13, 19, 26, 34, 44, 56, 70, 86, 105],
     [
-      ['Rawhide', P('#b08a60', '#d8b488', '#7a5a3a', '#5a3a28', '#8a8a8a')],
-      ['Tanned', P('#8a5a34', '#b07a4a', '#5a3a20', '#c0c0c0', '#d95763')],
-      ['Studded', P('#7a4a2a', '#a06a40', '#4a2e1c', '#d6e2ea', '#5b6ee1')],
-      ['Hardened', P('#6a4a3a', '#8a6a54', '#3a2a20', '#c8a040', '#d95763')],
-      ['Wolfhide', P('#8a8a90', '#b8b8c0', '#55555e', '#7a4a2a', '#5fcde4')],
-      ['Bearhide', P('#5a3a28', '#7a5438', '#34201a', '#e0b040', '#99e550')],
-      ['Drakehide', P('#3a8a5a', '#6ab87a', '#1e5034', '#c8a040', '#ffcc33')],
-      ['Wyvernhide', P('#5a6a9a', '#8a9ac8', '#2e3a5e', '#d6e2ea', '#d95763')],
-      ['Shadowhide', P('#2e2a3a', '#4e4a5e', '#16141e', '#a050ff', '#ff50ff')],
-      ['Dragonhide', P('#a02a2a', '#d05a3a', '#5a1414', '#f2c94c', '#ffcc33')],
-      ['Titanhide', P('#a89a7a', '#d8ccaa', '#6a5e48', '#5fcde4', '#ffcc33')],
-      ['Starhide', P('#2a2a6a', '#5a5ac0', '#14143a', '#fff2a8', '#ffd84a')],
+      [tk('Rawhide'), P('#b08a60', '#d8b488', '#7a5a3a', '#5a3a28', '#8a8a8a')],
+      [tk('Tanned'), P('#8a5a34', '#b07a4a', '#5a3a20', '#c0c0c0', '#d95763')],
+      [tk('Studded'), P('#7a4a2a', '#a06a40', '#4a2e1c', '#d6e2ea', '#5b6ee1')],
+      [tk('Hardened'), P('#6a4a3a', '#8a6a54', '#3a2a20', '#c8a040', '#d95763')],
+      [tk('Wolfhide'), P('#8a8a90', '#b8b8c0', '#55555e', '#7a4a2a', '#5fcde4')],
+      [tk('Bearhide'), P('#5a3a28', '#7a5438', '#34201a', '#e0b040', '#99e550')],
+      [tk('Drakehide'), P('#3a8a5a', '#6ab87a', '#1e5034', '#c8a040', '#ffcc33')],
+      [tk('Wyvernhide'), P('#5a6a9a', '#8a9ac8', '#2e3a5e', '#d6e2ea', '#d95763')],
+      [tk('Shadowhide'), P('#2e2a3a', '#4e4a5e', '#16141e', '#a050ff', '#ff50ff')],
+      [tk('Dragonhide'), P('#a02a2a', '#d05a3a', '#5a1414', '#f2c94c', '#ffcc33')],
+      [tk('Titanhide'), P('#a89a7a', '#d8ccaa', '#6a5e48', '#5fcde4', '#ffcc33')],
+      [tk('Starhide'), P('#2a2a6a', '#5a5ac0', '#14143a', '#fff2a8', '#ffd84a')],
     ],
   ),
   // orbs are drawn entirely in the gem color, so every arcane tier gets its own saturated gem
   arcane: tiers(
     [1, 3, 7, 12, 18, 25, 33, 42, 53, 66, 80, 98, 120],
     [
-      ['Copper', P('#d08a5a', '#f0b888', '#8a5030', '#5a3020', '#5fcde4')],
-      ['Bronze', P('#c89a4a', '#ecc47a', '#86602a', '#5a3a20', '#d95763')],
-      ['Silver', P('#d6dee8', '#ffffff', '#8a98aa', '#5b6ee1', '#8a9aff')],
-      ['Gold', { ...MATERIALS.gold, gem: '#e8508a' }],
-      ['Jade', P('#5ab88a', '#9ae8c0', '#2a7a5a', '#e0b040', '#6ad89a')],
-      ['Moonstone', P('#c8d4f0', '#f4f8ff', '#8090c0', '#d6e2ea', '#a0c8ff')],
-      ['Sapphire', P('#3a5ad0', '#7a9aff', '#1e2a7a', '#e0b040', '#3a6aff')],
-      ['Ruby', P('#c82a4a', '#ff6a7a', '#7a1428', '#f2c94c', '#ff3a5a')],
-      ['Emerald', P('#2aa85a', '#6ae890', '#145a30', '#f2c94c', '#2ad070')],
-      ['Diamond', P('#e8f8ff', '#ffffff', '#9ac0d8', '#d6e2ea', '#5ff0f0')],
-      ['Starstone', P('#4a3a9a', '#8a7ae0', '#241a5a', '#fff2a8', '#ffd84a')],
-      ['Voidglass', P('#2a1a3a', '#6a3aa0', '#120a1e', '#ff50ff', '#a050ff')],
-      ['Aetherite', P('#5ff0d0', '#d0fff4', '#2a8a7a', '#ff8ad0', '#40f0b8')],
+      [tk('Copper'), P('#d08a5a', '#f0b888', '#8a5030', '#5a3020', '#5fcde4')],
+      [tk('Bronze'), P('#c89a4a', '#ecc47a', '#86602a', '#5a3a20', '#d95763')],
+      [tk('Silver'), P('#d6dee8', '#ffffff', '#8a98aa', '#5b6ee1', '#8a9aff')],
+      [tk('Gold'), { ...MATERIALS.gold, gem: '#e8508a' }],
+      [tk('Jade'), P('#5ab88a', '#9ae8c0', '#2a7a5a', '#e0b040', '#6ad89a')],
+      [tk('Moonstone'), P('#c8d4f0', '#f4f8ff', '#8090c0', '#d6e2ea', '#a0c8ff')],
+      [tk('Sapphire'), P('#3a5ad0', '#7a9aff', '#1e2a7a', '#e0b040', '#3a6aff')],
+      [tk('Ruby'), P('#c82a4a', '#ff6a7a', '#7a1428', '#f2c94c', '#ff3a5a')],
+      [tk('Emerald'), P('#2aa85a', '#6ae890', '#145a30', '#f2c94c', '#2ad070')],
+      [tk('Diamond'), P('#e8f8ff', '#ffffff', '#9ac0d8', '#d6e2ea', '#5ff0f0')],
+      [tk('Starstone'), P('#4a3a9a', '#8a7ae0', '#241a5a', '#fff2a8', '#ffd84a')],
+      [tk('Voidglass'), P('#2a1a3a', '#6a3aa0', '#120a1e', '#ff50ff', '#a050ff')],
+      [tk('Aetherite'), P('#5ff0d0', '#d0fff4', '#2a8a7a', '#ff8ad0', '#40f0b8')],
     ],
   ),
 };
@@ -339,22 +342,22 @@ interface StarterDef {
 
 const STARTER_KITS: Record<ClassId, StarterDef[]> = {
   knight: [
-    { slot: 'weapon', base: 'sword', tier: 1, material: 'Iron', name: 'Iron Sword' },
-    { slot: 'offhand', base: 'shield', tier: 0, material: 'Wooden', name: 'Wooden Shield' },
+    { slot: 'weapon', base: 'sword', tier: 1, material: tk('Iron'), name: tk('Iron Sword') },
+    { slot: 'offhand', base: 'shield', tier: 0, material: tk('Wooden'), name: tk('Wooden Shield') },
   ],
   mage: [
-    { slot: 'weapon', base: 'staff', tier: 0, material: 'Wooden', name: 'Wooden Staff' },
-    { slot: 'head', base: 'hat', tier: 0, material: 'Cloth', name: 'Cloth Hat' },
+    { slot: 'weapon', base: 'staff', tier: 0, material: tk('Wooden'), name: tk('Wooden Staff') },
+    { slot: 'head', base: 'hat', tier: 0, material: tk('Cloth'), name: tk('Cloth Hat') },
   ],
   ranger: [
-    { slot: 'weapon', base: 'bow', tier: 0, material: 'Wooden', name: 'Wooden Bow' },
-    { slot: 'cape', base: 'cape', tier: 0, material: 'Cloth', name: 'Green Cloth Cape' },
+    { slot: 'weapon', base: 'bow', tier: 0, material: tk('Wooden'), name: tk('Wooden Bow') },
+    { slot: 'cape', base: 'cape', tier: 0, material: tk('Cloth'), name: tk('Green Cloth Cape') },
   ],
   rogue: [
-    { slot: 'weapon', base: 'dagger', tier: 2, material: 'Steel', name: 'Steel Dagger' },
-    { slot: 'head', base: 'hood', tier: 0, material: 'Cloth', name: 'Cloth Hood' },
+    { slot: 'weapon', base: 'dagger', tier: 2, material: tk('Steel'), name: tk('Steel Dagger') },
+    { slot: 'head', base: 'hood', tier: 0, material: tk('Cloth'), name: tk('Cloth Hood') },
   ],
-  berserker: [{ slot: 'weapon', base: 'axe', tier: 1, material: 'Iron', name: 'Iron Axe' }],
+  berserker: [{ slot: 'weapon', base: 'axe', tier: 1, material: tk('Iron'), name: tk('Iron Axe') }],
 };
 
 const capePalette = (c: string): MaterialPalette => ({ main: c, light: shade(c, 0.3), dark: shade(c, -0.3), trim: '#e0b040', gem: '#5fcde4' });
@@ -462,57 +465,83 @@ function rollAffixes(rng: Rng, slot: Slot, base: BaseId, ilvl: number, rarity: R
 
 // ---------------------------------------------------------------- names
 
+/** Puts `item` into a name template such as "Wise {item}" (English names are built from the same templates). */
+const fillItem = (template: string, item: string) => template.replace('{item}', () => item);
+
 const PREFIX: Record<StatId, string[]> = {
-  xp: ['Wise', 'Learned', 'Insightful'],
-  gold: ['Gilded', 'Golden', 'Prosperous'],
-  find: ['Seeking', 'Searching', 'Questing'],
-  crit: ['Keen', 'Sharp', 'Deadly'],
-  boss: ['Slaying', 'Giantbane', 'Titanic'],
-  luck: ['Lucky', 'Charmed', 'Fortunate'],
-  skill: ['Studious', 'Skilled', 'Masterful'],
-  potion: ['Brewing', 'Bubbling', 'Distilled'],
+  xp: [tk('Wise {item}'), tk('Learned {item}'), tk('Insightful {item}')],
+  gold: [tk('Gilded {item}'), tk('Golden {item}'), tk('Prosperous {item}')],
+  find: [tk('Seeking {item}'), tk('Searching {item}'), tk('Questing {item}')],
+  crit: [tk('Keen {item}'), tk('Sharp {item}'), tk('Deadly {item}')],
+  boss: [tk('Slaying {item}'), tk('Giantbane {item}'), tk('Titanic {item}')],
+  luck: [tk('Lucky {item}'), tk('Charmed {item}'), tk('Fortunate {item}')],
+  skill: [tk('Studious {item}'), tk('Skilled {item}'), tk('Masterful {item}')],
+  potion: [tk('Brewing {item}'), tk('Bubbling {item}'), tk('Distilled {item}')],
 };
 
 const SUFFIX: Record<StatId, string[]> = {
-  xp: ['Insight', 'Wisdom', 'the Scholar'],
-  gold: ['Plenty', 'Riches', 'the Merchant'],
-  find: ['Discovery', 'the Seeker', 'Finding'],
-  crit: ['Fury', 'Precision', 'the Hawk'],
-  boss: ['the Giant', 'Slaying', 'the Titan'],
-  luck: ['Fortune', 'the Clover', 'Chance'],
-  skill: ['Mastery', 'Practice', 'the Artisan'],
-  potion: ['Alchemy', 'the Brewer', 'Elixirs'],
+  xp: [tk('{item} of Insight'), tk('{item} of Wisdom'), tk('{item} of the Scholar')],
+  gold: [tk('{item} of Plenty'), tk('{item} of Riches'), tk('{item} of the Merchant')],
+  find: [tk('{item} of Discovery'), tk('{item} of the Seeker'), tk('{item} of Finding')],
+  crit: [tk('{item} of Fury'), tk('{item} of Precision'), tk('{item} of the Hawk')],
+  boss: [tk('{item} of the Giant'), tk('{item} of Slaying'), tk('{item} of the Titan')],
+  luck: [tk('{item} of Fortune'), tk('{item} of the Clover'), tk('{item} of Chance')],
+  skill: [tk('{item} of Mastery'), tk('{item} of Practice'), tk('{item} of the Artisan')],
+  potion: [tk('{item} of Alchemy'), tk('{item} of the Brewer'), tk('{item} of Elixirs')],
 };
 
 const OWNER_A = ['Grim', 'Thal', 'Mal', 'Vex', 'Kal', 'Bel', 'Os', 'Ruk', 'Zan', 'Ael', 'Dro', 'Fen', 'Ith', 'Sor', 'Ul', 'Var', 'Yr', 'Cor', 'Hal', 'Nim', 'Bram', 'Tov'];
 const OWNER_B = ['jaw', 'mir', 'wyn', 'rok', 'iel', 'eth', 'ra', 'vane', 'mund', 'os', 'ith', 'ash', 'ren', 'bek', 'tor', 'nar'];
-const OWNER_NOUN = ['Lament', 'Promise', 'Wrath', 'Embrace', 'Vigil', 'Folly', 'Requiem', 'Oath', 'Bane', 'Whisper', 'Reckoning', 'Hymn', 'Grudge', 'Mercy', 'Legacy', 'Gambit'];
+// "{owner}'s Lament": owners (made-up names) and compounds ("Starfall") are proper names and stay as they are
+const OWNER_NOUN = [
+  tk("{owner}'s Lament"), tk("{owner}'s Promise"), tk("{owner}'s Wrath"), tk("{owner}'s Embrace"), tk("{owner}'s Vigil"), tk("{owner}'s Folly"),
+  tk("{owner}'s Requiem"), tk("{owner}'s Oath"), tk("{owner}'s Bane"), tk("{owner}'s Whisper"), tk("{owner}'s Reckoning"), tk("{owner}'s Hymn"),
+  tk("{owner}'s Grudge"), tk("{owner}'s Mercy"), tk("{owner}'s Legacy"), tk("{owner}'s Gambit"),
+];
 const COMPOUND_A = ['Star', 'Dawn', 'Storm', 'Night', 'Frost', 'Ember', 'Moon', 'Doom', 'Soul', 'Dusk', 'Thunder', 'Gloom', 'Wild', 'Grave', 'Rune', 'Sky', 'Bright', 'Thorn'];
 const COMPOUND_B = ['fall', 'song', 'shard', 'fang', 'whisper', 'brand', 'heart', 'wake', 'call', 'spire', 'veil', 'crest', 'gleam', 'warden', 'bloom', 'reach', 'mark'];
 const EPITHET: Record<Slot, string[]> = {
-  weapon: ['Edge', 'Fang', 'Herald', 'Wrath', 'Bane', 'Talon'],
-  head: ['Crown', 'Ward', 'Gaze', 'Mind', 'Halo'],
-  body: ['Ward', 'Bulwark', 'Mantle', 'Shroud', 'Guardian'],
-  offhand: ['Ward', 'Codex', 'Eye', 'Bastion', 'Lantern'],
-  cape: ['Mantle', 'Shroud', 'Veil', 'Wings', 'Banner'],
-  trinket: ['Eye', 'Heart', 'Seal', 'Token', 'Sigil', 'Promise'],
+  weapon: [tk('Edge of {thing}'), tk('Fang of {thing}'), tk('Herald of {thing}'), tk('Wrath of {thing}'), tk('Bane of {thing}'), tk('Talon of {thing}')],
+  head: [tk('Crown of {thing}'), tk('Ward of {thing}'), tk('Gaze of {thing}'), tk('Mind of {thing}'), tk('Halo of {thing}')],
+  body: [tk('Ward of {thing}'), tk('Bulwark of {thing}'), tk('Mantle of {thing}'), tk('Shroud of {thing}'), tk('Guardian of {thing}')],
+  offhand: [tk('Ward of {thing}'), tk('Codex of {thing}'), tk('Eye of {thing}'), tk('Bastion of {thing}'), tk('Lantern of {thing}')],
+  cape: [tk('Mantle of {thing}'), tk('Shroud of {thing}'), tk('Veil of {thing}'), tk('Wings of {thing}'), tk('Banner of {thing}')],
+  trinket: [tk('Eye of {thing}'), tk('Heart of {thing}'), tk('Seal of {thing}'), tk('Token of {thing}'), tk('Sigil of {thing}'), tk('Promise of {thing}')],
 };
-const OF_THING = ['Dawn', 'the Void', 'Ages', 'Embers', 'the Deep', 'Kings', 'the Lost', 'Twilight', 'the Tides', 'Storms', 'the North', 'Echoes', 'Ash', 'the First Light', 'Ruin', 'Stars'];
-const ADJ = ['Weeping', 'Silent', 'Hollow', 'Burning', 'Frozen', 'Shattered', 'Eternal', 'Forgotten', 'Gilded', 'Restless', 'Howling', 'Radiant'];
+const OF_THING = [
+  tk('Dawn'), tk('the Void'), tk('Ages'), tk('Embers'), tk('the Deep'), tk('Kings'), tk('the Lost'), tk('Twilight'),
+  tk('the Tides'), tk('Storms'), tk('the North'), tk('Echoes'), tk('Ash'), tk('the First Light'), tk('Ruin'), tk('Stars'),
+];
+const ADJ = [
+  tk('Weeping'), tk('Silent'), tk('Hollow'), tk('Burning'), tk('Frozen'), tk('Shattered'),
+  tk('Eternal'), tk('Forgotten'), tk('Gilded'), tk('Restless'), tk('Howling'), tk('Radiant'),
+];
+const THE_ADJ_BASE = tk('The {adj} {base}');
+const COMPOUND_NAME = tk('{compound}, {name}');
+
+const fillOwner = (template: string, owner: string) => template.replace('{owner}', () => owner);
+const fillThing = (template: string, thing: string) => template.replace('{thing}', () => thing);
 
 /** Legendary and better: a one-of-a-kind name. */
 function uniqueName(rng: Rng, slot: Slot, base: BaseId): string {
   const owner = () => rng.pick(OWNER_A) + rng.pick(OWNER_B);
   const compound = () => rng.pick(COMPOUND_A) + rng.pick(COMPOUND_B);
   switch (rng.int(0, 3)) {
-    case 0:
-      return `${owner()}'s ${rng.pick(OWNER_NOUN)}`;
-    case 1:
-      return `${compound()}, ${rng.pick(EPITHET[slot])} of ${rng.pick(OF_THING)}`;
+    case 0: {
+      const o = owner();
+      return fillOwner(rng.pick(OWNER_NOUN), o);
+    }
+    case 1: {
+      const c = compound();
+      return `${c}, ${fillThing(rng.pick(EPITHET[slot]), rng.pick(OF_THING))}`;
+    }
     case 2:
       return `The ${rng.pick(ADJ)} ${baseName(base)}`;
-    default:
-      return `${compound()}, ${owner()}'s ${rng.pick(OWNER_NOUN)}`;
+    default: {
+      const c = compound();
+      const o = owner();
+      return `${c}, ${fillOwner(rng.pick(OWNER_NOUN), o)}`;
+    }
   }
 }
 
@@ -521,13 +550,103 @@ function affixName(rng: Rng, material: string, base: BaseId, affixes: Affix[]): 
   if (!affixes.length) return core;
   if (affixes.length === 1) {
     const s = affixes[0].stat;
-    return rng.chance(0.5) ? `${rng.pick(PREFIX[s])} ${core}` : `${core} of ${rng.pick(SUFFIX[s])}`;
+    return rng.chance(0.5) ? fillItem(rng.pick(PREFIX[s]), core) : fillItem(rng.pick(SUFFIX[s]), core);
   }
-  return `${rng.pick(PREFIX[affixes[0].stat])} ${core} of ${rng.pick(SUFFIX[affixes[1].stat])}`;
+  const prefixed = fillItem(rng.pick(PREFIX[affixes[0].stat]), core);
+  return fillItem(rng.pick(SUFFIX[affixes[1].stat]), prefixed);
 }
 
+// ----- names in the player's language: stored names are English, so they are taken apart and rebuilt
+
+const ROMAN_OR_NUMBER = /^(.+) ([IVXLCDM]+|\d+)$/;
+const ALL_PREFIXES = Object.values(PREFIX).flat();
+const ALL_SUFFIXES = Object.values(SUFFIX).flat();
+const ALL_EPITHETS = [...new Set(Object.values(EPITHET).flat())];
+
+/** A material name ("Iron", "Voidsteel II") in the player's language. */
+export function materialLabel(name: string): string {
+  const m = ROMAN_OR_NUMBER.exec(name);
+  return m ? t('{material} {numeral}', { material: t(m[1]), numeral: m[2] }) : t(name);
+}
+
+/** "{material} {base}" in the player's language. */
+const coreLabel = (material: string, base: BaseId) => t('{material} {base}', { material: materialLabel(material), base: t(baseName(base)) });
+
+/** English template filled with `value`, or null when `name` is not built from it. */
+function unfill(template: string, slot: string, name: string): string | null {
+  const [before, after] = template.split(`{${slot}}`);
+  return name.length > before.length + after.length && name.startsWith(before) && name.endsWith(after) ? name.slice(before.length, name.length - after.length) : null;
+}
+
+function translateOwnerName(name: string): string | null {
+  for (const tpl of OWNER_NOUN) {
+    const owner = unfill(tpl, 'owner', name);
+    if (owner !== null && !owner.includes(' ')) return t(tpl, { owner });
+  }
+  return null;
+}
+
+function translateAffixName(name: string, material: string, base: BaseId): string | null {
+  const core = `${material} ${baseName(base)}`;
+  const coreTr = coreLabel(material, base);
+  if (name === core) return coreTr;
+  const prefixed = (s: string): string | null => {
+    if (s === core) return coreTr;
+    for (const p of ALL_PREFIXES) if (fillItem(p, core) === s) return t(p, { item: coreTr });
+    return null;
+  };
+  const direct = prefixed(name);
+  if (direct !== null) return direct;
+  for (const suf of ALL_SUFFIXES) {
+    const inner = unfill(suf, 'item', name);
+    const innerTr = inner === null ? null : prefixed(inner);
+    if (innerTr !== null) return t(suf, { item: innerTr });
+  }
+  return null;
+}
+
+function translateUniqueName(name: string, base: BaseId): string | null {
+  const adj = ADJ.find((a) => name === `The ${a} ${baseName(base)}`);
+  if (adj) return t(THE_ADJ_BASE, { adj: t(adj), base: t(baseName(base)) });
+  const owned = translateOwnerName(name);
+  if (owned !== null) return owned;
+  const comma = name.indexOf(', ');
+  if (comma <= 0) return null;
+  const compound = name.slice(0, comma);
+  const rest = name.slice(comma + 2);
+  let restTr = translateOwnerName(rest);
+  if (restTr === null) {
+    for (const ep of ALL_EPITHETS) {
+      const thing = unfill(ep, 'thing', rest);
+      if (thing !== null && OF_THING.includes(thing)) {
+        restTr = t(ep, { thing: t(thing) });
+        break;
+      }
+    }
+  }
+  return restTr === null ? null : t(COMPOUND_NAME, { compound, name: restTr });
+}
+
+const nameCache = new Map<string, string>();
+
+/** A stored (English) item name in the player's language; names it can't take apart are shown as they are. */
+function translatedName(item: Pick<Item, 'name' | 'base' | 'material'> & Partial<Pick<Item, 'source'>>, name: string): string {
+  if (getLang() === 'en') return name;
+  if (t(name) !== name) return t(name); // starter kit names
+  const material = materialOf(item).name;
+  const key = `${getLang()}|${item.base}|${material}|${name}`;
+  const hit = nameCache.get(key);
+  if (hit !== undefined) return hit;
+  const out = translateAffixName(name, material, item.base) ?? translateUniqueName(name, item.base) ?? name;
+  if (nameCache.size > 512) nameCache.clear();
+  nameCache.set(key, out);
+  return out;
+}
+
+/** The item's name in the player's language, with its upgrade ("Iron Sword +2"). */
 export function itemDisplayName(item: Pick<Item, 'name' | 'base' | 'material' | 'upgrade'> & Partial<Pick<Item, 'source'>>): string {
-  const name = item.name?.trim() || `${materialOf(item).name} ${baseName(item.base)}`;
+  const stored = item.name?.trim();
+  const name = stored ? translatedName(item, stored) : coreLabel(materialOf(item).name, item.base);
   const u = upgradeOf(item);
   return u > 0 ? `${name} +${u}` : name;
 }

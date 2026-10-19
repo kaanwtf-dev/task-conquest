@@ -110,6 +110,8 @@ canvas.px {
   color: var(--accent);
   text-shadow: 2px 2px 0 var(--outline);
   text-transform: uppercase;
+  /* longer (Turkish) titles wrap; keep the lines apart */
+  line-height: 1.5;
 }
 
 .shadow-text {
@@ -1127,7 +1129,8 @@ canvas.px {
 }
 .opt span {
   max-width: 100%;
-  white-space: nowrap;
+  /* two-word names (Kertenkele Halkı) take a second line instead of being cut */
+  white-space: normal;
   text-align: center;
   line-height: 1.1;
   font-size: 12px;
@@ -1492,8 +1495,9 @@ canvas.px {
   display: flex;
   gap: 6px;
   margin: 14px 0 0;
-  overflow-x: auto;
-  scrollbar-width: none;
+  /* longer labels (Turkish) take a second row rather than hiding off the edge */
+  flex-wrap: wrap;
+  padding: 2px;
 }
 .subtab {
   appearance: none;

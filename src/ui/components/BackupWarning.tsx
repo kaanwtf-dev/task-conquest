@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store';
 import { sum } from '../../game/progression';
+import { t } from '../../i18n';
 
 const NAG_AGAIN_MS = 3 * 86_400_000;
 
@@ -44,15 +45,15 @@ export default function BackupWarning() {
         ⚠️
       </div>
       <div className="backup-warn-text">
-        <b>Your save is ONLY on this phone!!</b>
-        <span>Delete the app, clear your browser or lose your phone and your hero is gone forever. Back it up free, takes 30 seconds!</span>
+        <b>{t('Your save is ONLY on this phone!!')}</b>
+        <span>{t('Delete the app, clear your browser or lose your phone and your hero is gone forever. Back it up free, takes 30 seconds!')}</span>
       </div>
       <div className="backup-warn-actions">
         <button className="btn small" onClick={() => setTab('party')}>
-          Back up!
+          {t('Back up!')}
         </button>
         <button className="btn ghost small" onClick={() => update({ backupAskedAt: Date.now() })}>
-          Later
+          {t('Later')}
         </button>
       </div>
     </div>

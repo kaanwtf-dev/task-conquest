@@ -12,6 +12,7 @@ import { bossFor, bossReward, damageForTask } from '../game/bosses';
 import { achievementStatus } from '../game/achievements';
 import { THEME_BY_ID } from '../pixel/themes';
 import type { FxEvent } from './fx';
+import { t } from '../i18n';
 
 export interface RewardOutcome {
   hero: Hero;
@@ -67,8 +68,8 @@ export function achievementEvents(before: Hero, after: Hero): { events: FxEvent[
   const log: RewardOutcome['log'] = [];
   for (const s of achievementStatus(after, achievementCtx(after))) {
     if (s.tierReached > (a.get(s.id) ?? 0)) {
-      events.push({ type: 'achievement', name: s.name, tier: s.tierReached });
-      log.push({ kind: 'achievement', text: `Achievement: ${s.name} (tier ${s.tierReached}) — claim it on your Hero page!` });
+      events.push({ type: 'achievement', name: t(s.name), tier: s.tierReached });
+      log.push({ kind: 'achievement', text: t('Achievement: {name} (tier {tier}) — claim it on your Hero page!', { name: t(s.name), tier: s.tierReached }) });
     }
   }
   return { events, log };
@@ -160,7 +161,11 @@ export function taskRewards(p: {
   hero = { ...hero, savedDays: undeadSave(hero, now, cfg) };
   hero = { ...hero, bestStreak: Math.max(before.bestStreak ?? 0, streak(streakDays(hero), now, cfg)) };
   events.push({ type: 'kill', monster, xp, gold, crit, theme: theme.id, listId: list.id, difficulty: task.difficulty });
-  log.push({ kind: 'kill', text: `Slew a Lv${level} ${monster.name} — "${task.title}" (+${xp} XP, +${gold}g${crit ? ', CRIT!' : ''})` });
+  const slain = { level, monster: t(monster.name), title: task.title, xp, gold };
+  log.push({
+    kind: 'kill',
+    text: crit ? t('Slew a Lv{level} {monster} — "{title}" (+{xp} XP, +{gold}g, CRIT!)', slain) : t('Slew a Lv{level} {monster} — "{title}" (+{xp} XP, +{gold}g)', slain),
+  });
 
   // ---- loot ----
   const drop = scale < 1 ? {} as ReturnType<typeof rollDrop> : rollDrop({ seed: (seed ^ 0x9e3779b9) >>> 0, level, stats, elite: monster.elite, now });
@@ -170,12 +175,13 @@ export function taskRewards(p: {
     hero = { ...r.hero, itemsFound: inc(r.hero.itemsFound, dev, 1) };
     if (r.kept) newItems.push(drop.item);
     events.push({ type: 'loot', item: drop.item, soldFor: r.kept ? undefined : r.soldFor });
-    log.push({ kind: 'loot', text: r.kept ? `Found ${itemDisplayName(drop.item)}!` : `Bag full — sold ${itemDisplayName(drop.item)} for ${r.soldFor}g.` });
+    const item = itemDisplayName(drop.item);
+    log.push({ kind: 'loot', text: r.kept ? t('Found {item}!', { item }) : t('Bag full — sold {item} for {gold}g.', { item, gold: r.soldFor }) });
   }
   if (drop.potion) {
     potions.push(drop.potion);
     events.push({ type: 'loot', potion: drop.potion });
-    log.push({ kind: 'loot', text: `Found ${potionName(drop.potion.potion, drop.potion.tier)}.` });
+    log.push({ kind: 'loot', text: t('Found {potion}.', { potion: potionName(drop.potion.potion, drop.potion.tier) }) });
   }
 
   // ---- boss ----
@@ -196,8 +202,12 @@ export function taskRewards(p: {
     hero = { ...r.hero, itemsFound: inc(r.hero.itemsFound, dev, 1) };
     if (r.kept) newItems.push(chest);
     events.push({ type: 'bossHit', damage: dmg, hp: 0, maxHp: boss.maxHp, crit });
-    events.push({ type: 'bossDefeated', name: boss.name, index: boss.index, gold: reward.gold, item: chest });
-    log.push({ kind: 'boss', text: `BOSS DEFEATED: ${boss.name}! +${reward.gold}g and ${itemDisplayName(chest)}${r.kept ? '' : ` (sold for ${r.soldFor}g, bag full)`}.` });
+    events.push({ type: 'bossDefeated', name: t(boss.name), index: boss.index, gold: reward.gold, item: chest });
+    const won = { boss: t(boss.name), gold: reward.gold, item: itemDisplayName(chest), sold: r.soldFor };
+    log.push({
+      kind: 'boss',
+      text: r.kept ? t('BOSS DEFEATED: {boss}! +{gold}g and {item}.', won) : t('BOSS DEFEATED: {boss}! +{gold}g and {item} (sold for {sold}g, bag full).', won),
+    });
   } else {
     hero = { ...hero, bossDamage: inc(hero.bossDamage, dev, dmg) };
     events.push({ type: 'bossHit', damage: dmg, hp: boss.maxHp - dealt, maxHp: boss.maxHp, crit });
@@ -207,13 +217,13 @@ export function taskRewards(p: {
   const after = heroLevel(hero).level;
   if (after > level) {
     events.push({ type: 'levelUp', level: after });
-    log.push({ kind: 'level', text: `LEVEL UP! ${hero.name} reached level ${after}.` });
+    log.push({ kind: 'level', text: t('LEVEL UP! {name} reached level {level}.', { name: hero.name, level: after }) });
   }
   const skillAfter = heroSkill(hero, list.skill).level;
   if (skillAfter > skillBefore) {
     const sk = SKILL_BY_ID[list.skill];
-    events.push({ type: 'skillUp', skill: sk.name, level: skillAfter });
-    log.push({ kind: 'skill', text: `${sk.name} increased to ${skillAfter}.` });
+    events.push({ type: 'skillUp', skill: t(sk.name), level: skillAfter });
+    log.push({ kind: 'skill', text: t('{skill} increased to {level}.', { skill: t(sk.name), level: skillAfter }) });
   }
 
   const ach = achievementEvents(before, hero);
@@ -235,7 +245,12 @@ export function questChestRewards(p: { hero: Hero; items: Record<string, Item>; 
   hero = { ...r.hero, itemsFound: inc(r.hero.itemsFound, dev, 1) };
   const events: FxEvent[] = [{ type: 'questComplete', listName: list.name, item: chest, gold }];
   const log: RewardOutcome['log'] = [
-    { kind: 'quest', text: `QUEST COMPLETE: ${list.name}! Chest: ${gold}g and ${itemDisplayName(chest)}${r.kept ? '' : ` (sold for ${r.soldFor}g, bag full)`}.` },
+    {
+      kind: 'quest',
+      text: r.kept
+        ? t('QUEST COMPLETE: {list}! Chest: {gold}g and {item}.', { list: list.name, gold, item: itemDisplayName(chest) })
+        : t('QUEST COMPLETE: {list}! Chest: {gold}g and {item} (sold for {sold}g, bag full).', { list: list.name, gold, item: itemDisplayName(chest), sold: r.soldFor }),
+    },
   ];
   const ach = achievementEvents(before, hero);
   return { hero, items: r.kept ? [chest] : [], potions: [], events: [...events, ...ach.events], log: [...log, ...ach.log] };
