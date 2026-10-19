@@ -10,6 +10,7 @@ import { partyRoster } from '../partyRoster';
 import type { ClassId, TaskList } from '../../core/types';
 import { PxImg, Sheet, themeStyle } from '../components/common';
 import { Field } from './TaskEditSheet';
+import Leaderboard from '../components/Leaderboard';
 import { sfx } from '../../audio/sfx';
 
 export default function PartyScreen() {
@@ -23,6 +24,7 @@ export default function PartyScreen() {
           instantly, and whoever completes a quest gets the XP.
         </p>
       </div>
+      {sync.status !== 'off' && sync.userId && <Leaderboard />}
       {sync.status === 'off' ? <SetupCard /> : sync.userId ? <SignedIn /> : <AuthCard />}
       {sync.conflict && <ConflictSheet />}
     </div>

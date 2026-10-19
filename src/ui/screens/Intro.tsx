@@ -21,6 +21,12 @@ interface Card {
   art: () => React.ReactNode;
 }
 
+/** Running as the Home Screen app (not in a browser tab)? */
+function installed(): boolean {
+  if (typeof window === 'undefined') return true;
+  return matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+
 export default function Intro() {
   const hero = useStore((s) => s.hero);
   const items = useStore((s) => s.items);
@@ -129,6 +135,44 @@ export default function Intro() {
         </div>
       ),
     },
+    // only while it runs in a browser tab: the Home Screen app is what gets reminders and a full screen
+    ...(installed()
+      ? []
+      : [
+          {
+            title: 'Put it on your Home Screen',
+            body: 'It then opens full screen like a real app, works offline, and can send you reminders.',
+            art: () => (
+              <div className="intro-install">
+                <div className="intro-step">
+                  <b>iPhone / iPad</b> (Safari)
+                  <ol>
+                    <li>
+                      Tap <span className="intro-key">Share ⇧</span>
+                    </li>
+                    <li>
+                      Tap <span className="intro-key">Add to Home Screen</span>
+                    </li>
+                    <li>
+                      Tap <span className="intro-key">Add</span>
+                    </li>
+                  </ol>
+                </div>
+                <div className="intro-step">
+                  <b>Android</b> (Chrome)
+                  <ol>
+                    <li>
+                      Tap the <span className="intro-key">⋮</span> menu
+                    </li>
+                    <li>
+                      Tap <span className="intro-key">Add to Home screen</span> or <span className="intro-key">Install app</span>
+                    </li>
+                  </ol>
+                </div>
+              </div>
+            ),
+          },
+        ]),
   ];
   const last = i === cards.length - 1;
   const card = cards[i];

@@ -26,7 +26,7 @@ jobs:
       - run: npm ci
 
       - name: Typecheck
-        run: npx tsc -b
+        run: npx tsc -b && npx tsc -p scripts/push
 
       - name: Test
         run: npm test

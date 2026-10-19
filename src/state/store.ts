@@ -6,9 +6,11 @@ import type {
 import type { TimeCfg } from '../core/time';
 import type { Appearance } from '../pixel/sprites/hero';
 import type { ThemeId } from '../pixel/themes';
-import { dateKey, isActiveToday, isDone, parseDateKey, periodKey, todayKey } from '../core/time';
-import { heroLevel, sum } from '../game/progression';
+import { dateKey, isActiveToday, isDone, parseDateKey, periodKey, streak, todayKey } from '../core/time';
+import { baseXp, heroGold, heroLevel, sum } from '../game/progression';
 import { guessAisle } from '../pixel/keywords';
+import { guessDifficulty } from '../game/difficulty';
+import { missPenalty, missedWindow } from '../game/deadlines';
 import { hashStr } from '../core/rng';
 import { itemDisplayName, sellPrice, starterItems, upgradeCost } from '../game/loot';
 import { makeBuff, potionName, potionStackId } from '../game/potions';
@@ -133,6 +135,17 @@ export interface State {
    */
   unlistItem(id: string): { forgot: boolean; undo: () => void } | null;
   toggleTask(id: string): void;
+  /**
+   * Do a repeating task again within the same period (a second workout, brushing again): pays half, then
+   * less each time, never loot, at most REPEAT_MAX extra times per period. Returns false when it can't.
+   */
+  repeatTask(id: string): boolean;
+  /** Counts missed windows of time-limited repeating quests (with stakes) and applies their penalty. */
+  checkDeadlines(): void;
+  /** The answer to "did you do it?" for a one-off quest past its deadline. */
+  answerDeadline(id: string, answer: 'done' | 'missed' | 'later'): void;
+  /** Counts one miss of a quest with stakes (once per window key) and takes its gold. */
+  punishMiss(id: string, key: string): void;
   restockStaples(listId: string): number;
   reorderTasks(orderedIds: string[]): void;
   reorderLists(orderedIds: string[]): void;
@@ -147,6 +160,8 @@ export interface State {
   usePotion(stackId: string): boolean;
   buyOffer(offer: ShopOffer): boolean;
   claimAchievements(): { gold: number; newTitles: string[] };
+  /** Daily check-in: the first time the app is opened on a (logical) day pays a small reward. */
+  checkIn(): void;
   setTitle(title: string | undefined): void;
   updateHero(patch: Partial<Pick<Hero, 'name' | 'appearance' | 'capeDye'>>): void;
   exportData(): string;
@@ -155,6 +170,16 @@ export interface State {
 }
 
 const now = () => Date.now();
+
+/** Doing a done repeating task again: what each extra time pays (half, then less), and how many are allowed. */
+export const REPEAT_SCALE = [0.5, 0.35, 0.25, 0.15, 0.1];
+export const REPEAT_MAX = REPEAT_SCALE.length;
+
+const aisleKey = (title: string) => title.trim().toLowerCase();
+/** The category an item goes in: where the player last put it by hand, else a guess from its name. */
+function aisleOf(title: string, settings: Settings): string {
+  return settings.aisleMemory?.[aisleKey(title)] ?? guessAisle(title);
+}
 
 function seedLists(): { lists: Record<string, TaskList>; tasks: Record<string, Task> } {
   const t = now();
@@ -323,10 +348,10 @@ export const useStore = create<State>()(
           const t = now();
           const order = Math.min(0, ...Object.values(get().tasks).filter((x) => x.listId === listId && !x.deleted).map((x) => x.order)) - 1;
           const task: Task = {
-            id: uid(), listId, title: clean, difficulty: list.type === 'supply' ? 0 : 2,
+            id: uid(), listId, title: clean, difficulty: list.type === 'supply' ? 0 : guessDifficulty(clean, get().settings.difficultyMemory),
             repeat: LIST_TYPE_INFO[list.type].repeat, order, createdAt: t, updatedAt: t, timesDone: 0,
             createdBy: get().hero?.name,
-            ...(list.type === 'supply' ? { aisle: guessAisle(clean) } : {}),
+            ...(list.type === 'supply' ? { aisle: aisleOf(clean, get().settings) } : {}),
             ...extra,
           };
           set((s) => ({ tasks: { ...s.tasks, [task.id]: task } }));
@@ -342,6 +367,20 @@ export const useStore = create<State>()(
             full = { ...remapPeriod(cur, cur.repeat, cfg, patch.repeat, cfg, now()), ...patch };
           }
           set((s) => ({ tasks: { ...s.tasks, [id]: { ...s.tasks[id], ...full, updatedAt: now() } } }));
+          // a difficulty set by hand: the next quest with this name starts there instead of the guess
+          if (patch.difficulty !== undefined && get().lists[cur.listId]?.type !== 'supply') {
+            const memory = { ...get().settings.difficultyMemory, [aisleKey(patch.title ?? cur.title)]: patch.difficulty };
+            const keys = Object.keys(memory);
+            if (keys.length > 500) for (const k of keys.slice(0, keys.length - 500)) delete memory[k];
+            get().updateSettings({ difficultyMemory: memory });
+          }
+          // a grocery moved to another category by hand: remember it for next time (and for its new name)
+          if (patch.aisle && get().lists[cur.listId]?.type === 'supply') {
+            const memory = { ...get().settings.aisleMemory, [aisleKey(patch.title ?? cur.title)]: patch.aisle };
+            const keys = Object.keys(memory);
+            if (keys.length > 500) for (const k of keys.slice(0, keys.length - 500)) delete memory[k];
+            get().updateSettings({ aisleMemory: memory });
+          }
         },
 
         deleteTask(id) {
@@ -387,7 +426,8 @@ export const useStore = create<State>()(
           // supply items can be bought again any time but pay out at most once per logical day
           const rewardKey = list?.type === 'supply' ? `s${todayKey(t, cfg)}` : pk;
           const alreadyRewarded = task.rewardedFor === rewardKey;
-          s.updateTask(id, { doneFor: pk, rewardedFor: rewardKey, doneAt: t, timesDone: task.timesDone + 1, doneBy: hero.name });
+          s.updateTask(id, { doneFor: pk, rewardedFor: rewardKey, doneAt: t, timesDone: task.timesDone + 1, doneBy: hero.name, ...(task.misses ? { misses: 0 } : {}),
+            ...(task.deadline && !task.deadlineOutcome ? { deadlineOutcome: t <= task.deadline ? 'done' as const : undefined } : {}) });
           if (alreadyRewarded || !list) return;
 
           const seed = hashStr(`${id}:${pk}:${t}:${s.deviceId}`);
@@ -403,6 +443,69 @@ export const useStore = create<State>()(
               apply(questChestRewards({ hero: st.hero!, items: st.items, list, dev: st.deviceId, now: t, seed: hashStr(`chest:${list.id}:${pk}:${t}:${st.deviceId}`) }));
             }
           }
+        },
+
+        checkDeadlines() {
+          const s = get();
+          if (!s.hero) return;
+          const t = now();
+          for (const task of Object.values(s.tasks)) {
+            const list = s.lists[task.listId];
+            // party lists: nobody's hero is punished for a quest the whole party shares
+            if (!list || list.deleted || list.shared || list.type === 'supply') continue;
+            const key = missedWindow(task, t, s.settings);
+            if (key) get().punishMiss(task.id, key);
+          }
+        },
+
+        punishMiss(id, key) {
+          const s = get();
+          const task = s.tasks[id];
+          const hero = s.hero;
+          if (!task || !hero || !task.stakes || task.missedFor === key) return;
+          const misses = (task.misses ?? 0) + 1;
+          const total = (task.missTotal ?? 0) + 1;
+          s.updateTask(id, { missedFor: key, misses, missTotal: total });
+          const gold = missPenalty(heroGold(hero), task.stakes, misses, heroLevel(hero).level);
+          if (gold > 0) set({ hero: { ...hero, goldSpent: inc(hero.goldSpent, s.deviceId, gold), updatedAt: now() } });
+          fx.emit({ type: 'missed', title: task.title, gold, misses, total, stakes: task.stakes });
+          log('quest', `Missed "${task.title}"${gold ? ` and lost ${gold}g` : ''} (${misses} in a row).`);
+        },
+
+        answerDeadline(id, answer) {
+          const s = get();
+          const task = s.tasks[id];
+          if (!task || task.deleted) return;
+          const t = now();
+          if (answer === 'done') {
+            s.updateTask(id, { deadlineOutcome: 'done', askedAt: t });
+            if (!task.doneFor) s.toggleTask(id);
+          } else if (answer === 'missed') {
+            s.updateTask(id, { deadlineOutcome: 'missed', askedAt: t });
+            if (task.stakes) get().punishMiss(id, 'deadline');
+          } else {
+            // more time: a day from now; a must-do quest still pays for being late
+            if (task.stakes === 'must' && task.missedFor !== 'deadline') get().punishMiss(id, 'deadline');
+            s.updateTask(id, { deadline: t + 86_400_000, deadlineSetAt: t, askedAt: t });
+          }
+        },
+
+        repeatTask(id) {
+          const s = get();
+          const task = s.tasks[id];
+          const hero = s.hero;
+          const list = task ? s.lists[task.listId] : undefined;
+          if (!task || task.deleted || !hero || !list || list.type === 'supply' || task.repeat.kind === 'none') return false;
+          const cfg = s.settings;
+          const t = now();
+          if (!isDone(task, t, cfg)) return false;
+          const pk = periodKey(task.repeat, t, cfg);
+          const n = task.again?.period === pk ? task.again.n : 0;
+          if (n >= REPEAT_MAX) return false;
+          s.updateTask(id, { again: { period: pk, n: n + 1 }, doneAt: t, timesDone: task.timesDone + 1, doneBy: hero.name });
+          const seed = hashStr(`${id}:${pk}:again${n}:${t}:${s.deviceId}`);
+          apply(taskRewards({ hero, items: s.items, task, list, dev: s.deviceId, now: t, seed, cfg, scale: REPEAT_SCALE[n] }));
+          return true;
         },
 
         restockStaples(listId) {
@@ -444,7 +547,7 @@ export const useStore = create<State>()(
           if (!task || !list || task.listId === listId) return;
           const order = Math.min(0, ...Object.values(get().tasks).filter((x) => x.listId === listId && !x.deleted).map((x) => x.order)) - 1;
           const patch: Partial<Task> = { listId, order };
-          if (list.type === 'supply') patch.aisle = task.aisle ?? guessAisle(task.title);
+          if (list.type === 'supply') patch.aisle = task.aisle ?? aisleOf(task.title, get().settings);
           if (from?.shared || list.shared) {
             // crossing a sharing boundary: party members must see it disappear, so move = copy + tombstone
             const t = now();
@@ -605,6 +708,29 @@ export const useStore = create<State>()(
           return true;
         },
 
+        checkIn() {
+          const s = get();
+          const hero = s.hero;
+          if (!hero) return;
+          const t = now();
+          const today = todayKey(t, s.settings);
+          const days = hero.loginDays ?? [];
+          if (days.includes(today)) return;
+          const loginDays = [...days, today].sort().slice(-400);
+          const run = streak(loginDays, t, s.settings);
+          const level = heroLevel(hero).level;
+          // a little for showing up, more for a run of days, double every 7th day
+          const bonus = run % 7 === 0;
+          const mult = (1 + Math.min(run, 10) * 0.2) * (bonus ? 2 : 1);
+          const gold = Math.round((10 + level * 2) * mult);
+          const xp = Math.round(baseXp(level) * mult);
+          const after = { ...hero, loginDays, xp: inc(hero.xp, s.deviceId, xp), gold: inc(hero.gold, s.deviceId, gold), updatedAt: t };
+          set({ hero: after });
+          fx.emit({ type: 'checkIn', day: run, gold, xp, bonus });
+          const lv = heroLevel(after).level;
+          if (lv > level) fx.emit({ type: 'levelUp', level: lv });
+        },
+
         claimAchievements() {
           const hero = get().hero;
           if (!hero) return { gold: 0, newTitles: [] };
@@ -698,7 +824,16 @@ export const useStore = create<State>()(
               tasks: restore(cur.tasks, d.tasks, (tk) => tk.listId),
               items: restore(cur.items, d.items),
               potions: restore(cur.potions, d.potions),
-              settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) }, log: Array.isArray(d.log) ? d.log : [], activeListId: first?.id ?? null,
+              // reminders belong to this device and its account, not to the save being restored
+              settings: {
+                ...DEFAULT_SETTINGS,
+                ...(d.settings ?? {}),
+                pushAccount: cur.settings.pushAccount,
+                pushAskedAt: cur.settings.pushAskedAt,
+                push: cur.settings.push,
+              },
+              log: Array.isArray(d.log) ? d.log : [],
+              activeListId: first?.id ?? null,
             });
             return true;
           } catch {

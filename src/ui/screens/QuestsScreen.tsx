@@ -19,12 +19,15 @@ import { iconFor } from '../../pixel/iconGen';
 import { AISLES } from '../../pixel/keywords';
 import { SceneBanner, Stars, PxImg, Ui, useNow, useMedia, themeStyle } from '../components/common';
 import { markTap, haptic } from '../components/Effects';
+import { fx } from '../../state/fx';
 import { sfx, unlockAudio } from '../../audio/sfx';
 import type { Task, TaskList } from '../../core/types';
 import TaskEditSheet from './TaskEditSheet';
+import { WARN_MS, leftLabel, timeLeft, windowOf } from '../../game/deadlines';
 import { todaySections } from '../../state/today';
 import BossBar from '../components/BossBar';
 import PartyStrip from '../components/PartyStrip';
+import { PushInvite } from '../components/Reminders';
 import { ListSheet } from './OtherScreens';
 import { takeOffList } from '../groceries';
 
@@ -81,6 +84,7 @@ export default function QuestsScreen() {
       {list.shared && <PartyStrip list={list} />}
 
       <QuickAdd list={list} />
+      <PushInvite />
 
       {list.type === 'supply' ? (
         <SupplyView list={list} tasks={tasks} onEdit={setEditTask} />
@@ -140,6 +144,7 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
         }
         dueToday
       />
+      <PushInvite />
       {overdue.length + dueToday.length + routine.length + week.length === 0 && (
         <div className="win tasks">
           <div className="empty">Nothing due today. Go touch some grass, adventurer.</div>
@@ -266,8 +271,10 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
   const shared = useStore((s) => !!s.lists[task.listId]?.shared);
   const d = DIFFICULTY[task.difficulty];
   const rl = repeatLabel(task.repeat);
+  const timed = !done && !inactive && !!(task.deadline || task.byTime || task.stakes) && !(task.repeat.kind === 'none' && !task.deadline);
   return (
     <>
+      {timed && <TimeBar task={task} />}
       <button
         className={`check ${done ? 'on' : ''}`}
         aria-label={done ? `Mark ${task.title} not done` : `Complete ${task.title}`}
@@ -299,7 +306,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
       <PxImg className="ticon" src={iconFor(task.title, task.icon)} size={32} />
       <div className="tmain">
         <div className="ttitle">{task.title}</div>
-        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy)) && (
+        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy) || timed || !!task.misses) && (
           <div className="tmeta">
             {listName && <span className="tlist">{listName}</span>}
             {shared && done && task.doneBy && <span className="tlist">✓ {task.doneBy}</span>}
@@ -315,15 +322,74 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
               ) : (
                 <span>Due {task.due}</span>
               ))}
+            {timed && <TimeLeft task={task} />}
+            {!done && !!task.misses && <span className="overdue">missed {task.misses}×</span>}
             {task.notes && <span>✎</span>}
             {inactive && <span>Not today</span>}
           </div>
         )}
       </div>
       {task.difficulty > 0 && <Stars n={d.stars} />}
+      {done && task.repeat.kind !== 'none' && <AgainButton task={task} />}
     </>
   );
 });
+
+/** The countdown behind a time-limited quest: full when the window opens, empty at the deadline. */
+function TimeBar({ task }: { task: Task }) {
+  const now = useNow(30000);
+  const cfg = useStore((s) => s.settings);
+  const f = timeLeft(task, now, cfg);
+  if (f === null) return null;
+  return <span className={`tbar ${f === 0 ? 'late' : ''}`} style={{ '--left': f } as React.CSSProperties} aria-hidden />;
+}
+
+function TimeLeft({ task }: { task: Task }) {
+  const now = useNow(30000);
+  const cfg = useStore((s) => s.settings);
+  const label = leftLabel(task, now, cfg);
+  if (!label) return null;
+  const late = label === 'time is up';
+  const soon = !late && (windowOf(task, now, cfg)?.end ?? Infinity) - now < WARN_MS;
+  return (
+    <span className={late || soon ? 'overdue' : ''}>
+      {task.stakes === 'must' ? '⚠ ' : '⏳ '}
+      {label}
+    </span>
+  );
+}
+
+/** On a finished repeating quest: do it once more (another workout, brushing again) for a smaller reward. */
+function AgainButton({ task }: { task: Task }) {
+  const repeat = useStore((s) => s.repeatTask);
+  const supply = useStore((s) => s.lists[task.listId]?.type === 'supply');
+  const sfxOn = useStore((s) => s.settings.sfx > 0);
+  const haptics = useStore((s) => s.settings.haptics);
+  if (supply) return null;
+  const extra = task.again && task.again.period === task.doneFor ? task.again.n : 0;
+  return (
+    <button
+      className="again"
+      aria-label={`Do ${task.title} again`}
+      title="Did it again? Smaller reward each time"
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        unlockAudio();
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        markTap(r.left, r.top);
+        if (repeat(task.id)) {
+          if (sfxOn) sfx.check();
+          if (haptics) haptic();
+        } else fx.emit({ type: 'toast', text: 'That will do for now', small: 'Come back when it resets.' });
+      }}
+    >
+      +1{extra > 0 && <span className="again-n">×{extra + 1}</span>}
+    </button>
+  );
+}
 
 const SortableRow = memo(function SortableRow(props: Omit<RowProps, 'sortable'>) {
   const sortable = useSortable({ id: props.task.id });

@@ -68,6 +68,25 @@ export interface Task extends Meta {
   // supply-list extras
   qty?: string;
   aisle?: string;
+  // time-sensitive quests (game/deadlines.ts)
+  /** one-off quests: must be done by this moment (ms) */
+  deadline?: number;
+  /** when the deadline was set (start of the countdown bar) */
+  deadlineSetAt?: number;
+  /** repeating quests: must be done by this time of day ("HH:MM") */
+  byTime?: string;
+  /** what missing it costs: a little (flexible) or more (must do); none when unset */
+  stakes?: 'flexible' | 'must';
+  /** the last missed window that was counted (period key, or 'deadline') */
+  missedFor?: string;
+  /** misses in a row (reset by doing it) and ever */
+  misses?: number;
+  missTotal?: number;
+  /** one-off past its deadline: when we last asked "did you do it?", and the answer */
+  askedAt?: number;
+  deadlineOutcome?: 'done' | 'missed';
+  /** extra completions of a repeating task within one period: { period key, count } */
+  again?: { period: string; n: number };
   staple?: boolean;
 }
 
@@ -167,6 +186,7 @@ export interface Hero extends Meta {
   savedDays: string[]; // days covered by a streak save / undead perk
   capeDye?: string; // purchased dye overriding the equipped cape color
   bestStreak?: number; // longest streak ever (day history is capped, this is not)
+  loginDays?: string[]; // logical days the app was opened (daily check-in reward), last 400
 }
 
 /** Combined effective stats (after soft caps) derived from equipped gear + race/class. */
@@ -200,6 +220,19 @@ export interface Settings {
   introSeen?: boolean;
   /** Reward pop-ups stay until cleared (default), or hide by themselves after a few seconds. */
   popups?: 'stay' | 'auto';
+  /** Reminder notifications: when they go out and which kinds are off (on/off is the device's subscription). */
+  push?: { morningHour: number; eveningHour: number; off: ('plan' | 'evening' | 'comeback' | 'party' | 'deadline')[] };
+  /** When the in-app "want reminders?" card was last answered with Not now (or the system prompt refused). */
+  pushAskedAt?: number;
+  /**
+   * The account that turned reminders on here (and has not turned them off or signed out): while it is
+   * signed in, a subscription the system dropped is quietly renewed. Another account never inherits it.
+   */
+  pushAccount?: string;
+  /** Grocery categories the player picked by hand, by item name (lower case): next time it goes there. */
+  aisleMemory?: Record<string, string>;
+  /** Difficulties the player set by hand, by quest name (lower case): used instead of the automatic guess. */
+  difficultyMemory?: Record<string, number>;
 }
 
 export interface HeroDock {

@@ -30,6 +30,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,woff,woff2,png,svg,webmanifest}'],
+        // reminder notifications (public/push-sw.js): shown on push, open the app when tapped
+        importScripts: ['push-sw.js'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
       },

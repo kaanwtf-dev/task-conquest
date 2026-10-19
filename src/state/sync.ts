@@ -8,7 +8,9 @@ import { heroLevel } from '../game/progression';
 import { getClient, getSyncConfig, getUser, onAuthChange, signOut } from '../sync/supabase';
 import { SyncEngine } from '../sync/engine';
 import { SupabaseRemote } from '../sync/supabase';
-import { joinList, leaveList, upsertProfile } from '../sync/party';
+import { joinList, leaveList, logPoints, upsertProfile } from '../sync/party';
+import { dayPoints } from '../game/leaderboard';
+import { todayKey } from '../core/time';
 import type { LocalAdapter, LocalSnapshot } from '../sync/types';
 
 export type SyncStatus = 'off' | 'signed-out' | 'idle' | 'syncing' | 'offline' | 'error' | 'conflict';
@@ -148,6 +150,28 @@ async function hushed<T>(fn: () => Promise<T>): Promise<T> {
   } finally {
     quiet--;
   }
+}
+
+/** Leaderboard: today's points (and yesterday's, which can still change just after midnight) once they change. */
+let pointsTimer: number | undefined;
+const reported = new Map<string, number>();
+function reportPoints() {
+  if (!useSync.getState().userId) return;
+  clearTimeout(pointsTimer);
+  pointsTimer = window.setTimeout(() => {
+    const s = useStore.getState();
+    if (!s.hero) return;
+    const now = Date.now();
+    for (const day of [todayKey(now - 86_400_000, s.settings), todayKey(now, s.settings)]) {
+      const pts = dayPoints(s.hero, s.lists, s.tasks, day, s.settings);
+      const key = `${useSync.getState().userId}:${day}`;
+      if (pts <= (reported.get(key) ?? 0)) continue; // the server only keeps a day's best anyway
+      logPoints(day, pts).then(
+        () => reported.set(key, pts),
+        () => undefined, // offline or out of range: the next change tries again
+      );
+    }
+  }, 5000);
 }
 
 function publishProfile(hero: Hero | null) {
@@ -319,10 +343,12 @@ async function beginSyncing(e: SyncEngine, userId: string) {
     if (s.hero !== prev.hero || s.lists !== prev.lists || s.tasks !== prev.tasks || s.items !== prev.items || s.potions !== prev.potions)
       e.notifyLocalChange();
     if (s.hero !== prev.hero) publishProfile(s.hero);
+    if (s.tasks !== prev.tasks) reportPoints();
   });
   await (firstPull ? hushed(() => e.start()) : e.start());
   if (engine !== e) return;
   publishProfile(useStore.getState().hero);
+  reportPoints();
   const code = useSync.getState().pendingJoin;
   if (code)
     await joinByCode(code).catch((err) => useSync.setState({ pendingJoin: null, joinError: errText(err, 'Could not join with that invite link.') }));
@@ -448,6 +474,10 @@ syncHooks.heroReset = (born: number) => {
 
 /** Signs this device out, even offline. */
 export async function signOutHere() {
+  // reminders belong to the account: stop them on this device while the session can still remove them,
+  // and never hand them to whoever signs in next
+  useStore.getState().updateSettings({ pushAccount: undefined });
+  await import('../push/client').then((m) => m.disablePush()).catch(() => undefined);
   await signOut(); // throws only when the server refused (the message is shown)
   stopEngine();
   useSync.setState({ userId: null, email: null, status: 'signed-out', conflict: null });

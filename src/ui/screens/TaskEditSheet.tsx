@@ -48,6 +48,12 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
       difficulty: draft.difficulty,
       repeat: draft.repeat,
       due: draft.due,
+      deadline: draft.deadline,
+      deadlineSetAt: draft.deadlineSetAt,
+      askedAt: draft.askedAt,
+      deadlineOutcome: draft.deadlineOutcome,
+      byTime: draft.byTime,
+      stakes: draft.stakes,
       qty: draft.qty,
       aisle: draft.aisle,
       staple: draft.staple,
@@ -115,7 +121,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
           </>
         ) : (
           <>
-            <Field label="Difficulty">
+            <Field label="Difficulty (set automatically from the name; change it if it's off)">
               {DIFFICULTY.map((d, i) => (
                 <button type="button" key={d.name} className={`pill ${draft.difficulty === i ? 'sel' : ''}`} aria-pressed={draft.difficulty === i} onClick={() => patch({ difficulty: i as Difficulty })}>
                   {d.name} <span style={{ opacity: 0.7, fontSize: 13 }}>+{taskXp(level, i as Difficulty)}xp</span>
@@ -191,6 +197,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
                 </button>
               )}
             </Field>
+            <TimeLimit draft={draft} patch={patch} />
             <Field label="Notes">
               <textarea className="text-in" rows={3} aria-label="Notes" value={draft.notes ?? ''} onChange={(e) => patch({ notes: e.target.value || undefined })} style={{ width: '100%', resize: 'vertical' }} />
             </Field>
@@ -244,6 +251,93 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
         </div>
       </form>
     </Sheet>
+  );
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+/** ms -> the value of a datetime-local input (local time). */
+const localInput = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+const endOfDay = (offset: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  d.setHours(23, 59, 0, 0);
+  return d.getTime();
+};
+
+/** Deadline (one-off quests) or a daily "done by" time (repeating ones), and what missing it costs. */
+function TimeLimit({ draft, patch }: { draft: Task; patch: (p: Partial<Task>) => void }) {
+  const once = draft.repeat.kind === 'none';
+  // a new deadline starts a new countdown and a new "did you do it?"
+  const setDeadline = (deadline: number | undefined) =>
+    patch({ deadline, deadlineSetAt: deadline ? Date.now() : undefined, askedAt: undefined, deadlineOutcome: undefined });
+  const hasLimit = once ? !!draft.deadline : true;
+  const everyDay = draft.repeat.kind === 'daily' || draft.repeat.kind === 'days';
+  const period = { weekly: 'week', monthly: 'month', interval: 'period' }[draft.repeat.kind as string] ?? 'day';
+  const quick: [string, () => number][] = [
+    ['1 hour', () => Date.now() + 3600_000],
+    ['Tonight', () => (endOfDay(0) - Date.now() > 3600_000 ? endOfDay(0) : endOfDay(1))],
+    ['Tomorrow', () => endOfDay(1)],
+    ['1 week', () => endOfDay(7)],
+  ];
+  return (
+    <>
+      {once ? (
+        <Field label="Deadline (a countdown bar fills the row)">
+          {quick.map(([label, at]) => (
+            <button type="button" key={label} className="pill" onClick={() => setDeadline(at())}>
+              {label}
+            </button>
+          ))}
+          <input
+            className="text-in"
+            type="datetime-local"
+            aria-label="Deadline"
+            style={{ flex: '1 1 220px', minWidth: 200, maxWidth: 280 }}
+            value={draft.deadline ? localInput(draft.deadline) : ''}
+            onChange={(e) => setDeadline(e.target.value ? new Date(e.target.value).getTime() || undefined : undefined)}
+          />
+          {draft.deadline && (
+            <button type="button" className="pill" onClick={() => setDeadline(undefined)}>
+              Clear
+            </button>
+          )}
+        </Field>
+      ) : !everyDay ? null : (
+        <Field label="Done by (time of day; empty = by the end of the day)">
+          <input
+            className="text-in"
+            type="time"
+            aria-label="Done by"
+            style={{ maxWidth: 140 }}
+            value={draft.byTime ?? ''}
+            onChange={(e) => patch({ byTime: e.target.value || undefined })}
+          />
+          {draft.byTime && (
+            <button type="button" className="pill" onClick={() => patch({ byTime: undefined })}>
+              Clear
+            </button>
+          )}
+        </Field>
+      )}
+      {hasLimit && (
+        <Field label={once ? 'If you miss it' : `If it isn't done ${everyDay && draft.byTime ? `by ${draft.byTime}` : `by the end of the ${period}`}`}>
+          {(
+            [
+              [undefined, 'Nothing'],
+              ['flexible', 'Flexible · small loss'],
+              ['must', 'Must do · it hurts'],
+            ] as [Task['stakes'], string][]
+          ).map(([k, label]) => (
+            <button type="button" key={label} className={`pill ${draft.stakes === k ? 'sel' : ''}`} aria-pressed={draft.stakes === k} onClick={() => patch({ stakes: k })}>
+              {label}
+            </button>
+          ))}
+        </Field>
+      )}
+    </>
   );
 }
 

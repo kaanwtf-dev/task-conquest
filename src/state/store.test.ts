@@ -31,6 +31,98 @@ describe('store: hero creation', () => {
   });
 });
 
+describe('store: daily check-in', () => {
+  beforeEach(() => fresh());
+  afterEach(() => vi.useRealTimers());
+
+  it('pays once a day, more for a run of days, double on every 7th', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const events: FxEvent[] = [];
+    const off = fx.on((e) => events.push(e));
+    const gold = () => heroGold(st().hero!);
+    vi.setSystemTime(new Date(2026, 9, 1, 12));
+    const g0 = gold();
+    st().checkIn();
+    const g1 = gold();
+    expect(g1).toBeGreaterThan(g0);
+    st().checkIn(); // same day: nothing more
+    expect(gold()).toBe(g1);
+    for (let d = 2; d <= 7; d++) {
+      vi.setSystemTime(new Date(2026, 9, d, 12));
+      st().checkIn();
+    }
+    off();
+    const ins = events.filter((e) => e.type === 'checkIn') as Extract<FxEvent, { type: 'checkIn' }>[];
+    expect(ins.map((e) => e.day)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(ins[6].bonus).toBe(true);
+    expect(ins[6].gold).toBeGreaterThan(ins[5].gold * 1.5);
+  });
+});
+
+describe('store: time-limited quests', () => {
+  beforeEach(() => fresh());
+  afterEach(() => vi.useRealTimers());
+  const missedEvents = (events: FxEvent[]) => events.filter((e) => e.type === 'missed') as Extract<FxEvent, { type: 'missed' }>[];
+
+  it('takes gold for each missed day, more each time, once per day, and forgives once it is done', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 12, 8));
+    const daily = listOf('daily');
+    st().addTask(daily.id, 'Take meds');
+    const id = Object.values(st().tasks).find((t) => t.title === 'Take meds')!.id;
+    st().updateTask(id, { byTime: '10:00', stakes: 'must' });
+    useStore.setState((x) => ({ hero: { ...x.hero!, gold: { ...x.hero!.gold, test: 1000 } } }));
+    const events: FxEvent[] = [];
+    const off = fx.on((e) => events.push(e));
+    const gold = () => heroGold(st().hero!);
+
+    vi.setSystemTime(new Date(2026, 9, 12, 11)); // 10:00 passed undone
+    const g0 = gold();
+    st().checkDeadlines();
+    st().checkDeadlines(); // counted once
+    const g1 = gold();
+    expect(g0 - g1).toBeGreaterThan(0);
+    vi.setSystemTime(new Date(2026, 9, 13, 11));
+    st().checkDeadlines();
+    expect(g1 - gold()).toBeGreaterThan(g0 - g1); // a second miss in a row hurts more
+    expect(st().tasks[id]).toMatchObject({ misses: 2, missTotal: 2 });
+    // done in time the next day: the run of misses is over, nothing taken
+    vi.setSystemTime(new Date(2026, 9, 14, 9));
+    st().toggleTask(id);
+    vi.setSystemTime(new Date(2026, 9, 14, 11));
+    const g2 = gold();
+    st().checkDeadlines();
+    expect(gold()).toBe(g2);
+    off();
+    expect(missedEvents(events).map((e) => e.misses)).toEqual([1, 2]);
+    expect(st().tasks[id]).toMatchObject({ misses: 0, missTotal: 2 });
+  });
+
+  it('asks about a one-off: "missed" costs gold once, "done" completes it', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 12, 8));
+    const quests = listOf('quests');
+    st().addTask(quests.id, 'File taxes');
+    st().addTask(quests.id, 'Call bank');
+    const byTitle = (t: string) => Object.values(st().tasks).find((x) => x.title === t)!.id;
+    const a = byTitle('File taxes');
+    const b = byTitle('Call bank');
+    for (const id of [a, b]) st().updateTask(id, { deadline: new Date(2026, 9, 12, 12).getTime(), deadlineSetAt: Date.now(), stakes: 'must' });
+    useStore.setState((x) => ({ hero: { ...x.hero!, gold: { ...x.hero!.gold, test: 1000 } } }));
+    vi.setSystemTime(new Date(2026, 9, 12, 13));
+    const gold = () => heroGold(st().hero!);
+    const g0 = gold();
+    st().answerDeadline(a, 'missed');
+    st().answerDeadline(a, 'missed');
+    expect(gold()).toBeLessThan(g0);
+    expect(st().tasks[a]).toMatchObject({ deadlineOutcome: 'missed', misses: 1 });
+    const g1 = gold();
+    st().answerDeadline(b, 'done');
+    expect(st().tasks[b].doneFor).toBe('once');
+    expect(gold()).toBeGreaterThan(g1); // the normal reward
+  });
+});
+
 describe('store: completing tasks', () => {
   beforeEach(() => fresh());
   afterEach(() => vi.useRealTimers());
@@ -113,6 +205,16 @@ describe('store: completing tasks', () => {
     expect(st().unlistItem(q)).toBeNull();
   });
 
+  it('remembers the category a grocery was moved to, for next time', () => {
+    const g = listOf('supply');
+    const id = st().addTask(g.id, 'Ice cream')!;
+    st().updateTask(id, { aisle: 'dairy' });
+    st().deleteTask(id);
+    const again = st().addTask(g.id, 'ice cream ')!;
+    expect(again).not.toBe(id);
+    expect(st().tasks[again].aisle).toBe('dairy');
+  });
+
   it('undoing a forgotten grocery never duplicates one added again since', () => {
     const g = listOf('supply');
     const typo = st().addTask(g.id, 'Kale')!;
@@ -122,6 +224,23 @@ describe('store: completing tasks', () => {
     gone.undo();
     expect(st().tasks[typo].deleted).toBe(true);
     expect(listTasks(st(), g.id).filter((t) => t.title.toLowerCase() === 'kale')).toHaveLength(1);
+  });
+
+  it('a done repeating quest can be done again for less, a few times per period', () => {
+    const daily = listOf('daily');
+    const id = listTasks(st(), daily.id)[0].id;
+    expect(st().repeatTask(id)).toBe(false); // not done yet
+    st().toggleTask(id);
+    const xp1 = sum(st().hero!.xp);
+    expect(st().repeatTask(id)).toBe(true);
+    const gain = sum(st().hero!.xp) - xp1;
+    expect(gain).toBeGreaterThan(0);
+    for (let i = 1; i < 5; i++) expect(st().repeatTask(id)).toBe(true);
+    expect(st().repeatTask(id)).toBe(false); // capped
+    expect(st().tasks[id].again?.n).toBe(5);
+    const q = st().addTask(listOf('quests').id, 'one-off')!;
+    st().toggleTask(q);
+    expect(st().repeatTask(q)).toBe(false); // one-off quests are just done
   });
 
   it('chips at the boss and eventually defeats it', () => {

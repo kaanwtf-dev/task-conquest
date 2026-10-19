@@ -101,6 +101,27 @@ export default function Effects() {
         if (sound) setTimeout(() => sfx.levelUp(), 450);
         addBanner({ big: 'LEVEL UP!', small: `You reached level ${e.level}` }, 2600);
       }
+      if (e.type === 'checkIn') {
+        if (sound) setTimeout(() => sfx.coin(), 300);
+        addBanner(
+          {
+            big: e.bonus ? `DAY ${e.day} BONUS!` : `DAY ${e.day} CHECK-IN`,
+            small: `Welcome back! +${e.gold}g +${e.xp} XP${e.day > 1 ? ` · ${e.day}-day login streak` : ''}`,
+          },
+          2600,
+        );
+      }
+      if (e.type === 'missed') {
+        if (sound) sfx.uncheck();
+        addBanner(
+          {
+            big: e.stakes === 'must' ? '💥 MISSED!' : 'MISSED',
+            small: `${e.title}${e.gold ? ` · lost ${e.gold}g` : ''}${e.misses > 1 ? ` · ${e.misses} in a row` : ''}`,
+            color: '#e04848',
+          },
+          3200,
+        );
+      }
       if (e.type === 'skillUp') addBanner({ big: e.skill.toUpperCase(), small: `Skill increased to ${e.level}` }, 2000);
       if (e.type === 'questComplete') {
         if (sound) setTimeout(() => sfx.questComplete(), 600);

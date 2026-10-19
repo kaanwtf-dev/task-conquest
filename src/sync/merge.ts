@@ -79,7 +79,7 @@ export function unionSorted(a: unknown, b: unknown, keep = Infinity): string[] {
 // Fields merged as a CRDT; everything else on the hero is last-write-wins as a block.
 const HERO_CRDT_KEYS = [
   'xp', 'gold', 'goldSpent', 'kills', 'tasksDone', 'skillXp', 'bossesSlain', 'itemsFound', 'potionsUsed', 'questsCleared',
-  'activeDays', 'savedDays', 'owned', 'achievements', 'bossIndex', 'bossDamage', 'bagSize', 'streakSaves', 'bestStreak', 'createdAt', 'updatedAt',
+  'activeDays', 'savedDays', 'loginDays', 'owned', 'achievements', 'bossIndex', 'bossDamage', 'bagSize', 'streakSaves', 'bestStreak', 'createdAt', 'updatedAt',
 ] as const;
 
 function lwwPart(h: Hero): string {
@@ -130,6 +130,7 @@ export function mergeHero(a: Hero, b: Hero): Hero {
     questsCleared: mergeCounter(a.questsCleared, b.questsCleared),
     activeDays: unionSorted(a.activeDays, b.activeDays, DAYS_KEPT),
     savedDays: unionSorted(a.savedDays, b.savedDays, DAYS_KEPT),
+    ...(a.loginDays || b.loginDays ? { loginDays: unionSorted(a.loginDays, b.loginDays, DAYS_KEPT) } : {}),
     owned: unionSorted(a.owned, b.owned),
     achievements: mergeCounter(a.achievements, b.achievements),
     bossIndex: Math.max(ia, ib),

@@ -75,7 +75,7 @@ export function achievementEvents(before: Hero, after: Hero): { events: FxEvent[
 }
 
 /** Undead perk: one missed day per week is forgiven automatically. */
-function undeadSave(hero: Hero, now: number, cfg: TimeCfg): string[] {
+export function undeadSave(hero: Hero, now: number, cfg: TimeCfg): string[] {
   if (hero.appearance.race !== 'undead') return hero.savedDays ?? [];
   const days = new Set(streakDays(hero));
   const today = parseDateKey(todayKey(now, cfg));
@@ -114,8 +114,11 @@ export function taskRewards(p: {
   now: number;
   seed: number;
   cfg: TimeCfg;
+  /** a repeat of a task already done this period pays a fraction, and finds no loot */
+  scale?: number;
 }): RewardOutcome {
   const { task, list, dev, now, seed, cfg, items } = p;
+  const scale = Math.max(0, Math.min(1, p.scale ?? 1));
   const before = p.hero;
   const rng = new Rng(seed);
   const { level } = heroLevel(before);
@@ -134,8 +137,8 @@ export function taskRewards(p: {
     xp *= 2;
     gold *= 2;
   }
-  xp = Math.max(1, Math.round(xp));
-  gold = Math.max(1, Math.round(gold));
+  xp = Math.max(1, Math.round(xp * scale));
+  gold = Math.max(1, Math.round(gold * scale));
   const skillGain = Math.max(1, Math.round(xp * (1 + stats.skill / 100)));
 
   const theme = THEME_BY_ID[list.theme] ?? THEME_BY_ID.forest;
@@ -156,11 +159,11 @@ export function taskRewards(p: {
   };
   hero = { ...hero, savedDays: undeadSave(hero, now, cfg) };
   hero = { ...hero, bestStreak: Math.max(before.bestStreak ?? 0, streak(streakDays(hero), now, cfg)) };
-  events.push({ type: 'kill', monster, xp, gold, crit, theme: theme.id, listId: list.id });
+  events.push({ type: 'kill', monster, xp, gold, crit, theme: theme.id, listId: list.id, difficulty: task.difficulty });
   log.push({ kind: 'kill', text: `Slew a Lv${level} ${monster.name} — "${task.title}" (+${xp} XP, +${gold}g${crit ? ', CRIT!' : ''})` });
 
   // ---- loot ----
-  const drop = rollDrop({ seed: (seed ^ 0x9e3779b9) >>> 0, level, stats, elite: monster.elite, now });
+  const drop = scale < 1 ? {} as ReturnType<typeof rollDrop> : rollDrop({ seed: (seed ^ 0x9e3779b9) >>> 0, level, stats, elite: monster.elite, now });
   if (drop.item) drop.item = uniqueId(drop.item, now, 'd');
   if (drop.item) {
     const r = addItemOrSell(hero, items, newItems, drop.item, dev);
@@ -177,7 +180,7 @@ export function taskRewards(p: {
 
   // ---- boss ----
   const boss = bossFor(hero.bossIndex);
-  const dmg = damageForTask({ difficulty: task.difficulty, power: stats.power, level, bossPct: stats.boss, crit });
+  const dmg = Math.max(1, Math.round(damageForTask({ difficulty: task.difficulty, power: stats.power, level, bossPct: stats.boss, crit }) * scale));
   const dealt = sum(hero.bossDamage) + dmg;
   if (dealt >= boss.maxHp) {
     const reward = bossReward(boss.index, level);

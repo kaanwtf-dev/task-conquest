@@ -5,6 +5,8 @@ import { useMedia, themeStyle } from './ui/components/common';
 import Effects from './ui/components/Effects';
 import UpdateBanner from './ui/components/UpdateBanner';
 import UndoBar from './ui/components/UndoBar';
+import { PushKeeper } from './ui/components/Reminders';
+import DeadlineAsk from './ui/components/DeadlineAsk';
 import { playMusic, setMusicVolume, stopMusic } from './audio/music';
 import { setSfxVolume } from './audio/sfx';
 import HeroStage from './ui/stage/HeroStage';
@@ -57,6 +59,37 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // daily check-in: opening the app on a new day pays a little (now, and whenever it comes back to the front)
+  const checkIn = useStore((s) => s.checkIn);
+  const hasHero = !!hero;
+  useEffect(() => {
+    if (!hasHero) return;
+    const go = () => document.visibilityState === 'visible' && checkIn();
+    const t = setTimeout(go, 1200); // after the first sync pull had a moment to bring in today's check-in
+    const every = setInterval(go, 10 * 60_000);
+    document.addEventListener('visibilitychange', go);
+    return () => {
+      clearTimeout(t);
+      clearInterval(every);
+      document.removeEventListener('visibilitychange', go);
+    };
+  }, [hasHero, checkIn]);
+
+  // time-limited quests: count windows that ended undone (on open, every few minutes, on return)
+  const checkDeadlines = useStore((s) => s.checkDeadlines);
+  useEffect(() => {
+    if (!hasHero) return;
+    const go = () => document.visibilityState === 'visible' && checkDeadlines();
+    const t = setTimeout(go, 2500);
+    const every = setInterval(go, 5 * 60_000);
+    document.addEventListener('visibilitychange', go);
+    return () => {
+      clearTimeout(t);
+      clearInterval(every);
+      document.removeEventListener('visibilitychange', go);
+    };
+  }, [hasHero, checkDeadlines]);
 
   const sfxVolume = useStore((s) => s.settings.sfx);
   useEffect(() => setSfxVolume(sfxVolume), [sfxVolume]);
@@ -123,6 +156,8 @@ export default function App() {
       <Effects />
       <UpdateBanner />
       <UndoBar />
+      <PushKeeper />
+      <DeadlineAsk />
       {!introSeen && <Intro />}
       {newList && <ListSheet onClose={() => setNewList(false)} />}
     </div>
