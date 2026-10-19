@@ -2479,3 +2479,80 @@ canvas.px {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* "your save is only on this phone" */
+.backup-warn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-color: #e04848;
+  box-shadow: 0 0 0 2px #e04848 inset;
+}
+.backup-warn-icon {
+  font-size: 28px;
+  flex: none;
+  animation: backup-blink 1.2s steps(2) infinite;
+}
+@keyframes backup-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+.backup-warn-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 15px;
+  line-height: 1.25;
+}
+.backup-warn-text b {
+  color: #ff8a80;
+}
+.backup-warn-text span {
+  color: var(--muted);
+  font-size: 14px;
+}
+.backup-warn-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+}
+.backup-note {
+  margin-top: 0;
+  padding: 8px 10px;
+  font-size: 15px;
+  line-height: 1.35;
+  border: 2px dashed #e04848;
+  border-radius: 4px;
+}
+.backup-note b {
+  color: #ff8a80;
+}
+.intro-backup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 48px;
+  position: relative;
+}
+.intro-backup-arrow {
+  font-size: 32px;
+  color: var(--accent);
+  animation: backup-blink 1s steps(2) infinite;
+}
+.intro-backup-ok {
+  font-size: 28px;
+  color: #6ad06a;
+}
+@media (prefers-reduced-motion: reduce) {
+  .backup-warn-icon,
+  .intro-backup-arrow {
+    animation: none;
+  }
+}

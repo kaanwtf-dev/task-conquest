@@ -135,6 +135,18 @@ export default function Intro() {
         </div>
       ),
     },
+    {
+      title: "Don't lose your hero!",
+      body: 'Until you sign in, your progress lives ONLY on this phone. Delete the app, clear your browser or lose your phone and it is gone for good! Make a free account on the Party tab to keep it safe in the cloud.',
+      art: () => (
+        <div className="intro-backup" aria-hidden>
+          <span>💾</span>
+          <span className="intro-backup-arrow">➜</span>
+          <span>☁️</span>
+          <span className="intro-backup-ok">✔</span>
+        </div>
+      ),
+    },
     // always shown (handy for showing friends how); worded for whether this is already the Home Screen app
     {
       title: installed() ? "You're on the Home Screen" : 'Put it on your Home Screen',
