@@ -65,6 +65,13 @@ export default function Effects() {
   // reward pop-ups that stay until cleared, one at a time above the tab bar, newest first
   const [notes, setNotes] = useState<Banner[]>([]);
   const dismiss = (id: string) => setNotes((ns) => ns.filter((x) => x.id !== id));
+  // the red flash of the last hit (keyed by when, so a second hit restarts it)
+  const [hurt, setHurt] = useState(0);
+  useEffect(() => {
+    if (!hurt) return;
+    const id = setTimeout(() => setHurt(0), 800);
+    return () => clearTimeout(id);
+  }, [hurt]);
 
   useEffect(() => {
     const addBanner = (b: BannerIn, ms: number, reward = true) => {
@@ -115,8 +122,21 @@ export default function Effects() {
           2600,
         );
       }
+      if (e.type === 'hurt') {
+        if (sound) sfx.hurt(e.gold > 0);
+        if (settings.haptics) {
+          haptic();
+          setTimeout(haptic, 160);
+        }
+        setHurt(Date.now());
+        if (settings.anim !== 'off') {
+          document.body.classList.remove('hurt-shake');
+          void document.body.offsetWidth; // restart the shake if it is still running
+          document.body.classList.add('hurt-shake');
+          setTimeout(() => document.body.classList.remove('hurt-shake'), 500);
+        }
+      }
       if (e.type === 'missed') {
-        if (sound) sfx.uncheck();
         addBanner(
           {
             big: e.stakes === 'must' ? t('💥 MISSED!') : t('MISSED'),
@@ -175,6 +195,7 @@ export default function Effects() {
 
   return (
     <>
+      {!!hurt && <div key={hurt} className="hurt-flash" aria-hidden="true" />}
       {floats.map((f) => (
         <div key={f.id} className="float-reward" style={{ left: f.x, top: f.y, color: f.color }}>
           {f.text}

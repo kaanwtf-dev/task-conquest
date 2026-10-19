@@ -126,6 +126,14 @@ export const sfx = {
   pop() {
     tone(N(14), 0, 0.05, 'triangle', 0.18, N(26));
   },
+  /** The hero takes a hit for a missed quest: a crunch, a pained grunt, and gold spilling. */
+  hurt(gold = true) {
+    noise(0, 0.14, 0.3, 250);
+    tone(240, 0, 0.16, 'square', 0.18, 60);
+    tone(N(5), 0.15, 0.1, 'sawtooth', 0.12, N(0));
+    tone(N(2), 0.25, 0.22, 'square', 0.12, N(-7));
+    if (gold) [31, 28, 24, 19].forEach((s, i) => tone(N(s), 0.5 + i * 0.08, 0.07, 'square', 0.08));
+  },
   /** Someone poked the hero: one of a few silly noises. */
   poke() {
     const pick = Math.floor(Math.random() * 5);

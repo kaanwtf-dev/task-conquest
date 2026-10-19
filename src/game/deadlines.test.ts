@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../core/types';
 import { dateKey } from '../core/time';
-import { askDue, leftLabel, missPenalty, missedWindow, timeLeft, windowOf } from './deadlines';
+import { answerCost, askDue, leftLabel, missPenalty, missedAt, missedWindow, moreTimeOptions, needsAnswer, timeLeft, windowOf } from './deadlines';
 
 const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).getTime(); // October 2026, local time
 const day = (d: number) => dateKey(new Date(2026, 9, d));
@@ -85,11 +85,11 @@ describe('asking about a one-off', () => {
     expect(askDue(dated, at(15, 23), cfg)).toBe(false);
     expect(askDue(dated, at(16, 9), cfg)).toBe(true);
   });
-  it('asks once the deadline passed, then not again for half a day, and never once answered', () => {
+  it('asks once the deadline passed, then not again for an hour after it was closed, and never once answered', () => {
     expect(askDue(t, at(15, 13), cfg)).toBe(false);
     expect(askDue(t, at(15, 15), cfg)).toBe(true);
-    expect(askDue({ ...t, askedAt: at(15, 15) }, at(15, 20), cfg)).toBe(false);
-    expect(askDue({ ...t, askedAt: at(15, 15) }, at(16, 4), cfg)).toBe(true);
+    expect(askDue({ ...t, askedAt: at(15, 15) }, at(15, 15, 30), cfg)).toBe(false);
+    expect(askDue({ ...t, askedAt: at(15, 15) }, at(15, 16, 1), cfg)).toBe(true);
     expect(askDue({ ...t, deadlineOutcome: 'missed' }, at(16, 4), cfg)).toBe(false);
     expect(askDue({ ...t, doneFor: 'once' }, at(16, 4), cfg)).toBe(false);
   });
@@ -103,5 +103,46 @@ describe('miss penalty', () => {
     expect(missPenalty(1000, 'must', 20, 5)).toBe(280); // grows up to 3.5x
     expect(missPenalty(10, 'must', 1, 5)).toBe(10); // never more than you have
     expect(missPenalty(0, 'must', 1, 5)).toBe(0);
+  });
+});
+
+describe('what happened?', () => {
+  const meds = task({ byTime: '10:00', stakes: 'must' });
+
+  it('more time moves today\'s end, then a miss is counted from the new end', () => {
+    const extended = { ...meds, missedFor: day(15), missedEnd: at(15, 10), extendFor: { key: day(15), until: at(15, 13) } };
+    expect(windowOf(extended, at(15, 11), cfg)).toEqual({ start: at(15, 0), end: at(15, 13) });
+    expect(missedAt(extended, at(15, 12), cfg)).toBeNull(); // still open (and yesterday's is not counted again)
+    expect(missedAt(extended, at(15, 14), cfg)).toEqual({ key: day(15), end: at(15, 13) });
+    expect(windowOf(extended, at(16, 9), cfg)).toEqual({ start: at(16, 0), end: at(16, 10) }); // only that day
+  });
+
+  it('offers more time for one-offs, and for "done by" quests only while their day lasts', () => {
+    expect(moreTimeOptions(task({ repeat: { kind: 'none' } }), at(15, 12), cfg)).toEqual([3600_000, 3 * 3600_000, 86_400_000]);
+    const pending = { ...meds, pendingMiss: { key: day(15), end: at(15, 10) } };
+    const opts = moreTimeOptions(pending, at(15, 11), cfg);
+    expect(opts.slice(0, 2)).toEqual([3600_000, 3 * 3600_000]);
+    expect(at(15, 11) + opts[2]).toBe(at(15, 23, 59)); // or the rest of today
+    expect(moreTimeOptions(pending, at(15, 23, 20), cfg)).toEqual([at(15, 23, 59) - at(15, 23, 20)]);
+    expect(moreTimeOptions(pending, at(16, 8), cfg)).toEqual([]); // that day is over
+    expect(moreTimeOptions({ ...meds, byTime: undefined, pendingMiss: { key: day(14), end: at(15, 0) } }, at(15, 8), cfg)).toEqual([]);
+  });
+
+  it('costs: missing the full penalty; more time or calling it off half for must-dos, free otherwise', () => {
+    const full = missPenalty(1000, 'must', 1, 5);
+    expect(answerCost(meds, 'missed', 1000, 5)).toBe(full);
+    expect(answerCost(meds, 'cancel', 1000, 5)).toBe(Math.round(full / 2));
+    expect(answerCost(meds, { more: 3600_000 }, 1000, 5)).toBe(Math.round(full / 2));
+    expect(answerCost(meds, 'done', 1000, 5)).toBe(0);
+    expect(answerCost({ ...meds, stakes: 'flexible' }, 'cancel', 1000, 5)).toBe(0);
+    expect(answerCost({ ...meds, stakes: undefined }, 'missed', 1000, 5)).toBe(0);
+  });
+
+  it('asks until answered, and not again for an hour after it was closed', () => {
+    const pending = { ...meds, pendingMiss: { key: day(15), end: at(15, 10) } };
+    expect(needsAnswer(pending, at(15, 11), cfg)).toBe(true);
+    expect(needsAnswer({ ...pending, askedAt: at(15, 11) }, at(15, 11, 30), cfg)).toBe(false);
+    expect(needsAnswer({ ...pending, askedAt: at(15, 11) }, at(15, 12, 1), cfg)).toBe(true);
+    expect(needsAnswer({ ...pending, pendingMiss: null }, at(15, 11), cfg)).toBe(false);
   });
 });

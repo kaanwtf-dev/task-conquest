@@ -2364,16 +2364,122 @@ canvas.px {
   font-size: 8px;
 }
 
-/* "did you finish it?" */
+/* "what happened?": a quest whose time ran out */
+.deadline-ask .ask-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .deadline-ask .ask-title {
   font-size: 18px;
   margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+.deadline-ask .ask-count {
+  align-self: flex-start;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 .deadline-ask .ask-text {
   font-size: 15px;
   line-height: 1.4;
   color: var(--muted);
-  margin: 12px 0;
+  margin: 12px 0 8px;
+}
+.deadline-ask .ask-misses {
+  font-size: 15px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  color: var(--muted);
+}
+.deadline-ask .ask-misses.bad {
+  border-color: #e04848;
+  background: rgba(224, 72, 72, 0.15);
+  color: #ff8a8a;
+  font-weight: 600;
+}
+.deadline-ask .ask-q {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--accent);
+  margin: 14px 0 8px;
+}
+.deadline-ask .ask-actions {
+  display: grid;
+  gap: 8px;
+}
+.deadline-ask .ask-more {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.deadline-ask .ask-more .btn {
+  flex: 1;
+  white-space: nowrap;
+}
+.deadline-ask .ask-foot {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+  margin: 12px 0 0;
+}
+.btn.ok {
+  background: #6fd06a;
+}
+.btn.bad {
+  background: #e04848;
+  color: #fff;
+  text-shadow: 1px 1px 0 var(--outline);
+}
+
+/* the hero takes a hit: a red flash over everything and a shake */
+.hurt-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(224, 40, 40, 0.15) 30%, rgba(224, 40, 40, 0.65) 100%);
+  animation: hurt-flash 0.7s ease-out forwards;
+}
+@keyframes hurt-flash {
+  0%,
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+body.hurt-shake #root {
+  animation: hurt-shake 0.45s steps(2) 1;
+}
+@keyframes hurt-shake {
+  0% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-6px, 2px);
+  }
+  40% {
+    transform: translate(5px, -3px);
+  }
+  60% {
+    transform: translate(-4px, 1px);
+  }
+  80% {
+    transform: translate(3px, 0);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.hurt-shake #root {
+    animation: none;
+  }
 }
 
 /* party leaderboard */

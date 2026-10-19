@@ -79,10 +79,16 @@ export interface Task extends Meta {
   stakes?: 'flexible' | 'must';
   /** the last missed window that was counted (period key, or 'deadline') */
   missedFor?: string;
+  /** when that window ended (ms); windows ending up to then are counted already */
+  missedEnd?: number;
+  /** a repeating quest's window ended undone and the player hasn't said what happened yet */
+  pendingMiss?: { key: string; end: number } | null;
+  /** "more time" for a repeating quest's "done by" time: that period's window ends at `until` instead */
+  extendFor?: { key: string; until: number } | null;
   /** misses in a row (reset by doing it) and ever */
   misses?: number;
   missTotal?: number;
-  /** one-off past its deadline: when we last asked "did you do it?", and the answer */
+  /** when we last asked "what happened?" (a closed question waits a while), and a one-off's answer */
   askedAt?: number;
   deadlineOutcome?: 'done' | 'missed';
   /** extra completions of a repeating task within one period: { period key, count } */

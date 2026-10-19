@@ -50,9 +50,19 @@ export function windowOf(task: Task, now: number, cfg: TimeCfg): { start: number
   if (by !== null) {
     // "every day by 10:00": the window is the logical day up to that time (it may already be over)
     const start = midnight + cfg.dayStartHour * 3600_000;
-    return { start, end: midnight + by + (by < cfg.dayStartHour * 3600_000 ? DAY : 0) };
+    const end = midnight + by + (by < cfg.dayStartHour * 3600_000 ? DAY : 0);
+    // the player asked for more time today
+    const ext = task.extendFor;
+    if (ext && ext.key === periodKey(task.repeat, now, cfg) && ext.until > end) return { start, end: ext.until };
+    return { start, end };
   }
   return periodWindow(task, now, cfg);
+}
+
+/** The end of the logical day `now` is in. */
+export function dayEnd(now: number, cfg: TimeCfg): number {
+  const d = logicalDate(now, cfg);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() + cfg.dayStartHour * 3600_000;
 }
 
 /** A time limit the player set on purpose (not just the end of a repeating quest's day or week). */
@@ -118,30 +128,44 @@ export function leftLabel(task: Task, now: number, cfg: TimeCfg): string | null 
 }
 
 /**
- * A repeating quest with stakes whose last window ended without it being done: the period key of that
- * window (to remember it was counted), or null. One-off quests are asked about instead (see askDue).
+ * A repeating quest with stakes whose last window ended without it being done, and which hasn't been
+ * counted yet: that window's period key and end, or null. One-off quests are asked about (see askDue).
  */
-export function missedWindow(task: Task, now: number, cfg: TimeCfg): string | null {
+export function missedAt(task: Task, now: number, cfg: TimeCfg): { key: string; end: number } | null {
   if (task.deleted || task.repeat.kind === 'none' || !task.stakes) return null;
+  // windows up to the last counted one are settled (older saves only remember its key)
+  const counted = (key: string, end: number) => (task.missedEnd !== undefined ? end <= task.missedEnd : task.missedFor === key);
   const by = byTimeOf(task);
-  let at: number; // a moment inside the window that most recently ended
   if (by !== null) {
-    const w = windowOf(task, now, cfg)!;
-    at = now >= w.end ? now : now - DAY; // today's window is over, or else yesterday's was the last
+    const today = windowOf(task, now, cfg)!;
+    let at: number; // a moment inside the window that most recently ended
+    let end: number;
+    if (now >= today.end) {
+      at = now;
+      end = today.end;
+    } else {
+      // today's window is still open, so yesterday's was the last (more time only ever applies to today)
+      at = now - DAY;
+      end = windowOf({ ...task, extendFor: null }, now, cfg)!.end - DAY;
+    }
     const key = periodKey(task.repeat, at, cfg);
-    const end = now >= w.end ? w.end : w.end - DAY;
-    if (task.createdAt >= end || task.missedFor === key) return null;
+    if (task.createdAt >= end || counted(key, end)) return null;
     const doneInTime = task.doneFor === key && (task.doneAt ?? 0) <= end;
-    return doneInTime || !activeOn(task, at, cfg) ? null : key;
+    return doneInTime || !activeOn(task, at, cfg) ? null : { key, end };
   }
   const w = periodWindow(task, now, cfg);
   if (!w) return null;
-  at = w.start - 1; // the previous period
+  const at = w.start - 1; // the previous period
   const key = periodKey(task.repeat, at, cfg);
-  if (task.createdAt >= w.start || task.missedFor === key || task.doneFor === key) return null;
+  if (task.createdAt >= w.start || counted(key, w.start) || task.doneFor === key) return null;
   // a weekly quest done last week has doneFor = last week's key until it is done again; the check above
   // covers it. Days a 'some days' quest is off are not misses.
-  return activeOn(task, at, cfg) ? key : null;
+  return activeOn(task, at, cfg) ? { key, end: w.start } : null;
+}
+
+/** The period key of missedAt, or null. */
+export function missedWindow(task: Task, now: number, cfg: TimeCfg): string | null {
+  return missedAt(task, now, cfg)?.key ?? null;
 }
 
 function activeOn(task: Task, at: number, cfg: TimeCfg): boolean {
@@ -150,13 +174,54 @@ function activeOn(task: Task, at: number, cfg: TimeCfg): boolean {
   return true;
 }
 
-/** One-off quest past its due time, not done and not asked about lately: time to ask "did you do it?". */
+/** A closed "what happened?" question comes back after this long. */
+export const SNOOZE_MS = 3600_000;
+/** Nobody answered: a miss counts this long after the time ran out. */
+export const AUTO_MISS_MS = 24 * 3600_000;
+
+const snoozed = (task: Task, now: number) => !!task.askedAt && now - task.askedAt < SNOOZE_MS;
+
+/** One-off quest past its due time, not done and not answered: time to ask "what happened?". */
 export function askDue(task: Task, now: number, cfg: TimeCfg): boolean {
   if (task.deleted || task.repeat.kind !== 'none' || task.doneFor) return false;
   const end = deadlineOf(task, cfg);
   if (end === null || now < end) return false;
   if (task.deadlineOutcome) return false;
-  return !task.askedAt || now - task.askedAt > 12 * 3600_000;
+  return !snoozed(task, now);
+}
+
+/** A quest the player should say something about now: an overdue one-off, or a repeating quest's miss. */
+export function needsAnswer(task: Task, now: number, cfg: TimeCfg): boolean {
+  if (task.deleted) return false;
+  if (task.repeat.kind === 'none') return askDue(task, now, cfg);
+  return !!task.pendingMiss && !snoozed(task, now);
+}
+
+/** What the player can say about a missed window. */
+export type MissAnswer = 'done' | 'missed' | 'cancel' | { more: number };
+
+/** Gold an answer costs: the full penalty for a miss; a must-do also pays half for more time or for calling it off. */
+export function answerCost(task: Task, answer: MissAnswer, gold: number, level: number): number {
+  if (!task.stakes || answer === 'done') return 0;
+  const full = missPenalty(gold, task.stakes, (task.misses ?? 0) + 1, level);
+  if (answer === 'missed') return full;
+  return task.stakes === 'must' ? Math.round(full / 2) : 0;
+}
+
+/**
+ * How much more time the player can ask for (ms options). One-off quests: an hour, three, or a day.
+ * Repeating quests with a "done by" time: more time today only, while today lasts. Other repeating quests
+ * are already into their next period, so there is nothing to extend.
+ */
+export function moreTimeOptions(task: Task, now: number, cfg: TimeCfg): number[] {
+  if (task.repeat.kind === 'none') return [3600_000, 3 * 3600_000, DAY];
+  const p = task.pendingMiss;
+  if (!p || byTimeOf(task) === null || p.key !== periodKey(task.repeat, now, cfg)) return [];
+  const left = dayEnd(now, cfg) - now;
+  const opts = [3600_000, 3 * 3600_000].filter((ms) => ms < left - 15 * 60_000);
+  // "the rest of today", when that's more than the bigger option
+  if (left > 15 * 60_000 && !opts.includes(left)) opts.push(left - 60_000);
+  return opts;
 }
 
 /** Gold lost for a miss: must-do quests hurt more, and every miss in a row hurts more than the last. */

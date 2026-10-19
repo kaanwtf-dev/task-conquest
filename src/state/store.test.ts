@@ -64,62 +64,130 @@ describe('store: time-limited quests', () => {
   afterEach(() => vi.useRealTimers());
   const missedEvents = (events: FxEvent[]) => events.filter((e) => e.type === 'missed') as Extract<FxEvent, { type: 'missed' }>[];
 
-  it('takes gold for each missed day, more each time, once per day, and forgives once it is done', () => {
+  const meds = () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 9, 12, 8));
     const daily = listOf('daily');
     st().addTask(daily.id, 'Take meds');
-    const id = Object.values(st().tasks).find((t) => t.title === 'Take meds')!.id;
+    const id = Object.values(st().tasks).find((t) => t.title === 'Take meds' && !t.deleted)!.id;
     st().updateTask(id, { byTime: '10:00', stakes: 'must' });
     useStore.setState((x) => ({ hero: { ...x.hero!, gold: { ...x.hero!.gold, test: 1000 } } }));
+    return id;
+  };
+  const gold = () => heroGold(st().hero!);
+
+  it('asks what happened when a window ends undone; "missed" hurts, more each time in a row', () => {
+    const id = meds();
     const events: FxEvent[] = [];
     const off = fx.on((e) => events.push(e));
-    const gold = () => heroGold(st().hero!);
 
     vi.setSystemTime(new Date(2026, 9, 12, 11)); // 10:00 passed undone
     const g0 = gold();
     st().checkDeadlines();
-    st().checkDeadlines(); // counted once
+    st().checkDeadlines(); // queued once
+    expect(st().tasks[id].pendingMiss).toMatchObject({ key: '2026-10-12' });
+    expect(gold()).toBe(g0); // nothing taken before the player answers
+    st().resolveMiss(id, 'missed');
+    st().resolveMiss(id, 'missed'); // answered already
     const g1 = gold();
     expect(g0 - g1).toBeGreaterThan(0);
+    expect(events.filter((e) => e.type === 'hurt')).toHaveLength(1);
+    expect(st().tasks[id]).toMatchObject({ pendingMiss: null, misses: 1, missTotal: 1 });
+
     vi.setSystemTime(new Date(2026, 9, 13, 11));
     st().checkDeadlines();
+    st().resolveMiss(id, 'missed');
     expect(g1 - gold()).toBeGreaterThan(g0 - g1); // a second miss in a row hurts more
     expect(st().tasks[id]).toMatchObject({ misses: 2, missTotal: 2 });
-    // done in time the next day: the run of misses is over, nothing taken
+
+    // done in time the next day: the run of misses is over, nothing asked
     vi.setSystemTime(new Date(2026, 9, 14, 9));
     st().toggleTask(id);
     vi.setSystemTime(new Date(2026, 9, 14, 11));
-    const g2 = gold();
     st().checkDeadlines();
-    expect(gold()).toBe(g2);
-    off();
-    expect(missedEvents(events).map((e) => e.misses)).toEqual([1, 2]);
+    expect(st().tasks[id].pendingMiss).toBeNull();
     expect(st().tasks[id]).toMatchObject({ misses: 0, missTotal: 2 });
+    off();
   });
 
-  it('asks about a one-off: "missed" costs gold once, "done" completes it', () => {
+  it('"I did it", skipping and more time: free for flexible quests, half price for must-dos', () => {
+    const id = meds();
+    vi.setSystemTime(new Date(2026, 9, 12, 11));
+    st().checkDeadlines();
+    let g = gold();
+    st().resolveMiss(id, 'done');
+    expect(gold()).toBe(g);
+    expect(st().tasks[id]).toMatchObject({ pendingMiss: null, misses: 0 });
+    expect(st().tasks[id].missTotal ?? 0).toBe(0);
+
+    vi.setSystemTime(new Date(2026, 9, 13, 11));
+    st().checkDeadlines();
+    g = gold();
+    st().resolveMiss(id, { more: 3600_000 }); // until noon
+    const fee = g - gold();
+    expect(fee).toBeGreaterThan(0);
+    expect(st().tasks[id].misses ?? 0).toBe(0); // late is not a miss
+    st().checkDeadlines();
+    expect(st().tasks[id].pendingMiss).toBeNull(); // the window is open again
+    vi.setSystemTime(new Date(2026, 9, 13, 12, 30)); // and missed again
+    st().checkDeadlines();
+    expect(st().tasks[id].pendingMiss).toMatchObject({ key: '2026-10-13' });
+    g = gold();
+    st().resolveMiss(id, 'cancel');
+    expect(g - gold()).toBeGreaterThan(0);
+
+    st().updateTask(id, { stakes: 'flexible' });
+    vi.setSystemTime(new Date(2026, 9, 14, 11));
+    st().checkDeadlines();
+    g = gold();
+    st().resolveMiss(id, 'cancel');
+    expect(gold()).toBe(g);
+  });
+
+  it('a question nobody answers counts as missed a day later, or when the next window ends too', () => {
+    const id = meds();
+    const events: FxEvent[] = [];
+    const off = fx.on((e) => events.push(e));
+    vi.setSystemTime(new Date(2026, 9, 12, 11));
+    st().checkDeadlines();
+    vi.setSystemTime(new Date(2026, 9, 13, 9)); // today's window still open
+    st().checkDeadlines();
+    expect(st().tasks[id].misses ?? 0).toBe(0);
+    vi.setSystemTime(new Date(2026, 9, 13, 11, 30)); // a day after, and today's ended too
+    st().checkDeadlines();
+    expect(st().tasks[id]).toMatchObject({ misses: 1, pendingMiss: { key: '2026-10-13' } });
+    expect(missedEvents(events)).toHaveLength(1); // told, since nobody saw the question
+    off();
+  });
+
+  it('one-off quests: "missed" costs gold once, "done" completes it, more time moves the deadline, cancel removes it', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 9, 12, 8));
     const quests = listOf('quests');
-    st().addTask(quests.id, 'File taxes');
-    st().addTask(quests.id, 'Call bank');
-    const byTitle = (t: string) => Object.values(st().tasks).find((x) => x.title === t)!.id;
-    const a = byTitle('File taxes');
-    const b = byTitle('Call bank');
-    for (const id of [a, b]) st().updateTask(id, { deadline: new Date(2026, 9, 12, 12).getTime(), deadlineSetAt: Date.now(), stakes: 'must' });
+    for (const name of ['File taxes', 'Call bank', 'Renew visa', 'Buy a gift']) st().addTask(quests.id, name);
+    const byTitle = (t: string) => Object.values(st().tasks).find((x) => x.title === t && !x.deleted)!.id;
+    const [a, b, c, d] = ['File taxes', 'Call bank', 'Renew visa', 'Buy a gift'].map(byTitle);
+    for (const id of [a, b, c, d]) st().updateTask(id, { deadline: new Date(2026, 9, 12, 12).getTime(), deadlineSetAt: Date.now(), stakes: 'must' });
     useStore.setState((x) => ({ hero: { ...x.hero!, gold: { ...x.hero!.gold, test: 1000 } } }));
     vi.setSystemTime(new Date(2026, 9, 12, 13));
-    const gold = () => heroGold(st().hero!);
     const g0 = gold();
-    st().answerDeadline(a, 'missed');
-    st().answerDeadline(a, 'missed');
+    st().resolveMiss(a, 'missed');
+    st().resolveMiss(a, 'missed');
     expect(gold()).toBeLessThan(g0);
     expect(st().tasks[a]).toMatchObject({ deadlineOutcome: 'missed', misses: 1 });
     const g1 = gold();
-    st().answerDeadline(b, 'done');
+    st().resolveMiss(b, 'done');
     expect(st().tasks[b].doneFor).toBe('once');
     expect(gold()).toBeGreaterThan(g1); // the normal reward
+    st().resolveMiss(c, { more: 3 * 3600_000 });
+    expect(st().tasks[c].deadline).toBe(new Date(2026, 9, 12, 16).getTime());
+    expect(st().tasks[c].deadlineOutcome).toBeUndefined();
+    st().resolveMiss(d, 'cancel');
+    expect(st().tasks[d].deleted).toBe(true);
+    // two days on, still unanswered: missed
+    vi.setSystemTime(new Date(2026, 9, 14, 17));
+    st().checkDeadlines();
+    expect(st().tasks[c]).toMatchObject({ deadlineOutcome: 'missed' });
   });
 });
 

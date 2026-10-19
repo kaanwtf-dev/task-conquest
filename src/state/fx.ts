@@ -6,6 +6,8 @@ export type FxEvent =
   | { type: 'kill'; monster: MonsterSpawn; xp: number; gold: number; crit: boolean; theme: string; listId: string; difficulty?: number }
   | { type: 'levelUp'; level: number }
   | { type: 'missed'; title: string; gold: number; misses: number; total: number; stakes: 'flexible' | 'must' }
+  /** the hero takes a hit for a missed (or late) quest */
+  | { type: 'hurt'; gold: number; must: boolean }
   | { type: 'checkIn'; day: number; gold: number; xp: number; bonus: boolean }
   | { type: 'skillUp'; skill: string; level: number }
   | { type: 'questComplete'; listName: string; item?: Item; gold: number }

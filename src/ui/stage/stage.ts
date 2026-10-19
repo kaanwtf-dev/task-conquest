@@ -65,6 +65,12 @@ export class Stage {
   private blinkUntil = 0;
   private levelGlowUntil = 0;
   private pokeT0 = -Infinity;
+  private hurtT0 = -Infinity;
+  private hurtGold = 0;
+  /** coins still to spill from the last hit */
+  private spill = false;
+  /** red copies of hero frames, for the hit flash */
+  private red = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
   private alive = true;
   /** Players who asked for less motion get a still idle scene (redrawn slowly, for theme or gear changes). */
   private readonly still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -132,6 +138,35 @@ export class Stage {
     this.levelGlowUntil = performance.now() + 1600;
     this.floaters.push({ text: i18n.t('LEVEL UP!'), short: i18n.t('LV UP!'), color: '#ffd860', x: this.heroX + 20, y: 6, t0: performance.now(), dur: 1600 });
     this.schedule(true);
+  }
+
+  /** A missed quest: the hero is knocked back, flashes red and drops gold. */
+  hurt(gold: number) {
+    if (this.anim === 'off') return;
+    const now = performance.now();
+    this.hurtT0 = now;
+    this.hurtGold = gold;
+    this.spill = gold > 0;
+    this.floaters = this.floaters.filter((f) => !f.quip);
+    this.floaters.push({ text: i18n.t('OUCH!'), color: '#ff5a5a', x: this.heroX + 20, y: 8, t0: now, dur: 1300 });
+    if (gold > 0) this.floaters.push({ text: i18n.t('−{gold}g', { gold }), short: `−${gold}`, color: '#ffd860', x: this.heroX + 22, y: 20, t0: now + 150, dur: 1300 });
+    this.schedule(true);
+  }
+
+  private redFrame(f: HTMLCanvasElement): HTMLCanvasElement {
+    let r = this.red.get(f);
+    if (!r) {
+      r = document.createElement('canvas');
+      r.width = f.width;
+      r.height = f.height;
+      const c = r.getContext('2d')!;
+      c.drawImage(f, 0, 0);
+      c.globalCompositeOperation = 'source-atop';
+      c.fillStyle = 'rgba(255, 40, 40, 0.75)';
+      c.fillRect(0, 0, r.width, r.height);
+      this.red.set(f, r);
+    }
+    return r;
   }
 
   /** Tap to skip: finish all pending battles instantly. */
@@ -297,7 +332,18 @@ export class Stage {
     // poked: a quick hop
     const pk = (now - this.pokeT0) / 420;
     const hop = pose === 'idle' && pk >= 0 && pk < 1 && !this.still ? Math.round(Math.sin(pk * Math.PI) * 6) : 0;
-    ctx.drawImage(this.frame(pose, pose === 'idle' ? bob : 0, blink && pose === 'idle'), Math.round(this.heroX + heroDx), heroY - hop);
+    // hit: knocked back and shaking, flashing red, coins spilling (the first frame)
+    const hk = (now - this.hurtT0) / 700;
+    const hurt = hk >= 0 && hk < 1;
+    if (hurt && this.spill) {
+      this.spill = false;
+      const coins = Math.min(7, 2 + Math.floor(this.hurtGold / 8));
+      for (let i = 0; i < coins; i++)
+        this.particles.push({ x: this.heroX + 18, y: heroY + 16, vx: -Math.random() * 1.8 + 0.4, vy: -Math.random() * 2.2 - 1, c: '#f2c94c', life: 0.9, size: 5 });
+    }
+    const knock = hurt && !this.still ? Math.round(-4 * (1 - hk) + (Math.floor(now / 50) % 2 ? 1 : -1) * (1 - hk) * 2) : 0;
+    const frame = this.frame(pose, pose === 'idle' ? bob : 0, (blink || hurt) && pose === 'idle');
+    ctx.drawImage(hurt && Math.floor((now - this.hurtT0) / 90) % 2 === 0 ? this.redFrame(frame) : frame, Math.round(this.heroX + heroDx + knock), heroY - hop);
 
     // particles
     const dt = 1 / 60;

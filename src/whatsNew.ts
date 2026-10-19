@@ -15,6 +15,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '1.3',
+    date: '2026-10-19',
+    title: tk('Missing a quest now hurts'),
+    items: [
+      tk('When a timed quest runs out, the game asks what happened: you did it, more time, skip it, or take the hit.'),
+      tk('Missed it? Your hero gets hit: a red flash, a shake, a cry of pain and gold spilling out.'),
+      tk('Every miss is counted: in a row and in total, on the quest and in the question.'),
+      tk('A notification tells you when time runs out. Leave the question unanswered for a day and it counts as missed.'),
+    ],
+    image: 'whats-new/1.3.png',
+  },
+  {
     version: '1.2',
     date: '2026-10-19',
     title: tk('Task Conquest speaks Turkish'),

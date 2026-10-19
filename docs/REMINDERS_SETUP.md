@@ -1,10 +1,10 @@
 # Reminder notifications: one-time setup
 
-Task Conquest can send each player up to two reminders a day, plus a warning before a quest's deadline:
+Task Conquest can send each player up to two reminders a day, plus a warning before a quest's deadline and a note when one is missed:
 
 - **Morning:** today's plan. If they have been away for a few days, a "your hero misses you" nudge instead.
 - **Evening:** a streak about to end, a party member who got things done, dailies left, or a boss that is nearly down.
-- **Deadlines:** a heads-up a few hours before a time-limited quest runs out.
+- **Deadlines:** a heads-up a few hours before a time-limited quest runs out, and a note when its time ran out undone (opening the app asks what happened).
 
 Players switch reminders on in the app (Options › Reminders, or the card that appears on the quest screen). Each player picks the times and which kinds they want.
 

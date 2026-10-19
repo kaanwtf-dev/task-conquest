@@ -10,7 +10,7 @@ import { dateKey, isActiveToday, isDone, parseDateKey, periodKey, streak, todayK
 import { baseXp, heroGold, heroLevel, sum } from '../game/progression';
 import { guessAisle } from '../pixel/keywords';
 import { guessDifficulty } from '../game/difficulty';
-import { missPenalty, missedWindow } from '../game/deadlines';
+import { AUTO_MISS_MS, answerCost, deadlineOf, missedAt, type MissAnswer } from '../game/deadlines';
 import { hashStr } from '../core/rng';
 import { itemDisplayName, sellPrice, starterItems, upgradeCost } from '../game/loot';
 import { makeBuff, potionName, potionStackId } from '../game/potions';
@@ -18,7 +18,7 @@ import { applyBuffs, computeStats } from '../game/stats';
 import { claimRewards, titleLabel } from '../game/achievements';
 import { BAG_MAX, BAG_STEP, dyeKey, themeKey, type ShopOffer } from '../game/shop';
 import { fx } from './fx';
-import { t, tk, upper } from '../i18n';
+import { locale, t, tk, upper } from '../i18n';
 import { LATEST_VERSION } from '../whatsNew';
 import { achievementCtx, bagCount, inc, questChestRewards, streakDays, taskRewards, type RewardOutcome } from './rewards';
 
@@ -146,12 +146,16 @@ export interface State {
    * less each time, never loot, at most REPEAT_MAX extra times per period. Returns false when it can't.
    */
   repeatTask(id: string): boolean;
-  /** Counts missed windows of time-limited repeating quests (with stakes) and applies their penalty. */
+  /**
+   * Finds windows of time-limited repeating quests (with stakes) that ended undone and queues the
+   * "what happened?" question for each; questions nobody answered for a long time count as misses.
+   */
   checkDeadlines(): void;
-  /** The answer to "did you do it?" for a one-off quest past its deadline. */
-  answerDeadline(id: string, answer: 'done' | 'missed' | 'later'): void;
-  /** Counts one miss of a quest with stakes (once per window key) and takes its gold. */
-  punishMiss(id: string, key: string): void;
+  /**
+   * The player's answer to "what happened?" for a missed window or an overdue one-off quest. Returns the
+   * gold it cost. `auto`: nobody answered in time (the caller shows the hit).
+   */
+  resolveMiss(id: string, answer: MissAnswer, opts?: { auto?: boolean }): number;
   restockStaples(listId: string): number;
   reorderTasks(orderedIds: string[]): void;
   reorderLists(orderedIds: string[]): void;
@@ -458,48 +462,90 @@ export const useStore = create<State>()(
           const s = get();
           if (!s.hero) return;
           const t = now();
+          // misses nobody answered: the hero takes one hit for all of them together
+          let auto = 0;
+          let lost = 0;
+          const miss = (id: string) => {
+            auto++;
+            lost += get().resolveMiss(id, 'missed', { auto: true });
+          };
           for (const task of Object.values(s.tasks)) {
             const list = s.lists[task.listId];
             // party lists: nobody's hero is punished for a quest the whole party shares
-            if (!list || list.deleted || list.shared || list.type === 'supply') continue;
-            const key = missedWindow(task, t, s.settings);
-            if (key) get().punishMiss(task.id, key);
+            if (task.deleted || !list || list.deleted || list.shared || list.type === 'supply') continue;
+            if (task.repeat.kind === 'none') {
+              const end = deadlineOf(task, s.settings);
+              if (end !== null && t - end > AUTO_MISS_MS && !task.doneFor && !task.deadlineOutcome) miss(task.id);
+              continue;
+            }
+            // a question left unanswered for a day counts as a miss
+            if (task.pendingMiss && t - task.pendingMiss.end > AUTO_MISS_MS) miss(task.id);
+            const cur = get().tasks[task.id];
+            const m = missedAt(cur, t, s.settings);
+            if (!m) continue;
+            // a newer window ended while the last one was still unanswered: that one was missed for sure
+            if (cur.pendingMiss) miss(task.id);
+            get().updateTask(task.id, { pendingMiss: m, missedFor: m.key, missedEnd: m.end, askedAt: undefined });
           }
+          if (auto) fx.emit({ type: 'hurt', gold: lost, must: true });
         },
 
-        punishMiss(id, key) {
+        resolveMiss(id, answer, opts) {
           const s = get();
           const task = s.tasks[id];
           const hero = s.hero;
-          if (!task || !hero || !task.stakes || task.missedFor === key) return;
-          const misses = (task.misses ?? 0) + 1;
-          const total = (task.missTotal ?? 0) + 1;
-          s.updateTask(id, { missedFor: key, misses, missTotal: total });
-          const gold = missPenalty(heroGold(hero), task.stakes, misses, heroLevel(hero).level);
-          if (gold > 0) set({ hero: { ...hero, goldSpent: inc(hero.goldSpent, s.deviceId, gold), updatedAt: now() } });
-          fx.emit({ type: 'missed', title: task.title, gold, misses, total, stakes: task.stakes });
-          log('quest', gold
-            ? t('Missed "{title}" and lost {gold}g ({misses} in a row).', { title: task.title, gold, misses })
-            : t('Missed "{title}" ({misses} in a row).', { title: task.title, misses }));
-        },
-
-        answerDeadline(id, answer) {
-          const s = get();
-          const task = s.tasks[id];
-          if (!task || task.deleted) return;
-          const t = now();
+          if (!task || task.deleted || !hero) return 0;
+          const ms = now();
+          const once = task.repeat.kind === 'none';
+          // answered already (on this device, or another one that synced first)
+          if (once ? !!task.deadlineOutcome && answer !== 'done' : !task.pendingMiss) return 0;
+          const cost = answerCost(task, answer, heroGold(hero), heroLevel(hero).level);
+          const pay = () => {
+            if (cost > 0) set({ hero: { ...get().hero!, goldSpent: inc(get().hero!.goldSpent, s.deviceId, cost), updatedAt: now() } });
+          };
+          const settled = once ? { askedAt: ms } : { pendingMiss: null, askedAt: ms };
+          const title = task.title;
           if (answer === 'done') {
-            s.updateTask(id, { deadlineOutcome: 'done', askedAt: t });
-            if (!task.doneFor) s.toggleTask(id);
-          } else if (answer === 'missed') {
-            s.updateTask(id, { deadlineOutcome: 'missed', askedAt: t });
-            if (task.stakes) get().punishMiss(id, 'deadline');
-          } else {
-            // more time: a day from now; a must-do quest still pays for being late
-            if (task.stakes === 'must' && task.missedFor !== 'deadline') get().punishMiss(id, 'deadline');
-            const until = t + 86_400_000;
-            s.updateTask(id, { deadline: until, due: todayKey(until, s.settings), deadlineSetAt: t, askedAt: t });
+            if (once) {
+              s.updateTask(id, { deadlineOutcome: 'done', askedAt: ms });
+              if (!task.doneFor) s.toggleTask(id);
+            } else s.updateTask(id, { ...settled, misses: 0 }); // done in time, just not ticked
+            return 0;
           }
+          if (answer === 'missed') {
+            const misses = (task.misses ?? 0) + 1;
+            const total = (task.missTotal ?? 0) + 1;
+            s.updateTask(id, { ...settled, misses, missTotal: total, ...(once ? { deadlineOutcome: 'missed' as const, missedFor: 'deadline' } : {}) });
+            pay();
+            if (!opts?.auto) fx.emit({ type: 'hurt', gold: cost, must: task.stakes === 'must' });
+            // a miss nobody answered for: say what happened, since no question was seen
+            if (opts?.auto) fx.emit({ type: 'missed', title, gold: cost, misses, total, stakes: task.stakes ?? 'flexible' });
+            log('quest', cost
+              ? t('Missed "{title}" and lost {gold}g ({misses} in a row).', { title, gold: cost, misses })
+              : t('Missed "{title}" ({misses} in a row).', { title, misses }));
+            return cost;
+          }
+          if (answer === 'cancel') {
+            if (once) s.deleteTask(id);
+            else s.updateTask(id, settled);
+            pay();
+            if (cost) fx.emit({ type: 'hurt', gold: cost, must: true });
+            log('quest', cost
+              ? once ? t('Gave up "{title}" and paid {gold}g.', { title, gold: cost }) : t('Skipped "{title}" this time and paid {gold}g.', { title, gold: cost })
+              : once ? t('Gave up "{title}".', { title }) : t('Skipped "{title}" this time.', { title }));
+            return cost;
+          }
+          // more time
+          const until = ms + Math.max(60_000, answer.more);
+          if (once) s.updateTask(id, { deadline: until, due: todayKey(until, s.settings), deadlineSetAt: ms, askedAt: ms });
+          else s.updateTask(id, { ...settled, extendFor: { key: task.pendingMiss!.key, until } });
+          pay();
+          if (cost) fx.emit({ type: 'hurt', gold: cost, must: true });
+          const at = new Date(until).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' });
+          log('quest', cost
+            ? t('More time for "{title}" (until {at}), for {gold}g.', { title, at, gold: cost })
+            : t('More time for "{title}" (until {at}).', { title, at }));
+          return cost;
         },
 
         repeatTask(id) {

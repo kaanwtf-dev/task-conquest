@@ -12,6 +12,7 @@ import {
   PARTY_GAP_MS,
   afterSlot,
   deadlineNudge,
+  missedNudge,
   partyDigest,
   partyHours,
   pickNudge,
@@ -250,6 +251,15 @@ export async function runReminders(opts: {
         const picked = pickNudge(state, now, slot, prefs, history);
         nudge = picked;
         next = afterSlot(history, state, now, slot, prefs, picked);
+      }
+      // a quest whose time just ran out comes before warnings about ones still running
+      if (!nudge && deadlinesOn) {
+        const m = missedNudge(state, now, prefs, history);
+        if (m) {
+          nudge = m.nudge;
+          next = { ...next, warned: [...(next.warned ?? []), m.key].slice(-30) };
+          topic = 'missed';
+        }
       }
       if (!nudge && deadlinesOn) {
         const d = deadlineNudge(state, now, prefs, history);

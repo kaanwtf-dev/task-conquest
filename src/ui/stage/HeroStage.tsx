@@ -53,6 +53,7 @@ export default function HeroStage({ w, h, scale, heroX, monsterX, theme, classNa
     const off = fx.on((e) => {
       if (e.type === 'kill') st.kill({ monster: e.monster, xp: e.xp, gold: e.gold, crit: e.crit, theme: e.theme as ThemeId, difficulty: e.difficulty });
       if (e.type === 'levelUp') st.levelUp();
+      if (e.type === 'hurt') st.hurt(e.gold);
       if (e.type === 'loot' && !e.soldFor) {
         const rarity = e.item?.rarity ?? 0;
         const icon = e.item
