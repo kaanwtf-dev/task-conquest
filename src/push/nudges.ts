@@ -6,7 +6,7 @@ import { dateKey, isDone, parseDateKey, periodKey, streak, todayKey, type TimeCf
 import { bossProgress } from '../game/bosses';
 import { todaySections, todayRemaining } from '../state/today';
 import { undeadSave } from '../state/rewards';
-import { WARN_MS, windowOf } from '../game/deadlines';
+import { WARN_MS, hasLimit, windowOf } from '../game/deadlines';
 
 export type Slot = 'morning' | 'evening';
 /** What a player can switch off, one by one. */
@@ -278,7 +278,7 @@ export function deadlineNudge(state: NudgeState, now: number, prefs: PushPrefs, 
   for (const t of Object.values(state.tasks)) {
     const l = state.lists[t.listId];
     if (t.deleted || !l || l.deleted || l.shared || l.type === 'supply') continue;
-    if (!t.deadline && !t.stakes) continue;
+    if (!hasLimit(t, cfg)) continue;
     const w = windowOf(t, now, cfg);
     if (!w || w.end <= now || w.end - now > WARN_MS || isDone(t, now, cfg)) continue;
     const key = `${t.id}@${w.end}`;

@@ -23,7 +23,7 @@ import { fx } from '../../state/fx';
 import { sfx, unlockAudio } from '../../audio/sfx';
 import type { Task, TaskList } from '../../core/types';
 import TaskEditSheet from './TaskEditSheet';
-import { WARN_MS, leftLabel, timeLeft, windowOf } from '../../game/deadlines';
+import { WARN_MS, hasLimit, leftLabel, timeLeft, windowOf } from '../../game/deadlines';
 import { todaySections } from '../../state/today';
 import BossBar from '../components/BossBar';
 import PartyStrip from '../components/PartyStrip';
@@ -271,7 +271,8 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
   const shared = useStore((s) => !!s.lists[task.listId]?.shared);
   const d = DIFFICULTY[task.difficulty];
   const rl = repeatLabel(task.repeat);
-  const timed = !done && !inactive && !!(task.deadline || task.byTime || task.stakes) && !(task.repeat.kind === 'none' && !task.deadline);
+  // repeating quests count down their day / week / month; one-off quests count down to their due date
+  const timed = !done && !inactive && (task.repeat.kind !== 'none' || !!task.due || !!task.deadline);
   return (
     <>
       {timed && <TimeBar task={task} />}
@@ -351,6 +352,9 @@ function TimeLeft({ task }: { task: Task }) {
   if (!label) return null;
   const late = label === 'time is up';
   const soon = !late && (windowOf(task, now, cfg)?.end ?? Infinity) - now < WARN_MS;
+  // a plain daily or weekly quest only says so when time is getting short (its bar shows the rest)
+  if (!soon && !late && !hasLimit(task, cfg)) return null;
+  if (late && task.due && task.due < todayKey(now, cfg)) return null; // the "Overdue" chip says it already
   return (
     <span className={late || soon ? 'overdue' : ''}>
       {task.stakes === 'must' ? '⚠ ' : '⏳ '}
