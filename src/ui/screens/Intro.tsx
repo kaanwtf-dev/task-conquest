@@ -135,44 +135,42 @@ export default function Intro() {
         </div>
       ),
     },
-    // only while it runs in a browser tab: the Home Screen app is what gets reminders and a full screen
-    ...(installed()
-      ? []
-      : [
-          {
-            title: 'Put it on your Home Screen',
-            body: 'It then opens full screen like a real app, works offline, and can send you reminders.',
-            art: () => (
-              <div className="intro-install">
-                <div className="intro-step">
-                  <b>iPhone / iPad</b> (Safari)
-                  <ol>
-                    <li>
-                      Tap <span className="intro-key">Share ⇧</span>
-                    </li>
-                    <li>
-                      Tap <span className="intro-key">Add to Home Screen</span>
-                    </li>
-                    <li>
-                      Tap <span className="intro-key">Add</span>
-                    </li>
-                  </ol>
-                </div>
-                <div className="intro-step">
-                  <b>Android</b> (Chrome)
-                  <ol>
-                    <li>
-                      Tap the <span className="intro-key">⋮</span> menu
-                    </li>
-                    <li>
-                      Tap <span className="intro-key">Add to Home screen</span> or <span className="intro-key">Install app</span>
-                    </li>
-                  </ol>
-                </div>
-              </div>
-            ),
-          },
-        ]),
+    // always shown (handy for showing friends how); worded for whether this is already the Home Screen app
+    {
+      title: installed() ? "You're on the Home Screen" : 'Put it on your Home Screen',
+      body: installed()
+        ? 'The best way to play: full screen, offline, with reminders. Friends can add it the same way:'
+        : 'It then opens full screen like a real app, works offline, and can send you reminders.',
+      art: () => (
+        <div className="intro-install">
+          <div className="intro-step">
+            <b>iPhone / iPad</b> (Safari)
+            <ol>
+              <li>
+                Tap <span className="intro-key">Share ⇧</span>
+              </li>
+              <li>
+                Tap <span className="intro-key">Add to Home Screen</span>
+              </li>
+              <li>
+                Tap <span className="intro-key">Add</span>
+              </li>
+            </ol>
+          </div>
+          <div className="intro-step">
+            <b>Android</b> (Chrome)
+            <ol>
+              <li>
+                Tap the <span className="intro-key">⋮</span> menu
+              </li>
+              <li>
+                Tap <span className="intro-key">Add to Home screen</span> or <span className="intro-key">Install app</span>
+              </li>
+            </ol>
+          </div>
+        </div>
+      ),
+    },
   ];
   const last = i === cards.length - 1;
   const card = cards[i];
