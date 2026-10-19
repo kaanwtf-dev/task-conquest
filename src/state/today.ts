@@ -19,10 +19,12 @@ export function todaySections(lists: Record<string, TaskList>, tasks: Record<str
   const all = Object.values(tasks).filter((t) => !t.deleted && live.has(t.listId));
   const order = (a: Task, b: Task) => (lists[a.listId]?.order ?? 0) - (lists[b.listId]?.order ?? 0) || a.order - b.order;
   const open = (t: Task) => !isDone(t, now, cfg);
+  // a one-off with a deadline (and no due date) is due on the deadline's day
+  const due = (t: Task) => t.due ?? (t.repeat.kind === 'none' && typeof t.deadline === 'number' ? todayKey(t.deadline, cfg) : undefined);
   // a due date on a repeating task only marks its first occurrence; afterwards it is routine
   const s: TodaySections = {
-    overdue: all.filter((t) => t.repeat.kind === 'none' && t.due && t.due < today && open(t)),
-    dueToday: all.filter((t) => t.due === today && open(t)),
+    overdue: all.filter((t) => t.repeat.kind === 'none' && due(t) && due(t)! < today && open(t)),
+    dueToday: all.filter((t) => due(t) === today && open(t)),
     routine: all.filter((t) => t.due !== today && ROUTINE.has(t.repeat.kind) && isActiveToday(t, now, cfg) && open(t)),
     week: all.filter((t) => t.due !== today && PERIODIC.has(t.repeat.kind) && open(t)),
     doneToday: all.filter((t) => !!t.doneAt && todayKey(t.doneAt, cfg) === today && isDone(t, now, cfg)),

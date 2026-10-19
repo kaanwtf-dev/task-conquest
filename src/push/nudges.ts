@@ -6,11 +6,12 @@ import { dateKey, isDone, parseDateKey, periodKey, streak, todayKey, type TimeCf
 import { bossProgress } from '../game/bosses';
 import { todaySections, todayRemaining } from '../state/today';
 import { undeadSave } from '../state/rewards';
+import { WARN_MS, windowOf } from '../game/deadlines';
 
 export type Slot = 'morning' | 'evening';
 /** What a player can switch off, one by one. */
-export type NudgeKind = 'plan' | 'evening' | 'comeback' | 'party';
-export const NUDGE_KINDS: NudgeKind[] = ['plan', 'evening', 'comeback', 'party'];
+export type NudgeKind = 'plan' | 'evening' | 'comeback' | 'party' | 'deadline';
+export const NUDGE_KINDS: NudgeKind[] = ['plan', 'evening', 'comeback', 'party', 'deadline'];
 
 export interface PushPrefs {
   /** Local hours the morning and evening reminders go out (0-23). */
@@ -31,10 +32,12 @@ export interface PushHistory {
   comebacks?: number;
   /** party activity up to this time (ms) has been told already */
   partyAt?: number;
+  /** deadline warnings sent: "task id@window end" (the latest few) */
+  warned?: string[];
 }
 
 export interface Nudge {
-  kind: 'plan' | 'streak' | 'party' | 'dailies' | 'boss' | 'comeback';
+  kind: 'plan' | 'streak' | 'party' | 'dailies' | 'boss' | 'comeback' | 'deadline';
   title: string;
   body: string;
   /** replaces an older notification with the same tag instead of piling up */
@@ -261,4 +264,42 @@ export function partyDigest(state: NudgeState, since: number, until: number): Pi
     body: parts.join(' · '),
     tag: `questlog-party-${listId}`.slice(0, 64),
   };
+}
+
+/**
+ * A time-limited quest of this player's that ends within WARN_MS and is still open (one warning per quest
+ * per window, soonest first), or null. Party lists are left out: the whole party shares those.
+ */
+export function deadlineNudge(state: NudgeState, now: number, prefs: PushPrefs, history: PushHistory = {}): { nudge: Nudge; key: string } | null {
+  if (!state.hero || prefs.off.includes('deadline')) return null;
+  const cfg: TimeCfg = { dayStartHour: prefs.dayStartHour, weekStart: prefs.weekStart };
+  const warned = new Set(history.warned ?? []);
+  let best: { task: Task; end: number; key: string } | null = null;
+  for (const t of Object.values(state.tasks)) {
+    const l = state.lists[t.listId];
+    if (t.deleted || !l || l.deleted || l.shared || l.type === 'supply') continue;
+    if (!t.deadline && !t.stakes) continue;
+    const w = windowOf(t, now, cfg);
+    if (!w || w.end <= now || w.end - now > WARN_MS || isDone(t, now, cfg)) continue;
+    const key = `${t.id}@${w.end}`;
+    if (warned.has(key)) continue;
+    if (!best || w.end < best.end) best = { task: t, end: w.end, key };
+  }
+  if (!best) return null;
+  const { task, end } = best;
+  const mins = Math.max(1, Math.round((end - now) / 60_000));
+  const left = mins < 60 ? `${mins} min` : `${Math.round(mins / 60)}h`;
+  const at = new Date(end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const name = clip(task.title, 60);
+  const title = task.stakes === 'must' ? `⚠️ ${left} left: ${name}` : `⏳ ${left} left: ${name}`;
+  const misses = task.misses ?? 0;
+  const body =
+    misses > 0
+      ? `Missed ${misses}× in a row already. Don't make it ${misses + 1}. Due ${at}.`
+      : task.stakes === 'must'
+        ? `A must-do, due ${at}. Missing it costs gold.`
+        : task.stakes === 'flexible'
+          ? `Due ${at}. Missing it costs a little gold.`
+          : `Due ${at}.`;
+  return { nudge: { kind: 'deadline', title, body, tag: `deadline-${task.id}`, badge: 0 }, key: best.key };
 }

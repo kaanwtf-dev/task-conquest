@@ -10,6 +10,7 @@ import {
   NUDGE_KINDS,
   PARTY_GAP_MS,
   afterSlot,
+  deadlineNudge,
   partyDigest,
   partyHours,
   pickNudge,
@@ -96,6 +97,7 @@ export function sanitizeHistory(v: unknown): PushHistory {
     sent: { ...(day(sent.morning) ? { morning: day(sent.morning) } : {}), ...(day(sent.evening) ? { evening: day(sent.evening) } : {}) },
     comebacks: intIn(h.comebacks, 0, 1000, 0),
     ...(typeof h.partyAt === 'number' && Number.isFinite(h.partyAt) ? { partyAt: h.partyAt } : {}),
+    ...(Array.isArray(h.warned) ? { warned: h.warned.filter((x): x is string => typeof x === 'string' && x.length <= 80).slice(-30) } : {}),
   };
 }
 
@@ -229,7 +231,9 @@ export async function runReminders(opts: {
     } else {
       const slot = slotAt(now, prefs);
       const partyOn = !prefs.off.includes('party') && partyHours(now, prefs) && now - (history.partyAt ?? 0) >= PARTY_GAP_MS;
-      if (!slot && !partyOn) return;
+      // deadline warnings: any waking hour (the same hours as party news)
+      const deadlinesOn = !prefs.off.includes('deadline') && partyHours(now, prefs);
+      if (!slot && !partyOn && !deadlinesOn) return;
       const state = await saveOf(sub.user_id);
       setZone(validZone(sub.tz)); // another device's turn may have run while the save loaded
       let next = history;
@@ -239,6 +243,14 @@ export async function runReminders(opts: {
         const picked = pickNudge(state, now, slot, prefs, history);
         nudge = picked;
         next = afterSlot(history, state, now, slot, prefs, picked);
+      }
+      if (!nudge && deadlinesOn) {
+        const d = deadlineNudge(state, now, prefs, history);
+        if (d) {
+          nudge = d.nudge;
+          next = { ...next, warned: [...(next.warned ?? []), d.key].slice(-30) };
+          topic = 'deadline';
+        }
       }
       if (!nudge && partyOn) {
         // what the party did since the last digest (a new device starts with the last hour)

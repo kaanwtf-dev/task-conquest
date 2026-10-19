@@ -5,6 +5,7 @@ import type { Item, PotionId } from '../core/types';
 export type FxEvent =
   | { type: 'kill'; monster: MonsterSpawn; xp: number; gold: number; crit: boolean; theme: string; listId: string; difficulty?: number }
   | { type: 'levelUp'; level: number }
+  | { type: 'missed'; title: string; gold: number; misses: number; total: number; stakes: 'flexible' | 'must' }
   | { type: 'checkIn'; day: number; gold: number; xp: number; bonus: boolean }
   | { type: 'skillUp'; skill: string; level: number }
   | { type: 'questComplete'; listName: string; item?: Item; gold: number }

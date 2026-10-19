@@ -7,9 +7,10 @@ import type { TimeCfg } from '../core/time';
 import type { Appearance } from '../pixel/sprites/hero';
 import type { ThemeId } from '../pixel/themes';
 import { dateKey, isActiveToday, isDone, parseDateKey, periodKey, streak, todayKey } from '../core/time';
-import { baseXp, heroLevel, sum } from '../game/progression';
+import { baseXp, heroGold, heroLevel, sum } from '../game/progression';
 import { guessAisle } from '../pixel/keywords';
 import { guessDifficulty } from '../game/difficulty';
+import { missPenalty, missedWindow } from '../game/deadlines';
 import { hashStr } from '../core/rng';
 import { itemDisplayName, sellPrice, starterItems, upgradeCost } from '../game/loot';
 import { makeBuff, potionName, potionStackId } from '../game/potions';
@@ -139,6 +140,12 @@ export interface State {
    * less each time, never loot, at most REPEAT_MAX extra times per period. Returns false when it can't.
    */
   repeatTask(id: string): boolean;
+  /** Counts missed windows of time-limited repeating quests (with stakes) and applies their penalty. */
+  checkDeadlines(): void;
+  /** The answer to "did you do it?" for a one-off quest past its deadline. */
+  answerDeadline(id: string, answer: 'done' | 'missed' | 'later'): void;
+  /** Counts one miss of a quest with stakes (once per window key) and takes its gold. */
+  punishMiss(id: string, key: string): void;
   restockStaples(listId: string): number;
   reorderTasks(orderedIds: string[]): void;
   reorderLists(orderedIds: string[]): void;
@@ -419,7 +426,8 @@ export const useStore = create<State>()(
           // supply items can be bought again any time but pay out at most once per logical day
           const rewardKey = list?.type === 'supply' ? `s${todayKey(t, cfg)}` : pk;
           const alreadyRewarded = task.rewardedFor === rewardKey;
-          s.updateTask(id, { doneFor: pk, rewardedFor: rewardKey, doneAt: t, timesDone: task.timesDone + 1, doneBy: hero.name });
+          s.updateTask(id, { doneFor: pk, rewardedFor: rewardKey, doneAt: t, timesDone: task.timesDone + 1, doneBy: hero.name, ...(task.misses ? { misses: 0 } : {}),
+            ...(task.deadline && !task.deadlineOutcome ? { deadlineOutcome: t <= task.deadline ? 'done' as const : undefined } : {}) });
           if (alreadyRewarded || !list) return;
 
           const seed = hashStr(`${id}:${pk}:${t}:${s.deviceId}`);
@@ -434,6 +442,51 @@ export const useStore = create<State>()(
               const st = get();
               apply(questChestRewards({ hero: st.hero!, items: st.items, list, dev: st.deviceId, now: t, seed: hashStr(`chest:${list.id}:${pk}:${t}:${st.deviceId}`) }));
             }
+          }
+        },
+
+        checkDeadlines() {
+          const s = get();
+          if (!s.hero) return;
+          const t = now();
+          for (const task of Object.values(s.tasks)) {
+            const list = s.lists[task.listId];
+            // party lists: nobody's hero is punished for a quest the whole party shares
+            if (!list || list.deleted || list.shared || list.type === 'supply') continue;
+            const key = missedWindow(task, t, s.settings);
+            if (key) get().punishMiss(task.id, key);
+          }
+        },
+
+        punishMiss(id, key) {
+          const s = get();
+          const task = s.tasks[id];
+          const hero = s.hero;
+          if (!task || !hero || !task.stakes || task.missedFor === key) return;
+          const misses = (task.misses ?? 0) + 1;
+          const total = (task.missTotal ?? 0) + 1;
+          s.updateTask(id, { missedFor: key, misses, missTotal: total });
+          const gold = missPenalty(heroGold(hero), task.stakes, misses, heroLevel(hero).level);
+          if (gold > 0) set({ hero: { ...hero, goldSpent: inc(hero.goldSpent, s.deviceId, gold), updatedAt: now() } });
+          fx.emit({ type: 'missed', title: task.title, gold, misses, total, stakes: task.stakes });
+          log('quest', `Missed "${task.title}"${gold ? ` and lost ${gold}g` : ''} (${misses} in a row).`);
+        },
+
+        answerDeadline(id, answer) {
+          const s = get();
+          const task = s.tasks[id];
+          if (!task || task.deleted) return;
+          const t = now();
+          if (answer === 'done') {
+            s.updateTask(id, { deadlineOutcome: 'done', askedAt: t });
+            if (!task.doneFor) s.toggleTask(id);
+          } else if (answer === 'missed') {
+            s.updateTask(id, { deadlineOutcome: 'missed', askedAt: t });
+            if (task.stakes) get().punishMiss(id, 'deadline');
+          } else {
+            // more time: a day from now; a must-do quest still pays for being late
+            if (task.stakes === 'must' && task.missedFor !== 'deadline') get().punishMiss(id, 'deadline');
+            s.updateTask(id, { deadline: t + 86_400_000, deadlineSetAt: t, askedAt: t });
           }
         },
 

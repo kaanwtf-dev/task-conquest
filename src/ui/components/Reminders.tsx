@@ -25,6 +25,7 @@ const KIND_LABEL: Record<NudgeKind, string> = {
   evening: 'streak saver',
   party: 'party news',
   comeback: 'miss-you',
+  deadline: 'deadlines',
 };
 const MORNING = [7, 8, 9, 10];
 const EVENING = [18, 19, 20, 21, 22];

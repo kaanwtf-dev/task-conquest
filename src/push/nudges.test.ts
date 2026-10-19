@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Hero, Task, TaskList } from '../core/types';
 import { dateKey } from '../core/time';
 import { bossFor } from '../game/bosses';
-import { DEFAULT_PUSH_PREFS, afterSlot, partyDigest, pickNudge, slotAt, type NudgeState, type PushPrefs } from './nudges';
+import { DEFAULT_PUSH_PREFS, afterSlot, deadlineNudge, partyDigest, pickNudge, slotAt, type NudgeState, type PushPrefs } from './nudges';
 
 const at = (d: number, h: number) => new Date(2026, 9, d, h).getTime(); // October 2026, local time
 const day = (d: number) => dateKey(new Date(2026, 9, d));
@@ -156,5 +156,29 @@ describe('party digest', () => {
     const P = list('P', { type: 'supply', name: 'Mine' });
     const tasks = [task('Milk', 'P', { repeat: { kind: 'none' }, doneFor: 'once', doneBy: 'Luna', doneAt: at(15, 17) + 60_000 })];
     expect(partyDigest(state(hero(), tasks, [S, P]), since, until)).toBeNull();
+  });
+});
+
+describe('deadline warning', () => {
+  const lists = [list('D', { type: 'daily' }), list('Q'), list('S', { type: 'weekly', shared: true })];
+  const rent = task('Pay rent', 'Q', { repeat: { kind: 'none' }, deadline: at(15, 14), stakes: 'must' });
+
+  it('warns about the soonest open quest ending within 3 hours, once per window', () => {
+    const meds = task('Meds', 'D', { byTime: '13:00', stakes: 'flexible', misses: 2 });
+    const st = state(hero(), [rent, meds], lists);
+    expect(deadlineNudge(st, at(15, 9), prefs())).toBeNull(); // nothing that close yet
+    const d = deadlineNudge(st, at(15, 11), prefs())!;
+    expect(d.nudge.title).toBe('⏳ 2h left: Meds');
+    expect(d.nudge.body).toBe("Missed 2× in a row already. Don't make it 3. Due 1:00 PM.");
+    const next = deadlineNudge(st, at(15, 11), prefs(), { warned: [d.key] })!;
+    expect(next.nudge.title).toBe('⚠️ 3h left: Pay rent');
+    expect(next.nudge.body).toBe('A must-do, due 2:00 PM. Missing it costs gold.');
+  });
+
+  it('stays quiet for done quests, party lists, past deadlines, or when switched off', () => {
+    const shared = task('Chore', 'S', { repeat: { kind: 'none' }, deadline: at(15, 12) });
+    expect(deadlineNudge(state(hero(), [{ ...rent, doneFor: 'once' }, shared], lists), at(15, 12), prefs())).toBeNull();
+    expect(deadlineNudge(state(hero(), [rent], lists), at(15, 15), prefs())).toBeNull();
+    expect(deadlineNudge(state(hero(), [rent], lists), at(15, 12), prefs({ off: ['deadline'] }))).toBeNull();
   });
 });

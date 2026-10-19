@@ -23,6 +23,7 @@ import { fx } from '../../state/fx';
 import { sfx, unlockAudio } from '../../audio/sfx';
 import type { Task, TaskList } from '../../core/types';
 import TaskEditSheet from './TaskEditSheet';
+import { WARN_MS, leftLabel, timeLeft, windowOf } from '../../game/deadlines';
 import { todaySections } from '../../state/today';
 import BossBar from '../components/BossBar';
 import PartyStrip from '../components/PartyStrip';
@@ -270,8 +271,10 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
   const shared = useStore((s) => !!s.lists[task.listId]?.shared);
   const d = DIFFICULTY[task.difficulty];
   const rl = repeatLabel(task.repeat);
+  const timed = !done && !inactive && !!(task.deadline || task.byTime || task.stakes) && !(task.repeat.kind === 'none' && !task.deadline);
   return (
     <>
+      {timed && <TimeBar task={task} />}
       <button
         className={`check ${done ? 'on' : ''}`}
         aria-label={done ? `Mark ${task.title} not done` : `Complete ${task.title}`}
@@ -303,7 +306,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
       <PxImg className="ticon" src={iconFor(task.title, task.icon)} size={32} />
       <div className="tmain">
         <div className="ttitle">{task.title}</div>
-        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy)) && (
+        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy) || timed || !!task.misses) && (
           <div className="tmeta">
             {listName && <span className="tlist">{listName}</span>}
             {shared && done && task.doneBy && <span className="tlist">✓ {task.doneBy}</span>}
@@ -319,6 +322,8 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
               ) : (
                 <span>Due {task.due}</span>
               ))}
+            {timed && <TimeLeft task={task} />}
+            {!done && !!task.misses && <span className="overdue">missed {task.misses}×</span>}
             {task.notes && <span>✎</span>}
             {inactive && <span>Not today</span>}
           </div>
@@ -329,6 +334,30 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
     </>
   );
 });
+
+/** The countdown behind a time-limited quest: full when the window opens, empty at the deadline. */
+function TimeBar({ task }: { task: Task }) {
+  const now = useNow(30000);
+  const cfg = useStore((s) => s.settings);
+  const f = timeLeft(task, now, cfg);
+  if (f === null) return null;
+  return <span className={`tbar ${f === 0 ? 'late' : ''}`} style={{ '--left': f } as React.CSSProperties} aria-hidden />;
+}
+
+function TimeLeft({ task }: { task: Task }) {
+  const now = useNow(30000);
+  const cfg = useStore((s) => s.settings);
+  const label = leftLabel(task, now, cfg);
+  if (!label) return null;
+  const late = label === 'time is up';
+  const soon = !late && (windowOf(task, now, cfg)?.end ?? Infinity) - now < WARN_MS;
+  return (
+    <span className={late || soon ? 'overdue' : ''}>
+      {task.stakes === 'must' ? '⚠ ' : '⏳ '}
+      {label}
+    </span>
+  );
+}
 
 /** On a finished repeating quest: do it once more (another workout, brushing again) for a smaller reward. */
 function AgainButton({ task }: { task: Task }) {

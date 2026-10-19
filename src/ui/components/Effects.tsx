@@ -111,6 +111,17 @@ export default function Effects() {
           2600,
         );
       }
+      if (e.type === 'missed') {
+        if (sound) sfx.uncheck();
+        addBanner(
+          {
+            big: e.stakes === 'must' ? '💥 MISSED!' : 'MISSED',
+            small: `${e.title}${e.gold ? ` · lost ${e.gold}g` : ''}${e.misses > 1 ? ` · ${e.misses} in a row` : ''}`,
+            color: '#e04848',
+          },
+          3200,
+        );
+      }
       if (e.type === 'skillUp') addBanner({ big: e.skill.toUpperCase(), small: `Skill increased to ${e.level}` }, 2000);
       if (e.type === 'questComplete') {
         if (sound) setTimeout(() => sfx.questComplete(), 600);

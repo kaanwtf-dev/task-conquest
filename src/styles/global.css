@@ -404,6 +404,37 @@ canvas.px {
   padding: 9px 8px;
   border-radius: 5px;
   position: relative;
+  isolation: isolate;
+}
+/* countdown of a time-limited quest: shrinks to the left, green -> yellow -> red */
+.task .tbar {
+  position: absolute;
+  inset: 2px auto 2px 0;
+  width: calc(var(--left) * 100%);
+  z-index: -1;
+  border-radius: 4px;
+  pointer-events: none;
+  background: hsl(calc(var(--left) * 110) 75% 45% / 0.26);
+  box-shadow: inset -3px 0 0 hsl(calc(var(--left) * 110) 80% 55% / 0.7);
+  transition: width 1s steps(8);
+}
+.task .tbar.late {
+  width: 100%;
+  background: hsl(0 75% 45% / 0.16);
+  box-shadow: none;
+  animation: tbar-late 1.6s steps(2) infinite;
+}
+@keyframes tbar-late {
+  50% {
+    background: hsl(0 75% 45% / 0.3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .task .tbar,
+  .task .tbar.late {
+    transition: none;
+    animation: none;
+  }
 }
 .task + .task {
   border-top: 2px dashed rgba(255, 255, 255, 0.1);
@@ -431,6 +462,8 @@ canvas.px {
 }
 .task .tmeta {
   display: flex;
+  flex-wrap: wrap;
+  row-gap: 4px;
   gap: 8px;
   align-items: center;
   margin-top: 4px;
@@ -1281,6 +1314,9 @@ canvas.px {
 }
 .tmeta .tlist {
   color: var(--accent);
+}
+.tmeta > span {
+  white-space: nowrap;
 }
 .tmeta .overdue {
   /* a solid chip, readable on every theme, and not shown by color alone (the text says Overdue) */
@@ -2317,4 +2353,16 @@ canvas.px {
   margin-left: 3px;
   color: var(--muted);
   font-size: 8px;
+}
+
+/* "did you finish it?" */
+.deadline-ask .ask-title {
+  font-size: 18px;
+  margin-top: 4px;
+}
+.deadline-ask .ask-text {
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--muted);
+  margin: 12px 0;
 }

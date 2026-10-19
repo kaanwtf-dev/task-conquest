@@ -68,6 +68,23 @@ export interface Task extends Meta {
   // supply-list extras
   qty?: string;
   aisle?: string;
+  // time-sensitive quests (game/deadlines.ts)
+  /** one-off quests: must be done by this moment (ms) */
+  deadline?: number;
+  /** when the deadline was set (start of the countdown bar) */
+  deadlineSetAt?: number;
+  /** repeating quests: must be done by this time of day ("HH:MM") */
+  byTime?: string;
+  /** what missing it costs: a little (flexible) or more (must do); none when unset */
+  stakes?: 'flexible' | 'must';
+  /** the last missed window that was counted (period key, or 'deadline') */
+  missedFor?: string;
+  /** misses in a row (reset by doing it) and ever */
+  misses?: number;
+  missTotal?: number;
+  /** one-off past its deadline: when we last asked "did you do it?", and the answer */
+  askedAt?: number;
+  deadlineOutcome?: 'done' | 'missed';
   /** extra completions of a repeating task within one period: { period key, count } */
   again?: { period: string; n: number };
   staple?: boolean;
@@ -204,7 +221,7 @@ export interface Settings {
   /** Reward pop-ups stay until cleared (default), or hide by themselves after a few seconds. */
   popups?: 'stay' | 'auto';
   /** Reminder notifications: when they go out and which kinds are off (on/off is the device's subscription). */
-  push?: { morningHour: number; eveningHour: number; off: ('plan' | 'evening' | 'comeback' | 'party')[] };
+  push?: { morningHour: number; eveningHour: number; off: ('plan' | 'evening' | 'comeback' | 'party' | 'deadline')[] };
   /** When the in-app "want reminders?" card was last answered with Not now (or the system prompt refused). */
   pushAskedAt?: number;
   /**
