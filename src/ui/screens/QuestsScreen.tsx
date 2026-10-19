@@ -24,6 +24,7 @@ import { sfx, unlockAudio } from '../../audio/sfx';
 import type { Task, TaskList } from '../../core/types';
 import TaskEditSheet from './TaskEditSheet';
 import BackupWarning from '../components/BackupWarning';
+import { TipNudge } from '../components/Support';
 import { WARN_MS, hasLimit, leftLabel, timeLeft, windowOf } from '../../game/deadlines';
 import { todaySections } from '../../state/today';
 import BossBar from '../components/BossBar';
@@ -86,6 +87,7 @@ export default function QuestsScreen() {
 
       <QuickAdd list={list} />
       <BackupWarning />
+      <TipNudge />
       <PushInvite />
 
       {list.type === 'supply' ? (
@@ -147,6 +149,7 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
         dueToday
       />
       <BackupWarning />
+      <TipNudge />
       <PushInvite />
       {overdue.length + dueToday.length + routine.length + week.length === 0 && (
         <div className="win tasks">

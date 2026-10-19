@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { RemindersOption } from '../components/Reminders';
+import { SupportBox } from '../components/Support';
 import { useStore, heroStats, isForeignList, LIST_TYPE_INFO } from '../../state/store';
 import { SKILLS } from '../../game/catalog';
 import { iconFor } from '../../pixel/iconGen';
@@ -109,6 +110,7 @@ export function SettingsScreen() {
           </button>
         </Opt>
       </div>
+      <SupportBox />
       <div className="section-label">Backup</div>
       <div className="win" style={{ padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button className="btn small" onClick={() => exportBackup(s.exportData())}>

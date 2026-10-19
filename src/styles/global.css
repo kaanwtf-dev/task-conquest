@@ -2556,3 +2556,24 @@ canvas.px {
     animation: none;
   }
 }
+
+/* tips and feedback */
+.support {
+  padding: 12px;
+}
+.support p {
+  margin: 0 0 12px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.support-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn-emoji {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 1.35em;
+  line-height: 1;
+  vertical-align: -0.1em;
+}

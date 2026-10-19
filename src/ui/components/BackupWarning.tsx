@@ -26,13 +26,18 @@ function useCloudAccount(): string | null | 'off' | undefined {
   return v;
 }
 
-export default function BackupWarning() {
+/** Whether the "back up your save" card is showing now. */
+export function useBackupDue(): boolean {
   const done = useStore((s) => (s.hero ? sum(s.hero.tasksDone) : 0));
   const askedAt = useStore((s) => s.settings.backupAskedAt ?? 0);
+  const account = useCloudAccount();
+  return account === null && done >= 1 && Date.now() - askedAt >= NAG_AGAIN_MS;
+}
+
+export default function BackupWarning() {
   const update = useStore((s) => s.updateSettings);
   const setTab = useStore((s) => s.setTab);
-  const account = useCloudAccount();
-  if (account !== null || done < 1 || Date.now() - askedAt < NAG_AGAIN_MS) return null;
+  if (!useBackupDue()) return null;
   return (
     <div className="win backup-warn" role="alert">
       <div className="backup-warn-icon" aria-hidden>
