@@ -189,14 +189,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
                 </label>
               )}
             </Field>
-            <Field label="Due date">
-              <input className="text-in" type="date" aria-label="Due date" style={{ maxWidth: 200 }} value={draft.due ?? ''} onChange={(e) => patch({ due: e.target.value || undefined })} />
-              {draft.due && (
-                <button type="button" className="pill" onClick={() => patch({ due: undefined })}>
-                  Clear
-                </button>
-              )}
-            </Field>
+            <DueField draft={draft} patch={patch} />
             <TimeLimit draft={draft} patch={patch} />
             <Field label="Notes">
               <textarea className="text-in" rows={3} aria-label="Notes" value={draft.notes ?? ''} onChange={(e) => patch({ notes: e.target.value || undefined })} style={{ width: '100%', resize: 'vertical' }} />
@@ -255,57 +248,66 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
-/** ms -> the value of a datetime-local input (local time). */
-const localInput = (ms: number) => {
+const hhmm = (ms: number) => {
   const d = new Date(ms);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-const endOfDay = (offset: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  d.setHours(23, 59, 0, 0);
-  return d.getTime();
+const dayOf = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+/** A date (YYYY-MM-DD) and a time (HH:MM) in local time, as ms. */
+const at = (date: string, time: string) => {
+  const [y, m, d] = date.split('-').map(Number);
+  const [h, min] = time.split(':').map(Number);
+  return new Date(y, m - 1, d, h, min).getTime();
 };
 
-/** Deadline (one-off quests) or a daily "done by" time (repeating ones), and what missing it costs. */
+/**
+ * The due date, plus an optional time for one-off quests. A one-off quest with a due date gets a countdown
+ * bar up to it (the end of that day, or the time given) and is asked about once it has passed.
+ */
+function DueField({ draft, patch }: { draft: Task; patch: (p: Partial<Task>) => void }) {
+  const once = draft.repeat.kind === 'none';
+  // an exact time is kept only while it is on the due date (an older deadline from elsewhere is shown as its date)
+  const date = draft.due ?? (once && draft.deadline ? dayOf(draft.deadline) : '');
+  const time = once && draft.deadline && dayOf(draft.deadline) === date ? hhmm(draft.deadline) : '';
+  // a new due date or time starts a new countdown and a new "did you do it?"
+  const set = (due: string, t: string) =>
+    patch({
+      due: due || undefined,
+      deadline: once && due && t ? at(due, t) : undefined,
+      deadlineSetAt: due ? Date.now() : undefined,
+      askedAt: undefined,
+      deadlineOutcome: undefined,
+    });
+  return (
+    <Field label={once ? 'Due (a countdown bar runs until then)' : 'Due date (first time only)'}>
+      <input className="text-in" type="date" aria-label="Due date" style={{ flex: '1 1 200px', minWidth: 190, maxWidth: 240 }} value={date} onChange={(e) => set(e.target.value, time)} />
+      {once && date && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 15 }}>
+          by
+          <input className="text-in" type="time" aria-label="Due time (optional)" style={{ minWidth: 130, maxWidth: 160 }} value={time} onChange={(e) => set(date, e.target.value)} />
+        </label>
+      )}
+      {date && (
+        <button type="button" className="pill" onClick={() => set('', '')}>
+          Clear
+        </button>
+      )}
+    </Field>
+  );
+}
+
+/** A daily "done by" time (daily quests), and what missing the due time costs. */
 function TimeLimit({ draft, patch }: { draft: Task; patch: (p: Partial<Task>) => void }) {
   const once = draft.repeat.kind === 'none';
-  // a new deadline starts a new countdown and a new "did you do it?"
-  const setDeadline = (deadline: number | undefined) =>
-    patch({ deadline, deadlineSetAt: deadline ? Date.now() : undefined, askedAt: undefined, deadlineOutcome: undefined });
-  const hasLimit = once ? !!draft.deadline : true;
+  const hasLimit = once ? !!(draft.due || draft.deadline) : true;
   const everyDay = draft.repeat.kind === 'daily' || draft.repeat.kind === 'days';
   const period = { weekly: 'week', monthly: 'month', interval: 'period' }[draft.repeat.kind as string] ?? 'day';
-  const quick: [string, () => number][] = [
-    ['1 hour', () => Date.now() + 3600_000],
-    ['Tonight', () => (endOfDay(0) - Date.now() > 3600_000 ? endOfDay(0) : endOfDay(1))],
-    ['Tomorrow', () => endOfDay(1)],
-    ['1 week', () => endOfDay(7)],
-  ];
   return (
     <>
-      {once ? (
-        <Field label="Deadline (a countdown bar fills the row)">
-          {quick.map(([label, at]) => (
-            <button type="button" key={label} className="pill" onClick={() => setDeadline(at())}>
-              {label}
-            </button>
-          ))}
-          <input
-            className="text-in"
-            type="datetime-local"
-            aria-label="Deadline"
-            style={{ flex: '1 1 220px', minWidth: 200, maxWidth: 280 }}
-            value={draft.deadline ? localInput(draft.deadline) : ''}
-            onChange={(e) => setDeadline(e.target.value ? new Date(e.target.value).getTime() || undefined : undefined)}
-          />
-          {draft.deadline && (
-            <button type="button" className="pill" onClick={() => setDeadline(undefined)}>
-              Clear
-            </button>
-          )}
-        </Field>
-      ) : !everyDay ? null : (
+      {everyDay && (
         <Field label="Done by (time of day; empty = by the end of the day)">
           <input
             className="text-in"

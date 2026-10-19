@@ -414,8 +414,11 @@ canvas.px {
   z-index: -1;
   border-radius: 4px;
   pointer-events: none;
-  background: hsl(calc(var(--left) * 110) 75% 45% / 0.26);
-  box-shadow: inset -3px 0 0 hsl(calc(var(--left) * 110) 80% 55% / 0.7);
+  /* a solid strip along the bottom reads on every list color; a light tint fills the rest */
+  background:
+    linear-gradient(to top, hsl(calc(var(--left) * 110) 85% 55%) 0 4px, transparent 4px),
+    hsl(calc(var(--left) * 110) 75% 45% / 0.3);
+  box-shadow: inset -3px 0 0 hsl(calc(var(--left) * 110) 85% 60%);
   transition: width 1s steps(8);
 }
 .task .tbar.late {

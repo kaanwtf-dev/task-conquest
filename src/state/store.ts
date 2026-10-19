@@ -486,7 +486,8 @@ export const useStore = create<State>()(
           } else {
             // more time: a day from now; a must-do quest still pays for being late
             if (task.stakes === 'must' && task.missedFor !== 'deadline') get().punishMiss(id, 'deadline');
-            s.updateTask(id, { deadline: t + 86_400_000, deadlineSetAt: t, askedAt: t });
+            const until = t + 86_400_000;
+            s.updateTask(id, { deadline: until, due: todayKey(until, s.settings), deadlineSetAt: t, askedAt: t });
           }
         },
 

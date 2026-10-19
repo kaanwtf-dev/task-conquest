@@ -23,15 +23,27 @@ export function byTimeOf(task: Task): number | null {
   return task.repeat.kind === 'daily' || task.repeat.kind === 'days' ? parseByTime(task.byTime) : null;
 }
 
-/** The time window a quest has to be done in right now, or null for quests with no time limit. */
+/** When a one-off quest is due: its exact deadline, or else the end of its due date's (logical) day. */
+export function deadlineOf(task: Task, cfg: TimeCfg): number | null {
+  if (typeof task.deadline === 'number' && Number.isFinite(task.deadline)) return task.deadline;
+  if (typeof task.due !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(task.due)) return null;
+  const d = parseDateKey(task.due);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() + cfg.dayStartHour * 3600_000;
+}
+
+/**
+ * The time window a quest has to be done in right now: up to its due date (one-off quests), its "done by"
+ * time (daily ones that have one), or the end of its day, week or month (other repeating ones).
+ * Null for one-off quests with no due date.
+ */
 export function windowOf(task: Task, now: number, cfg: TimeCfg): { start: number; end: number } | null {
   if (task.repeat.kind === 'none') {
-    if (!task.deadline) return null;
-    const start = Math.min(task.deadlineSetAt ?? task.createdAt, task.deadline - 60_000);
-    return { start, end: task.deadline };
+    const end = deadlineOf(task, cfg);
+    if (end === null) return null;
+    const start = Math.min(task.deadlineSetAt ?? task.createdAt, end - 60_000);
+    return { start, end };
   }
   const by = byTimeOf(task);
-  if (!task.stakes && by === null) return null;
   const day = logicalDate(now, cfg);
   const midnight = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
   if (by !== null) {
@@ -40,6 +52,11 @@ export function windowOf(task: Task, now: number, cfg: TimeCfg): { start: number
     return { start, end: midnight + by + (by < cfg.dayStartHour * 3600_000 ? DAY : 0) };
   }
   return periodWindow(task, now, cfg);
+}
+
+/** A time limit the player set on purpose (not just the end of a repeating quest's day or week). */
+export function hasLimit(task: Task, cfg: TimeCfg): boolean {
+  return task.repeat.kind === 'none' ? deadlineOf(task, cfg) !== null : !!task.stakes || byTimeOf(task) !== null;
 }
 
 /** The whole current repeat period, from its first to its last moment. */
@@ -116,7 +133,7 @@ export function missedWindow(task: Task, now: number, cfg: TimeCfg): string | nu
     const doneInTime = task.doneFor === key && (task.doneAt ?? 0) <= end;
     return doneInTime || !activeOn(task, at, cfg) ? null : key;
   }
-  const w = windowOf(task, now, cfg);
+  const w = periodWindow(task, now, cfg);
   if (!w) return null;
   at = w.start - 1; // the previous period
   const key = periodKey(task.repeat, at, cfg);
@@ -132,10 +149,11 @@ function activeOn(task: Task, at: number, cfg: TimeCfg): boolean {
   return true;
 }
 
-/** One-off quest past its deadline, not done and not asked about lately: time to ask "did you do it?". */
-export function askDue(task: Task, now: number): boolean {
-  if (task.deleted || task.repeat.kind !== 'none' || !task.deadline || task.doneFor) return false;
-  if (now < task.deadline) return false;
+/** One-off quest past its due time, not done and not asked about lately: time to ask "did you do it?". */
+export function askDue(task: Task, now: number, cfg: TimeCfg): boolean {
+  if (task.deleted || task.repeat.kind !== 'none' || task.doneFor) return false;
+  const end = deadlineOf(task, cfg);
+  if (end === null || now < end) return false;
   if (task.deadlineOutcome) return false;
   return !task.askedAt || now - task.askedAt > 12 * 3600_000;
 }

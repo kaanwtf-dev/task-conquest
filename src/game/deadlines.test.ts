@@ -30,9 +30,18 @@ describe('countdown', () => {
     expect(windowOf(monthly, at(15, 7), cfg)).toEqual({ start: at(1, 0), end: new Date(2026, 10, 1).getTime() });
     const every3 = task({ repeat: { kind: 'interval', every: 3, anchor: day(10) }, stakes: 'must' });
     expect(windowOf(every3, at(15, 7), cfg)).toEqual({ start: at(13, 0), end: at(16, 0) });
-    // a plain daily with neither a time nor stakes has no countdown; a weekly ignores a "by" time
-    expect(windowOf(task(), at(15, 7), cfg)).toBeNull();
-    expect(windowOf(task({ repeat: { kind: 'weekly' }, byTime: '10:00' }), at(15, 7), cfg)).toBeNull();
+    // a plain daily counts down its day; a weekly ignores a "by" time
+    expect(windowOf(task(), at(15, 7), cfg)).toEqual({ start: at(15, 0), end: at(16, 0) });
+    expect(windowOf(task({ repeat: { kind: 'weekly' }, byTime: '10:00' }), at(15, 7), cfg)).toEqual({ start: at(12, 0), end: at(19, 0) });
+  });
+
+  it('runs a one-off with a due date to the end of that day, or to its exact time', () => {
+    const t = task({ repeat: { kind: 'none' }, due: day(16), createdAt: at(14, 0) });
+    expect(windowOf(t, at(15, 7), cfg)).toEqual({ start: at(14, 0), end: at(17, 0) });
+    expect(windowOf(t, at(15, 7), { ...cfg, dayStartHour: 4 })!.end).toBe(at(17, 4));
+    expect(windowOf({ ...t, deadline: at(16, 18) }, at(15, 7), cfg)!.end).toBe(at(16, 18));
+    expect(windowOf(task({ repeat: { kind: 'none' } }), at(15, 7), cfg)).toBeNull();
+    expect(timeLeft(t, at(16, 0), cfg)).toBeCloseTo(1 / 3);
   });
 });
 
@@ -71,13 +80,18 @@ describe('missed windows', () => {
 
 describe('asking about a one-off', () => {
   const t = task({ repeat: { kind: 'none' }, deadline: at(15, 14), stakes: 'flexible' });
+  it('asks about a quest whose due date has passed', () => {
+    const dated = task({ repeat: { kind: 'none' }, due: day(15) });
+    expect(askDue(dated, at(15, 23), cfg)).toBe(false);
+    expect(askDue(dated, at(16, 9), cfg)).toBe(true);
+  });
   it('asks once the deadline passed, then not again for half a day, and never once answered', () => {
-    expect(askDue(t, at(15, 13))).toBe(false);
-    expect(askDue(t, at(15, 15))).toBe(true);
-    expect(askDue({ ...t, askedAt: at(15, 15) }, at(15, 20))).toBe(false);
-    expect(askDue({ ...t, askedAt: at(15, 15) }, at(16, 4))).toBe(true);
-    expect(askDue({ ...t, deadlineOutcome: 'missed' }, at(16, 4))).toBe(false);
-    expect(askDue({ ...t, doneFor: 'once' }, at(16, 4))).toBe(false);
+    expect(askDue(t, at(15, 13), cfg)).toBe(false);
+    expect(askDue(t, at(15, 15), cfg)).toBe(true);
+    expect(askDue({ ...t, askedAt: at(15, 15) }, at(15, 20), cfg)).toBe(false);
+    expect(askDue({ ...t, askedAt: at(15, 15) }, at(16, 4), cfg)).toBe(true);
+    expect(askDue({ ...t, deadlineOutcome: 'missed' }, at(16, 4), cfg)).toBe(false);
+    expect(askDue({ ...t, doneFor: 'once' }, at(16, 4), cfg)).toBe(false);
   });
 });
 
