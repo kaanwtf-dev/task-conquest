@@ -2366,3 +2366,74 @@ canvas.px {
   color: var(--muted);
   margin: 12px 0;
 }
+
+/* party leaderboard */
+.board {
+  padding: 8px 12px;
+}
+.board-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border-radius: 4px;
+}
+.board-row + .board-row {
+  border-top: 2px dashed rgba(255, 255, 255, 0.08);
+}
+.board-row.me {
+  background: rgba(255, 216, 77, 0.1);
+}
+.board-rank {
+  width: 34px;
+  text-align: center;
+  font-family: var(--font-pixel);
+  font-size: 12px;
+  flex: none;
+}
+.board-nosprite {
+  width: 36px;
+  height: 36px;
+  flex: none;
+}
+.board-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.board-who b {
+  font-weight: normal;
+  font-size: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-days {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+.board-pts {
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--gold, #ffd84d);
+}
+.board-note {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--muted);
+  padding: 8px 4px;
+}
+.board-how {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  padding: 8px 4px 4px;
+  text-decoration: underline;
+  cursor: pointer;
+}

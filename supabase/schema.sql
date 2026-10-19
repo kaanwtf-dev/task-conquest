@@ -379,3 +379,60 @@ language sql stable security definer set search_path = '' as $$
 $$;
 revoke execute on function public.reminders_last_run() from public, anon;
 grant execute on function public.reminders_last_run() to authenticated;
+
+-- ---------------------------------------------------------------- party leaderboard
+-- Points a player earned per day (their local, logical day). Written only through log_points, which caps
+-- a day at 20 and only takes today or yesterday: making up quests or replaying old days can't beat simply
+-- showing up every day. Party members see each other's last 7 days through party_board.
+create table if not exists public.day_points (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  day date not null,
+  points int not null check (points between 0 and 20),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, day)
+);
+alter table public.day_points enable row level security;
+revoke all on public.day_points from anon, authenticated;
+grant all on public.day_points to service_role;
+
+create or replace function public.log_points(p_day date, p_points int) returns void
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_today date := (now() at time zone 'utc')::date;
+begin
+  if auth.uid() is null then
+    raise exception 'sign in first' using errcode = '42501';
+  end if;
+  -- a player's local day is within a day of UTC's, either way; anything older is closed
+  if p_day is null or p_day < v_today - 1 or p_day > v_today + 1 then
+    raise exception 'day out of range' using errcode = '22023';
+  end if;
+  insert into public.day_points as d (user_id, day, points, updated_at)
+  values (auth.uid(), p_day, least(greatest(coalesce(p_points, 0), 0), 20), clock_timestamp())
+  -- devices report what they have seen: the day keeps its best count
+  on conflict (user_id, day) do update set points = greatest(d.points, excluded.points), updated_at = clock_timestamp()
+  where excluded.points > d.points;
+end $$;
+revoke execute on function public.log_points(date, int) from public, anon;
+grant execute on function public.log_points(date, int) to authenticated;
+
+-- The caller and everyone they share a list with: hero card, points and active days over the last 7 days.
+create or replace function public.party_board()
+returns table (user_id uuid, name text, data jsonb, points int, days int)
+language sql stable security definer set search_path = '' as $$
+  with mates as (
+    select auth.uid() as uid where auth.uid() is not null
+    union
+    select b.user_id from public.list_members a join public.list_members b on a.list_id = b.list_id
+    where a.user_id = auth.uid()
+  )
+  select m.uid, p.name, p.data,
+         coalesce(sum(d.points), 0)::int,
+         (count(d.day) filter (where d.points > 0))::int
+  from mates m
+  left join public.profiles p on p.user_id = m.uid
+  left join public.day_points d on d.user_id = m.uid and d.day > (now() at time zone 'utc')::date - 7
+  group by m.uid, p.name, p.data;
+$$;
+revoke execute on function public.party_board() from public, anon;
+grant execute on function public.party_board() to authenticated;

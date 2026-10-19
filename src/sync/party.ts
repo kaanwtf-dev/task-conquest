@@ -1,6 +1,7 @@
 // Party lists: invite codes/links, joining and leaving, the member roster and public hero cards.
 import type { ClassId, Hero } from '../core/types';
 import { HAIR_STYLES, RACE_BY_ID, type Appearance } from '../pixel/sprites/hero';
+import { BOARD_DAYS, DAY_CAP } from '../game/leaderboard';
 import { flushSync } from './engine';
 import { getClient, toRemoteError } from './supabase';
 
@@ -129,4 +130,26 @@ export async function upsertProfile(hero: Hero, level: number): Promise<void> {
     { onConflict: 'user_id' },
   )) as RpcResult<null>;
   if (res.error) throw friendly(res);
+}
+
+/** Report the points of a day (YYYY-MM-DD, the player's own logical day); the server keeps the best. */
+export async function logPoints(day: string, points: number): Promise<void> {
+  const res = await rpc<null>('log_points', { p_day: day, p_points: points });
+  if (res.error) throw friendly(res);
+}
+
+export interface BoardMember extends PartyMember {
+  points: number;
+  days: number;
+}
+
+/** The caller and everyone sharing a list with them, with their points over the last 7 days. */
+export async function partyBoard(): Promise<BoardMember[]> {
+  const res = await rpc<{ user_id: string; name: string | null; data: unknown; points: number; days: number }[]>('party_board', {});
+  if (res.error) throw friendly(res);
+  return (res.data ?? []).map((r) => ({
+    ...toMember({ ...r, role: 'member' }),
+    points: Math.max(0, Math.min(BOARD_DAYS * DAY_CAP, Math.floor(Number(r.points) || 0))),
+    days: Math.max(0, Math.min(BOARD_DAYS, Math.floor(Number(r.days) || 0))),
+  }));
 }
