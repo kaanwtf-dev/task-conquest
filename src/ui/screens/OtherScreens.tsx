@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { RemindersOption } from '../components/Reminders';
 import { SupportBox } from '../components/Support';
+import { InstallButton, useCanInstall } from '../components/InstallGuide';
 import { LANGS, detectLang, t } from '../../i18n';
 import { WhatsNewSheet } from '../components/WhatsNew';
 import { useStore, heroStats, isForeignList, LIST_TYPE_INFO } from '../../state/store';
@@ -15,6 +16,7 @@ export function SettingsScreen() {
   const s = useStore();
   const importInput = useRef<HTMLInputElement>(null);
   const cfg = s.settings;
+  const canInstall = useCanInstall();
   const set = s.updateSettings;
   const [notes, setNotes] = useState(false);
   return (
@@ -31,6 +33,11 @@ export function SettingsScreen() {
             );
           })}
         </Opt>
+        {canInstall && (
+          <Opt label={t('Home Screen')}>
+            <InstallButton className="pill sel" />
+          </Opt>
+        )}
         <Opt label={t('Battle animations')}>
           {(['full', 'quick', 'off'] as AnimMode[]).map((m) => (
             <button key={m} className={`pill ${cfg.anim === m ? 'sel' : ''}`} aria-pressed={cfg.anim === m} onClick={() => (sfx.tick(), set({ anim: m }))}>

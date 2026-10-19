@@ -234,6 +234,8 @@ export interface Settings {
   pushAskedAt?: number;
   /** when "back up your save" was last put off (this device) */
   backupAskedAt?: number;
+  /** when the "put it on your Home Screen" card was last put off (this device) */
+  installAskedAt?: number;
   /** the "enjoying Task Conquest? tip the developer" card: when it was last put off, and whether it is done for good */
   tipAskedAt?: number;
   tipDone?: boolean;

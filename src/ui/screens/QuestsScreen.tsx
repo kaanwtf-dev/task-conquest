@@ -23,7 +23,8 @@ import { fx } from '../../state/fx';
 import { sfx, unlockAudio } from '../../audio/sfx';
 import type { Task, TaskList } from '../../core/types';
 import TaskEditSheet from './TaskEditSheet';
-import BackupWarning from '../components/BackupWarning';
+import BackupWarning, { useBackupDue } from '../components/BackupWarning';
+import { InstallCard } from '../components/InstallGuide';
 import { TipNudge } from '../components/Support';
 import { WARN_MS, hasLimit, leftLabel, timeLeft, windowOf } from '../../game/deadlines';
 import { todaySections } from '../../state/today';
@@ -89,6 +90,7 @@ export default function QuestsScreen() {
 
       <QuickAdd list={list} />
       <BackupWarning />
+      <InstallNudge />
       <TipNudge />
       <PushInvite />
 
@@ -151,6 +153,7 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
         dueToday
       />
       <BackupWarning />
+      <InstallNudge />
       <TipNudge />
       <PushInvite />
       {overdue.length + dueToday.length + routine.length + week.length === 0 && (
@@ -751,3 +754,8 @@ const PantryChip = memo(function PantryChip({ task, onEdit }: { task: Task; onEd
     </button>
   );
 });
+
+/** The Home Screen card, one card at a time: it waits while the backup warning is up. */
+function InstallNudge() {
+  return useBackupDue() ? null : <InstallCard />;
+}

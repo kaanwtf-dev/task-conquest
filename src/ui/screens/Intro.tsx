@@ -1,5 +1,6 @@
 // First-run walkthrough: a few short illustrated cards on what Task Conquest is and how it works.
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { InstallButton } from '../components/InstallGuide';
 import { useStore } from '../../state/store';
 import { heroLook } from '../../game/look';
 import { CLASS_BY_ID } from '../../game/catalog';
@@ -183,6 +184,7 @@ export default function Intro() {
               </li>
             </ol>
           </div>
+          <InstallButton />
         </div>
       ),
     },
