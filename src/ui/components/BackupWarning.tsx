@@ -1,0 +1,55 @@
+// "Your save is only on this phone!": shown to players who aren't signed in once they've made progress.
+// "Later" hides it for a few days; it keeps coming back until the save is backed up to the cloud.
+import { useEffect, useState } from 'react';
+import { useStore } from '../../state/store';
+import { sum } from '../../game/progression';
+
+const NAG_AGAIN_MS = 3 * 86_400_000;
+
+/** Signed in (account id), not (null), or no cloud on this site ('off'); undefined while loading. */
+function useCloudAccount(): string | null | 'off' | undefined {
+  const [v, setV] = useState<string | null | 'off' | undefined>(undefined);
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let alive = true;
+    void import('../../state/sync').then(({ useSync }) => {
+      if (!alive) return;
+      const read = (s: { status: string; userId: string | null }) => setV(s.status === 'off' ? 'off' : s.userId);
+      read(useSync.getState());
+      off = useSync.subscribe(read);
+    });
+    return () => {
+      alive = false;
+      off?.();
+    };
+  }, []);
+  return v;
+}
+
+export default function BackupWarning() {
+  const done = useStore((s) => (s.hero ? sum(s.hero.tasksDone) : 0));
+  const askedAt = useStore((s) => s.settings.backupAskedAt ?? 0);
+  const update = useStore((s) => s.updateSettings);
+  const setTab = useStore((s) => s.setTab);
+  const account = useCloudAccount();
+  if (account !== null || done < 1 || Date.now() - askedAt < NAG_AGAIN_MS) return null;
+  return (
+    <div className="win backup-warn" role="alert">
+      <div className="backup-warn-icon" aria-hidden>
+        ⚠️
+      </div>
+      <div className="backup-warn-text">
+        <b>Your save is ONLY on this phone!!</b>
+        <span>Delete the app, clear your browser or lose your phone and your hero is gone forever. Back it up free, takes 30 seconds!</span>
+      </div>
+      <div className="backup-warn-actions">
+        <button className="btn small" onClick={() => setTab('party')}>
+          Back up!
+        </button>
+        <button className="btn ghost small" onClick={() => update({ backupAskedAt: Date.now() })}>
+          Later
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -92,6 +92,10 @@ function AuthCard() {
       <div className="section-label">Sign in</div>
       <div className="win" style={{ padding: 12 }}>
         {pending && <p style={{ color: 'var(--accent)', marginTop: 0 }}>Sign in to join party list {pending}.</p>}
+        <p className="backup-note">
+          ⚠️ <b>Not backed up!</b> Right now your save lives only on this device. A free account keeps it safe in the cloud and lets you play on
+          your other devices too.
+        </p>
         <form
           onSubmit={(e) => {
             e.preventDefault();
