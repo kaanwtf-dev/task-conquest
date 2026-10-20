@@ -535,3 +535,39 @@ describe('store: party lists are left, never deleted for the party', () => {
     expect(left).toEqual([]);
   });
 });
+
+describe('store: settings that follow the account', () => {
+  beforeEach(() => fresh());
+  afterEach(() => vi.useRealTimers());
+
+  it('stamps account-wide settings onto the hero, leaves device-only ones alone', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 20, 9));
+    const u0 = st().hero!.updatedAt;
+    st().updateSettings({ backupAskedAt: Date.now() }); // this device only
+    expect(st().hero!.prefs).toBeUndefined();
+    vi.setSystemTime(new Date(2026, 9, 20, 10));
+    st().updateSettings({ lang: 'tr', anim: 'quick' });
+    const p = st().hero!.prefs!;
+    expect(p.values).toMatchObject({ lang: 'tr', anim: 'quick' });
+    expect(p.values).not.toHaveProperty('backupAskedAt');
+    expect(st().settings.prefsAt).toBe(p.at);
+    expect(st().hero!.updatedAt).toBeGreaterThan(u0); // so the sync sends it
+  });
+
+  it('takes in newer settings from another device (once), ignores older ones and junk', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 20, 9));
+    st().updateSettings({ lang: 'en' });
+    const at = st().settings.prefsAt!;
+    // another device's newer hero arrives (as the sync engine writes it)
+    useStore.setState((s) => ({ hero: { ...s.hero!, prefs: { at: at + 5000, values: { lang: 'tr', music: 0.3, dayStartHour: 4, sfx: 7, backupAskedAt: 1, evil: 'x' } } } }));
+    expect(st().settings).toMatchObject({ lang: 'tr', music: 0.3, dayStartHour: 4, prefsAt: at + 5000 });
+    expect(st().settings.sfx).not.toBe(7); // out of range: dropped
+    expect(st().settings.backupAskedAt).not.toBe(1); // device-only: never taken from the cloud
+    expect(st().hero!.prefs!.at).toBe(at + 5000); // not stamped again (no echo back to the cloud)
+    // an older copy changes nothing
+    useStore.setState((s) => ({ hero: { ...s.hero!, prefs: { at: at - 1, values: { lang: 'en' } } } }));
+    expect(st().settings.lang).toBe('tr');
+  });
+});

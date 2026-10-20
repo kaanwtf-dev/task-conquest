@@ -309,3 +309,15 @@ describe('mergeHero bestStreak', () => {
     expect('bestStreak' in mergeHero(c, d)).toBe(false);
   });
 });
+
+describe('settings in the hero', () => {
+  it('the newest settings win, whichever device saved the hero last', async () => {
+    const { mergeHero } = await import('./merge');
+    const base = { id: 'hero', name: 'A', createdAt: 1, updatedAt: 10 } as unknown as import('../core/types').Hero;
+    const phone = { ...base, updatedAt: 50, prefs: { at: 20, values: { lang: 'en' } } };
+    const mac = { ...base, updatedAt: 30, prefs: { at: 40, values: { lang: 'tr' } } };
+    expect(mergeHero(phone, mac).prefs).toEqual({ at: 40, values: { lang: 'tr' } });
+    expect(mergeHero(mac, phone).prefs).toEqual({ at: 40, values: { lang: 'tr' } });
+    expect(mergeHero(base, base)).not.toHaveProperty('prefs');
+  });
+});

@@ -282,4 +282,5 @@ export const TR_COMPONENTS: Record<string, string> = {
   'View': 'Görüntü',
   '📲 Put it on your Home Screen': '📲 Ana Ekranına ekle',
   'Home Screen': 'Ana Ekran',
+  'You can change this anytime in Options.': 'Bunu istediğin zaman Ayarlar’dan değiştirebilirsin.',
 };

@@ -12,7 +12,7 @@ import { spriteUrl } from '../../pixel/pix';
 import { iconFor } from '../../pixel/iconGen';
 import { BodyPortal, PxImg, SceneBanner, Ui } from '../components/common';
 import { sfx, unlockAudio } from '../../audio/sfx';
-import { t } from '../../i18n';
+import { LANGS, resolveLang, t } from '../../i18n';
 
 const GUIDE: Appearance = { race: 'human', skin: 1, hair: 'short', hairColor: '#5a3a22', eyes: '#3a5a9a', beard: 'none', outfit: '#3a6ad0', pants: '#4a3a2a' };
 const FRIEND: Appearance = { race: 'elf', skin: 0, hair: 'long', hairColor: '#e8c070', eyes: '#2a8a5a', beard: 'none', outfit: '#8a4ac0', pants: '#2a2a3a' };
@@ -272,6 +272,7 @@ export default function Intro() {
               <p id="intro-body" className="intro-body">
                 {card.body}
               </p>
+              {i === 0 && <LangPick />}
             </div>
             <div className="intro-foot">
               <button className="btn ghost small" onClick={() => go(i - 1)} disabled={i === 0} aria-label={t('Previous')}>
@@ -290,5 +291,24 @@ export default function Intro() {
         </div>
       )}
     </BodyPortal>
+  );
+}
+
+/** The language, right on the first card (the guess from the browser can be wrong for someone abroad). */
+function LangPick() {
+  const lang = useStore((s) => s.settings.lang);
+  const update = useStore((s) => s.updateSettings);
+  const shown = resolveLang(lang);
+  return (
+    <div className="intro-lang">
+      <div role="group" aria-label={t('Language')}>
+        {LANGS.filter((l) => l.id !== 'auto').map(({ id, label }) => (
+          <button key={id} className={`pill ${shown === id ? 'sel' : ''}`} aria-pressed={shown === id} onClick={() => (sfx.tick(), update({ lang: id }))}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <span className="muted small">{t('You can change this anytime in Options.')}</span>
+    </div>
   );
 }

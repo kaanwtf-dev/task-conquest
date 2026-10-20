@@ -167,6 +167,8 @@ export interface Hero extends Meta {
   name: string;
   appearance: Appearance;
   classId: ClassId;
+  /** the settings that follow the account (state/syncedSettings.ts), and when they last changed */
+  prefs?: { at: number; values: Record<string, unknown> };
   xp: Counter;
   gold: Counter;
   goldSpent: Counter;
@@ -250,6 +252,8 @@ export interface Settings {
   aisleMemory?: Record<string, string>;
   /** Difficulties the player set by hand, by quest name (lower case): used instead of the automatic guess. */
   difficultyMemory?: Record<string, number>;
+  /** when the account-wide settings this device has were last changed (hero.prefs.at); newer ones are taken in */
+  prefsAt?: number;
 }
 
 export interface HeroDock {

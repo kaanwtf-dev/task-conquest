@@ -15,15 +15,20 @@ export const LANGS: { id: LangPref; label: string }[] = [
 
 let current: Lang = 'en';
 
-/** Turkish when the phone's language is Turkish, or when it's set to Turkey's time zone; English otherwise. */
-export function detectLang(): Lang {
+/**
+ * The first language the browser asks for that the game speaks (its preference order), else English. Only the
+ * browser's languages count: the time zone says where someone is, not what they read.
+ */
+export function detectLang(langs?: readonly string[]): Lang {
   try {
-    const langs = typeof navigator !== 'undefined' ? [...(navigator.languages ?? []), navigator.language] : [];
-    if (langs.some((l) => typeof l === 'string' && /^tr\b/i.test(l))) return 'tr';
-    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (zone === 'Europe/Istanbul' || zone === 'Asia/Istanbul') return 'tr';
+    const list = langs ?? (typeof navigator !== 'undefined' ? [...(navigator.languages ?? []), navigator.language] : []);
+    for (const l of list) {
+      if (typeof l !== 'string') continue;
+      if (/^tr\b/i.test(l)) return 'tr';
+      if (/^en\b/i.test(l)) return 'en';
+    }
   } catch {
-    // no navigator or Intl: English
+    // no navigator: English
   }
   return 'en';
 }

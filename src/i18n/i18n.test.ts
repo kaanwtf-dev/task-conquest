@@ -85,7 +85,12 @@ describe('Turkish', () => {
     expect(upper('istanbul')).toBe('İSTANBUL');
   });
 
-  it('picks Turkish from the phone language or the Turkey time zone', () => {
+  it('follows the browser languages in their order, never the time zone', () => {
+    expect(detectLang(['tr-TR'])).toBe('tr');
+    expect(detectLang(['en-US', 'tr-TR'])).toBe('en'); // English first: English
+    expect(detectLang(['de-DE', 'tr', 'en'])).toBe('tr'); // the first one the game speaks
+    expect(detectLang(['de-DE', 'fr-FR'])).toBe('en');
+    expect(detectLang([])).toBe('en');
     const nav = globalThis.navigator;
     Object.defineProperty(globalThis, 'navigator', { value: { languages: ['tr-TR'], language: 'tr-TR' }, configurable: true });
     expect(detectLang()).toBe('tr');

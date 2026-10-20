@@ -2990,3 +2990,16 @@ body.hurt-shake #root {
 .ig-step .ig-phone {
   grid-column: 2;
 }
+
+/* language choice on the first intro card */
+.intro-lang {
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.intro-lang [role='group'] {
+  display: flex;
+  gap: 8px;
+}

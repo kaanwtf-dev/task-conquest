@@ -10,6 +10,7 @@ import { dateKey, isActiveToday, isDone, parseDateKey, periodKey, streak, todayK
 import { baseXp, heroGold, heroLevel, sum } from '../game/progression';
 import { guessAisle } from '../pixel/keywords';
 import { guessDifficulty } from '../game/difficulty';
+import { pickSynced, sanitizeSynced, touchesSynced } from './syncedSettings';
 import { AUTO_MISS_MS, answerCost, deadlineOf, missedAt, type MissAnswer } from '../game/deadlines';
 import { hashStr } from '../core/rng';
 import { itemDisplayName, sellPrice, starterItems, upgradeCost } from '../game/loot';
@@ -160,7 +161,8 @@ export interface State {
   reorderTasks(orderedIds: string[]): void;
   reorderLists(orderedIds: string[]): void;
   moveTask(id: string, listId: string): void;
-  updateSettings(patch: Partial<Settings>): void;
+  /** `fromCloud`: settings another device changed (not stamped and sent back). */
+  updateSettings(patch: Partial<Settings>, fromCloud?: boolean): void;
   // hero & loot
   equip(itemId: string): void;
   unequip(slot: Slot): void;
@@ -616,9 +618,16 @@ export const useStore = create<State>()(
           get().updateTask(id, patch);
         },
 
-        updateSettings(patch) {
+        updateSettings(patch, fromCloud) {
           const prev = get().settings;
           const next = { ...prev, ...patch };
+          // account-wide settings ride along in the synced hero (newest wins); ones from the cloud aren't sent back
+          const hero = get().hero;
+          if (!fromCloud && hero && touchesSynced(patch)) {
+            const at = Math.max(now(), (hero.prefs?.at ?? 0) + 1);
+            next.prefsAt = at;
+            set({ hero: { ...hero, prefs: { at, values: pickSynced(next) }, updatedAt: Math.max(now(), hero.updatedAt + 1) } });
+          }
           if (next.dayStartHour !== prev.dayStartHour || next.weekStart !== prev.weekStart) {
             const t = now();
             const tasks = { ...get().tasks };
@@ -975,3 +984,10 @@ export const bagItems = (s: Pick<State, 'hero' | 'items'>): Item[] => {
 export const potionStacks = (s: Pick<State, 'potions'>): PotionStack[] =>
   Object.values(s.potions).filter((p) => !p.deleted && p.count > 0);
 export type { PotionId };
+
+// settings another device changed arrive inside the synced hero: take them in when they are newer
+useStore.subscribe((s) => {
+  const p = s.hero?.prefs;
+  if (!p || !(p.at > (s.settings.prefsAt ?? 0))) return;
+  s.updateSettings({ ...sanitizeSynced(p.values), prefsAt: p.at }, true);
+});

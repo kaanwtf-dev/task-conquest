@@ -139,6 +139,8 @@ export function mergeHero(a: Hero, b: Hero): Hero {
     streakSaves: Math.max(finiteOr(a.streakSaves, 0), finiteOr(b.streakSaves, 0)),
     // only present once some device recorded one, so merging old saves stays a no-op
     ...(a.bestStreak != null || b.bestStreak != null ? { bestStreak: Math.max(finiteOr(a.bestStreak, 0), finiteOr(b.bestStreak, 0)) } : {}),
+    // the account-wide settings: the newest change wins, whichever device saved the hero last
+    ...(a.prefs || b.prefs ? { prefs: finiteOr(a.prefs?.at, 0) >= finiteOr(b.prefs?.at, 0) ? a.prefs : b.prefs } : {}),
   };
 }
 
