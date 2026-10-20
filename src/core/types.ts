@@ -76,13 +76,20 @@ export interface Task extends Meta {
   /** repeating quests: must be done by this time of day ("HH:MM") */
   byTime?: string;
   /** what missing it costs: a little (flexible) or more (must do); none when unset */
-  stakes?: 'flexible' | 'must';
+  stakes?: 'flexible' | 'must' | 'none';
   /** the last missed window that was counted (period key, or 'deadline') */
   missedFor?: string;
   /** when that window ended (ms); windows ending up to then are counted already */
   missedEnd?: number;
   /** a repeating quest's window ended undone and the player hasn't said what happened yet */
-  pendingMiss?: { key: string; end: number } | null;
+  pendingMiss?: {
+    key: string;
+    end: number;
+    /** gold the hero already lost for it (the hit lands right away; "What happened?" can give it back) */
+    paid?: number;
+    /** misses in a row before this one (restored if the player says it was done after all) */
+    prevMisses?: number;
+  } | null;
   /** "more time" for a repeating quest's "done by" time: that period's window ends at `until` instead */
   extendFor?: { key: string; until: number } | null;
   /** misses in a row (reset by doing it) and ever */

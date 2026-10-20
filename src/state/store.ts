@@ -11,7 +11,7 @@ import { baseXp, heroGold, heroLevel, sum } from '../game/progression';
 import { guessAisle } from '../pixel/keywords';
 import { guessDifficulty } from '../game/difficulty';
 import { pickSynced, sanitizeSynced, touchesSynced } from './syncedSettings';
-import { AUTO_MISS_MS, answerCost, deadlineOf, missedAt, type MissAnswer } from '../game/deadlines';
+import { AUTO_MISS_MS, answerCost, deadlineOf, missPenalty, missedAt, refundFor, stakesOf, type MissAnswer } from '../game/deadlines';
 import { hashStr } from '../core/rng';
 import { itemDisplayName, sellPrice, starterItems, upgradeCost } from '../game/loot';
 import { makeBuff, potionName, potionStackId } from '../game/potions';
@@ -103,6 +103,8 @@ export const syncHooks: {
   leave?: (listId: string) => void;
   /** Start over dropped the hero of this lineage: delete it in the cloud as well. */
   heroReset?: (lineage: number) => void;
+  /** Still catching up with the cloud after opening: hold off on anything that charges the hero once. */
+  busy?: () => boolean;
 } = {};
 
 /** Before the store remembered its account, the sync layer kept the last synced user here. */
@@ -462,8 +464,10 @@ export const useStore = create<State>()(
 
         checkDeadlines() {
           const s = get();
-          if (!s.hero) return;
-          const t = now();
+          // a miss is charged once, on whichever device notices it first: not before this one has heard
+          // from the others (sync calls this again once it has caught up)
+          if (!s.hero || syncHooks.busy?.()) return;
+          const at = now();
           // misses nobody answered: the hero takes one hit for all of them together
           let auto = 0;
           let lost = 0;
@@ -477,17 +481,35 @@ export const useStore = create<State>()(
             if (task.deleted || !list || list.deleted || list.shared || list.type === 'supply') continue;
             if (task.repeat.kind === 'none') {
               const end = deadlineOf(task, s.settings);
-              if (end !== null && t - end > AUTO_MISS_MS && !task.doneFor && !task.deadlineOutcome) miss(task.id);
+              if (end !== null && at - end > AUTO_MISS_MS && !task.doneFor && !task.deadlineOutcome) miss(task.id);
               continue;
             }
-            // a question left unanswered for a day counts as a miss
-            if (task.pendingMiss && t - task.pendingMiss.end > AUTO_MISS_MS) miss(task.id);
+            // a question left unanswered for a day: the hit it already cost stands (older saves: it counts now)
+            if (task.pendingMiss && at - task.pendingMiss.end > AUTO_MISS_MS) {
+              if (task.pendingMiss.paid === undefined) miss(task.id);
+              else get().updateTask(task.id, { pendingMiss: null });
+            }
             const cur = get().tasks[task.id];
-            const m = missedAt(cur, t, s.settings);
+            const m = missedAt(cur, at, s.settings);
             if (!m) continue;
             // a newer window ended while the last one was still unanswered: that one was missed for sure
-            if (cur.pendingMiss) miss(task.id);
-            get().updateTask(task.id, { pendingMiss: m, missedFor: m.key, missedEnd: m.end, askedAt: undefined });
+            if (cur.pendingMiss?.paid === undefined && cur.pendingMiss) miss(task.id);
+            // the hero takes the hit right away; "What happened?" can still give the gold back
+            const now0 = get().tasks[task.id];
+            const hero = get().hero!;
+            const prevMisses = now0.misses ?? 0;
+            const misses = prevMisses + 1;
+            const total = (now0.missTotal ?? 0) + 1;
+            const stakes = stakesOf(now0) ?? 'flexible';
+            const cost = missPenalty(heroGold(hero), stakes, misses, heroLevel(hero).level);
+            get().updateTask(task.id, { pendingMiss: { ...m, paid: cost, prevMisses }, missedFor: m.key, missedEnd: m.end, askedAt: undefined, misses, missTotal: total });
+            if (cost > 0) set({ hero: { ...hero, goldSpent: inc(hero.goldSpent, s.deviceId, cost), updatedAt: now() } });
+            auto++;
+            lost += cost;
+            fx.emit({ type: 'missed', title: now0.title, gold: cost, misses, total, stakes });
+            log('quest', cost
+              ? t('Missed "{title}" and lost {gold}g ({misses} in a row).', { title: now0.title, gold: cost, misses })
+              : t('Missed "{title}" ({misses} in a row).', { title: now0.title, misses }));
           }
           if (auto) fx.emit({ type: 'hurt', gold: lost, must: true });
         },
@@ -501,6 +523,26 @@ export const useStore = create<State>()(
           const once = task.repeat.kind === 'none';
           // answered already (on this device, or another one that synced first)
           if (once ? !!task.deadlineOutcome && answer !== 'done' : !task.pendingMiss) return 0;
+          // the hero already took the hit for this one: an answer can only give gold back
+          const refund = refundFor(task, answer);
+          if (refund !== null) {
+            const p = task.pendingMiss!;
+            const keep = answer === 'missed';
+            const total = Math.max(0, (task.missTotal ?? 1) - 1);
+            s.updateTask(id, {
+              pendingMiss: null,
+              askedAt: ms,
+              ...(keep ? {} : { misses: answer === 'done' ? 0 : (p.prevMisses ?? 0), missTotal: total }),
+              ...(typeof answer === 'object' ? { extendFor: { key: p.key, until: ms + Math.max(60_000, answer.more) } } : {}),
+            });
+            if (refund > 0) {
+              const h = get().hero!;
+              set({ hero: { ...h, gold: inc(h.gold, s.deviceId, refund), updatedAt: now() } });
+              fx.emit({ type: 'toast', text: t('+{gold}g back', { gold: refund }), small: task.title });
+              log('quest', t('"{title}" was sorted out: {gold}g back.', { title: task.title, gold: refund }));
+            }
+            return -refund;
+          }
           const cost = answerCost(task, answer, heroGold(hero), heroLevel(hero).level);
           const pay = () => {
             if (cost > 0) set({ hero: { ...get().hero!, goldSpent: inc(get().hero!.goldSpent, s.deviceId, cost), updatedAt: now() } });
@@ -519,9 +561,9 @@ export const useStore = create<State>()(
             const total = (task.missTotal ?? 0) + 1;
             s.updateTask(id, { ...settled, misses, missTotal: total, ...(once ? { deadlineOutcome: 'missed' as const, missedFor: 'deadline' } : {}) });
             pay();
-            if (!opts?.auto) fx.emit({ type: 'hurt', gold: cost, must: task.stakes === 'must' });
+            if (!opts?.auto) fx.emit({ type: 'hurt', gold: cost, must: stakesOf(task) === 'must' });
             // a miss nobody answered for: say what happened, since no question was seen
-            if (opts?.auto) fx.emit({ type: 'missed', title, gold: cost, misses, total, stakes: task.stakes ?? 'flexible' });
+            if (opts?.auto) fx.emit({ type: 'missed', title, gold: cost, misses, total, stakes: stakesOf(task) ?? 'flexible' });
             log('quest', cost
               ? t('Missed "{title}" and lost {gold}g ({misses} in a row).', { title, gold: cost, misses })
               : t('Missed "{title}" ({misses} in a row).', { title, misses }));

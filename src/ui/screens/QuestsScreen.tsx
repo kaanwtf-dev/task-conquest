@@ -26,7 +26,7 @@ import TaskEditSheet from './TaskEditSheet';
 import BackupWarning, { useBackupDue } from '../components/BackupWarning';
 import { InstallCard } from '../components/InstallGuide';
 import { TipNudge } from '../components/Support';
-import { WARN_MS, hasLimit, leftLabel, timeLeft, windowOf } from '../../game/deadlines';
+import { WARN_MS, hasLimit, leftLabel, stakesOf, timeLeft, windowOf } from '../../game/deadlines';
 import { todaySections } from '../../state/today';
 import BossBar from '../components/BossBar';
 import PartyStrip from '../components/PartyStrip';
@@ -281,6 +281,14 @@ function QuickAdd({ list, dueToday }: { list?: TaskList; dueToday?: boolean }) {
 
 let lastToggle = { t: 0, id: '', y: 0 };
 
+/** What missing this quest costs here: repeating quests are flexible unless set otherwise; party lists never cost. */
+function useStakes(task: Task) {
+  return useStore((s) => {
+    const l = s.lists[task.listId];
+    return l && !l.shared && l.type !== 'supply' ? stakesOf(task) : null;
+  });
+}
+
 interface RowProps {
   task: Task;
   done: boolean;
@@ -295,6 +303,7 @@ interface RowProps {
  * changes), and the memoized body holds everything costly, so it only re-renders for its own task.
  */
 const TaskRow = memo(function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps) {
+  const stakes = useStakes(task);
   const style = sortable
     ? { transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition, opacity: inactive ? 0.45 : 1 }
     : inactive
@@ -303,7 +312,7 @@ const TaskRow = memo(function TaskRow({ task, done, inactive, showList, onEdit, 
   return (
     <div
       ref={sortable?.setNodeRef}
-      className={`task ${done ? 'done' : ''} ${sortable?.isDragging ? 'dragging' : ''} ${task.stakes && !done ? `stakes-${task.stakes}` : ''}`}
+      className={`task ${done ? 'done' : ''} ${sortable?.isDragging ? 'dragging' : ''} ${stakes && !done ? `stakes-${stakes}` : ''}`}
       style={style}
       {...(sortable ? { ...sortable.attributes, ...sortable.listeners, role: 'listitem', 'aria-roledescription': t('draggable quest') } : {})}
       onClick={() => onEdit(task.id)}
@@ -326,6 +335,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
   const sfxOn = useStore((s) => s.settings.sfx > 0);
   const listName = useStore((s) => (showList ? s.lists[task.listId]?.name : undefined));
   const shared = useStore((s) => !!s.lists[task.listId]?.shared);
+  const stakes = useStakes(task);
   const d = DIFFICULTY[task.difficulty];
   const rl = repeatLabel(task.repeat);
   // repeating quests count down their day / week / month; one-off quests count down to their due date
@@ -364,7 +374,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
       <PxImg className="ticon" src={iconFor(task.title, task.icon)} size={32} />
       <div className="tmain">
         <div className="ttitle">{task.title}</div>
-        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy) || timed || !!task.misses || !!task.stakes) && (
+        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy) || timed || !!task.misses || !!stakes) && (
           <div className="tmeta">
             {listName && <span className="tlist">{listName}</span>}
             {shared && done && task.doneBy && <span className="tlist">✓ {task.doneBy}</span>}
@@ -380,7 +390,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
               ) : (
                 <span>{t('Due {date}', { date: task.due })}</span>
               ))}
-            {task.stakes && !done && <StakesChip stakes={task.stakes} />}
+            {stakes && !done && <StakesChip stakes={stakes} />}
             {timed && <TimeLeft task={task} />}
             {!done && !!task.misses && <span className="overdue">{t('missed {n}×', { n: task.misses })}</span>}
             {task.notes && <span>✎</span>}

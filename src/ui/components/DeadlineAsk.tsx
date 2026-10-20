@@ -3,8 +3,9 @@
 // time, may call it off, or takes the hit. Unanswered questions count as missed after a while (store).
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store';
-import { SNOOZE_MS, answerCost, deadlineOf, moreTimeOptions, needsAnswer, nextDeadline, type MissAnswer } from '../../game/deadlines';
+import { SNOOZE_MS, answerCost, deadlineOf, moreTimeOptions, needsAnswer, nextDeadline, refundFor, stakesOf, type MissAnswer } from '../../game/deadlines';
 import { heroGold, heroLevel } from '../../game/progression';
+import { LATEST_VERSION } from '../../whatsNew';
 import { iconFor } from '../../pixel/iconGen';
 import { PxImg, Sheet, useNow } from './common';
 import { sfx } from '../../audio/sfx';
@@ -59,7 +60,9 @@ export default function DeadlineAsk() {
   });
   const ids = waiting ? waiting.split(' ') : [];
   const task = useStore((s) => (ids[0] ? s.tasks[ids[0]] : undefined));
-  if (!task || Date.now() < holdUntil) return null;
+  // the "what's new" notes go first (they explain these questions after an update)
+  const notesDue = useStore((s) => !!s.settings.introSeen && s.settings.seenVersion !== LATEST_VERSION);
+  if (!task || notesDue || Date.now() < holdUntil) return null;
   return <Ask key={task.id} task={task} count={ids.length} onHit={() => setHoldUntil(Date.now() + AFTER_HIT_MS)} />;
 }
 
@@ -78,11 +81,18 @@ function Ask({ task, count, onHit }: { task: Task; count: number; onHit: () => v
   const once = task.repeat.kind === 'none';
   const gold = heroGold(hero);
   const level = heroLevel(hero).level;
+  const stakes = stakesOf(task);
+  // repeating quests: the hero took the hit when the miss was noticed, and answers can give gold back
+  const paid = task.pendingMiss?.paid;
+  const charged = paid !== undefined;
   const cost = (a: MissAnswer) => answerCost(task, a, gold, level);
-  const fee = (a: MissAnswer) => (cost(a) ? ` · ${t('−{gold}g', { gold: cost(a) })}` : '');
+  const back = (a: MissAnswer) => refundFor(task, a) ?? 0;
+  const fee = (a: MissAnswer) =>
+    charged ? (back(a) ? ` · ${t('+{gold}g back', { gold: back(a) })}` : '') : cost(a) ? ` · ${t('−{gold}g', { gold: cost(a) })}` : '';
   const options = moreTimeOptions(task, at, cfg);
   const answer = (a: MissAnswer) => {
-    if (a === 'missed' || cost(a) > 0) onHit();
+    if (!charged && (a === 'missed' || cost(a) > 0)) onHit();
+    else if (charged && back(a) > 0) sfx.coin();
     else sfx.tick();
     resolveMiss(task.id, a);
   };
@@ -113,18 +123,15 @@ function Ask({ task, count, onHit }: { task: Task; count: number; onHit: () => v
       <div className="ask-head">
         <PxImg src={iconFor(task.title, task.icon)} size={44} />
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div className="win-title">{task.stakes === 'must' ? t("💥 Time's up!") : t("⌛ Time's up!")}</div>
+          <div className="win-title">{charged ? t('💥 Missed!') : stakes === 'must' ? t("💥 Time's up!") : t("⌛ Time's up!")}</div>
           <div className="ask-title">{task.title}</div>
         </div>
         {count > 1 && <div className="ask-count">{t('{n} waiting', { n: count })}</div>}
       </div>
       <p className="ask-text">
         {due}{' '}
-        {task.stakes === 'must'
-          ? t('It was a must-do.')
-          : task.stakes === 'flexible'
-            ? t('It was flexible.')
-            : ''}
+        {stakes === 'must' ? t('It was a must-do.') : stakes === 'flexible' ? t('It was flexible.') : ''}{' '}
+        {charged && (paid ? t('Your hero already took the hit: −{gold}g.', { gold: paid }) : t('Your hero already took the hit.'))}
       </p>
       <div className={`ask-misses ${misses ? 'bad' : ''}`}>
         {misses
@@ -158,17 +165,21 @@ function Ask({ task, count, onHit }: { task: Task; count: number; onHit: () => v
           {fee('cancel')}
         </button>
         <button className="btn bad" onClick={() => answer('missed')}>
-          {t('💥 I missed it')}
+          {charged ? t('👍 OK, I missed it') : t('💥 I missed it')}
           {fee('missed')}
         </button>
       </div>
       <p className="ask-foot">
-        {task.stakes === 'must'
-          ? t('More time or calling it off still costs half: it was a must-do.')
-          : task.stakes === 'flexible'
-            ? t('More time and calling it off are free for flexible quests.')
-            : t('This quest has no stakes, so missing it costs nothing.')}{' '}
-        {t('No answer within a day counts as missed.')}
+        {charged
+          ? stakes === 'must'
+            ? t('Did it after all? You get it all back. More time or skipping gives back half: it was a must-do.')
+            : t('Did it after all, or need more time? You get it all back.')
+          : stakes === 'must'
+            ? t('More time or calling it off still costs half: it was a must-do.')
+            : stakes === 'flexible'
+              ? t('More time and calling it off are free for flexible quests.')
+              : t('This quest has no stakes, so missing it costs nothing.')}{' '}
+        {charged ? t('No answer within a day and the hit stays.') : t('No answer within a day counts as missed.')}
       </p>
     </Sheet>
   );

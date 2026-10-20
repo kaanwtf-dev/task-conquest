@@ -139,4 +139,8 @@ export const TR_STATE: Record<string, string> = {
   'Skipped "{title}" this time.': '"{title}" bu seferlik atlandı.',
   'More time for "{title}" (until {at}), for {gold}g.': '"{title}" için ek süre ({at} saatine kadar), {gold} altına.',
   'More time for "{title}" (until {at}).': '"{title}" için ek süre ({at} saatine kadar).',
+  '{n}× in a row: your hero takes the hit. Did it after all? Tap to say so.': 'Üst üste {n}. kez: kahramanın darbeyi yiyor. Aslında yaptın mı? Söylemek için dokun.',
+  'Your hero takes the hit. Did it after all? Tap to say so.': 'Kahramanın darbeyi yiyor. Aslında yaptın mı? Söylemek için dokun.',
+  '+{gold}g back': '+{gold} altın geri',
+  '"{title}" was sorted out: {gold}g back.': '"{title}" halledildi: {gold} altın geri.',
 };

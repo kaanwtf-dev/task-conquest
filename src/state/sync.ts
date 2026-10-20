@@ -491,6 +491,22 @@ export async function signOutHere() {
 }
 
 /** Call once at startup. */
+// Missed quests are charged the moment they are noticed: on opening, wait until this device has heard from
+// the cloud, so two devices don't both charge the same miss before either knows of the other's.
+const openedAt = Date.now();
+const CATCH_UP_MS = 30_000;
+let caughtUp = false;
+syncHooks.busy = () => !caughtUp && Date.now() - openedAt < CATCH_UP_MS;
+function catchUp() {
+  if (caughtUp) return;
+  caughtUp = true;
+  useStore.getState().checkDeadlines();
+}
+// signed in: once the first sync has finished (or can't run: offline, an error, a choice to make)
+useSync.subscribe((s, prev) => {
+  if (prev.status === 'syncing' && s.status !== 'syncing') catchUp();
+});
+
 export function initSync() {
   // #join=CODE deep links (shared via the Party tab)
   const m = location.hash.match(/join=([A-Za-z0-9]+)/);
@@ -501,6 +517,7 @@ export function initSync() {
   }
   if (!getSyncConfig()) {
     useSync.setState({ status: 'off' });
+    catchUp();
     return;
   }
   const apply = (user: { id: string; email?: string | null } | null) => {
@@ -515,11 +532,15 @@ export function initSync() {
     } else {
       stopEngine();
       useSync.setState({ userId: null, email: null, status: 'signed-out', conflict: null });
+      catchUp();
     }
   };
   getUser()
     .then(apply)
-    .catch(() => useSync.setState({ status: 'signed-out' }));
+    .catch(() => {
+      useSync.setState({ status: 'signed-out' });
+      catchUp();
+    });
   unsubAuth?.();
   unsubAuth = onAuthChange(apply);
 }

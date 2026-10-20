@@ -40,7 +40,7 @@ describe('notification alarms', () => {
       task('Shared', 'S', base),
       task('Milk', 'G', base),
       task('Someday', 'Q', { repeat: { kind: 'none' } }),
-      task('Plain daily', 'D'),
+      task('No stakes daily', 'D', { stakes: 'none' }),
     ];
     expect(alarmsFor(state(tasks), at(15, 9), cfg, prefs())).toEqual([]);
     expect(alarmsFor({ ...state([task('Rent', 'Q', base)]), hero: null }, at(15, 9), cfg, prefs())).toEqual([]);
@@ -52,7 +52,14 @@ describe('notification alarms', () => {
     expect(keys([{ ...meds, doneFor: day(15) }], at(15, 9))).toEqual(['warn:Meds@16 17:00', 'missed:Meds@16 20:00', 'warn:Meds@17 17:00', 'missed:Meds@17 20:00']);
     const [warn, missed] = alarmsFor(state([meds]), at(15, 9), cfg, prefs());
     expect(warn.body).toBe("Missed 2× in a row already. Don't make it 3. Due 8:00 PM.");
-    expect(missed.body).toBe('That makes 3× in a row. Tap to decide: more time, call it off, or take the hit.');
+    expect(missed.body).toBe('3× in a row: your hero takes the hit. Did it after all? Tap to say so.');
+  });
+
+  it('a plain daily is flexible by default: warned before the day ends, told when it was missed', () => {
+    const plain = task('Read', 'D');
+    expect(keys([plain], at(15, 9)).slice(0, 2)).toEqual(['warn:Read@15 21:00', 'missed:Read@16 9:00']);
+    const [, missed] = alarmsFor(state([plain]), at(15, 9), cfg, prefs());
+    expect(missed.body).toBe('Your hero takes the hit. Did it after all? Tap to say so.');
   });
 
   it('keeps quiet at night: a midnight miss is told in the morning, a warning moves to when people are up', () => {

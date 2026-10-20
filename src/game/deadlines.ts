@@ -6,6 +6,20 @@ import { isDone, logicalDate, parseDateKey, periodKey, weekStartDate, type TimeC
 
 export type Stakes = 'flexible' | 'must';
 
+/**
+ * Repeating quests the player never set stakes on count as flexible: missing them hurts a little. Only days
+ * (weeks, months) that began after this release count, so nobody is hit for one that started before the
+ * update could tell them.
+ */
+export const DEFAULT_STAKES_FROM = Date.UTC(2026, 9, 20, 18);
+
+/** What missing the quest costs: its own choice, else flexible for repeating quests; null when nothing. */
+export function stakesOf(task: Pick<Task, 'stakes' | 'repeat'>): Stakes | null {
+  if (task.stakes === 'flexible' || task.stakes === 'must') return task.stakes;
+  if (task.stakes === 'none') return null;
+  return task.repeat.kind === 'none' ? null : 'flexible';
+}
+
 const DAY = 86_400_000;
 /** One-off quests: warn this long before the deadline. */
 export const WARN_MS = 3 * 3600_000;
@@ -67,7 +81,7 @@ export function dayEnd(now: number, cfg: TimeCfg): number {
 
 /** A time limit the player set on purpose (not just the end of a repeating quest's day or week). */
 export function hasLimit(task: Task, cfg: TimeCfg): boolean {
-  return task.repeat.kind === 'none' ? deadlineOf(task, cfg) !== null : !!task.stakes || byTimeOf(task) !== null;
+  return task.repeat.kind === 'none' ? deadlineOf(task, cfg) !== null : stakesOf(task) !== null || byTimeOf(task) !== null;
 }
 
 /** The whole current repeat period, from its first to its last moment. */
@@ -132,7 +146,10 @@ export function leftLabel(task: Task, now: number, cfg: TimeCfg): string | null 
  * counted yet: that window's period key and end, or null. One-off quests are asked about (see askDue).
  */
 export function missedAt(task: Task, now: number, cfg: TimeCfg): { key: string; end: number } | null {
-  if (task.deleted || task.repeat.kind === 'none' || !task.stakes) return null;
+  if (task.deleted || task.repeat.kind === 'none' || !stakesOf(task)) return null;
+  const from = task.createdAt;
+  // without stakes of its own, a period that began before the default came in doesn't count
+  const tooEarly = (at: number) => !task.stakes && (periodWindow(task, at, cfg)?.start ?? 0) < DEFAULT_STAKES_FROM;
   // windows up to the last counted one are settled (older saves only remember its key)
   const counted = (key: string, end: number) => (task.missedEnd !== undefined ? end <= task.missedEnd : task.missedFor === key);
   const by = byTimeOf(task);
@@ -149,7 +166,7 @@ export function missedAt(task: Task, now: number, cfg: TimeCfg): { key: string; 
       end = windowOf({ ...task, extendFor: null }, now, cfg)!.end - DAY;
     }
     const key = periodKey(task.repeat, at, cfg);
-    if (task.createdAt >= end || counted(key, end)) return null;
+    if (from >= end || tooEarly(at) || counted(key, end)) return null;
     const doneInTime = task.doneFor === key && (task.doneAt ?? 0) <= end;
     return doneInTime || !activeOn(task, at, cfg) ? null : { key, end };
   }
@@ -157,7 +174,7 @@ export function missedAt(task: Task, now: number, cfg: TimeCfg): { key: string; 
   if (!w) return null;
   const at = w.start - 1; // the previous period
   const key = periodKey(task.repeat, at, cfg);
-  if (task.createdAt >= w.start || counted(key, w.start) || task.doneFor === key) return null;
+  if (from >= w.start || tooEarly(at) || counted(key, w.start) || task.doneFor === key) return null;
   // a weekly quest done last week has doneFor = last week's key until it is done again; the check above
   // covers it. Days a 'some days' quest is off are not misses.
   return activeOn(task, at, cfg) ? { key, end: w.start } : null;
@@ -214,10 +231,24 @@ export type MissAnswer = 'done' | 'missed' | 'cancel' | { more: number };
 
 /** Gold an answer costs: the full penalty for a miss; a must-do also pays half for more time or for calling it off. */
 export function answerCost(task: Task, answer: MissAnswer, gold: number, level: number): number {
-  if (!task.stakes || answer === 'done') return 0;
-  const full = missPenalty(gold, task.stakes, (task.misses ?? 0) + 1, level);
+  const stakes = stakesOf(task);
+  if (!stakes || answer === 'done') return 0;
+  const full = missPenalty(gold, stakes, (task.misses ?? 0) + 1, level);
   if (answer === 'missed') return full;
-  return task.stakes === 'must' ? Math.round(full / 2) : 0;
+  return stakes === 'must' ? Math.round(full / 2) : 0;
+}
+
+/**
+ * Gold an answer gives back when the hero already took the hit for this miss (repeating quests): all of it
+ * for "I did it", all of it for flexible quests skipped or given more time, half for must-dos; none for
+ * "I missed it". Null when nothing was taken yet (one-off quests are asked before anything is taken).
+ */
+export function refundFor(task: Task, answer: MissAnswer): number | null {
+  const p = task.pendingMiss;
+  if (!p || p.paid === undefined) return null;
+  if (answer === 'missed') return 0;
+  if (answer === 'done') return p.paid;
+  return stakesOf(task) === 'must' ? p.paid - Math.round(p.paid / 2) : p.paid;
 }
 
 /**

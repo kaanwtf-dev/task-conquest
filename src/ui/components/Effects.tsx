@@ -18,6 +18,8 @@ export function markTap(x: number, y: number) {
 /** iOS Safari has no vibrate(); toggling a native switch input triggers a haptic tick (iOS 18+). */
 let hapticLabel: HTMLLabelElement | null = null;
 export function haptic() {
+  // browsers refuse (and complain) before the first tap, e.g. a missed quest charged as the app opens
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
   if (navigator.vibrate) {
     navigator.vibrate(12);
     return;

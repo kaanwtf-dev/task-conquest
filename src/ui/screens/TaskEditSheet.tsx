@@ -4,6 +4,7 @@ import { DIFFICULTY, taskXp, heroLevel } from '../../game/progression';
 import { iconFor, firstEmoji } from '../../pixel/iconGen';
 import { AISLES } from '../../pixel/keywords';
 import { todayKey } from '../../core/time';
+import { stakesOf } from '../../game/deadlines';
 import type { Difficulty, Repeat, Task } from '../../core/types';
 import { PxImg, Sheet, themeStyle } from '../components/common';
 import { sfx } from '../../audio/sfx';
@@ -337,12 +338,13 @@ function TimeLimit({ draft, patch }: { draft: Task; patch: (p: Partial<Task>) =>
         <Field label={once ? t('If you miss it') : everyDay && draft.byTime ? t("If it isn't done by {time}", { time: draft.byTime }) : byEnd}>
           {(
             [
-              [undefined, t('Nothing')],
+              ['none', t('Nothing')],
               ['flexible', t('Flexible · small loss')],
               ['must', t('Must do · it hurts')],
-            ] as [Task['stakes'], string][]
+            ] as const
           ).map(([k, label]) => (
-            <button type="button" key={label} className={`pill ${draft.stakes === k ? 'sel' : ''}`} aria-pressed={draft.stakes === k} onClick={() => patch({ stakes: k })}>
+            // repeating quests are flexible unless set otherwise; tapping the pill already shown changes nothing
+            <button type="button" key={k} className={`pill ${(stakesOf(draft) ?? 'none') === k ? 'sel' : ''}`} aria-pressed={(stakesOf(draft) ?? 'none') === k} onClick={() => (stakesOf(draft) ?? 'none') !== k && patch({ stakes: k })}>
               {label}
             </button>
           ))}

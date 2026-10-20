@@ -15,6 +15,20 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '1.4',
+    date: '2026-10-20',
+    title: tk('Dailies and weeklies count now'),
+    items: [
+      tk('Repeating quests are flexible by default: skip a daily or weekly and your hero takes a small hit, no deadline needed. Starting tomorrow.'),
+      tk('The hit lands the moment the game notices. Did it after all? Tap “I did it” and get your gold back.'),
+      tk('Want a quest without stakes? Open it and set “If you miss it” to Nothing.'),
+      tk('Language follows your browser now, and you can pick English or Türkçe on the first screen.'),
+      tk('Your settings follow your account to every device you sign in on.'),
+      tk('Small fix: the number 5 is easier to read.'),
+    ],
+    image: 'whats-new/1.4.png',
+  },
+  {
     version: '1.3',
     date: '2026-10-19',
     title: tk('Missing a quest now hurts'),

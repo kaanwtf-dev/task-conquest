@@ -4,7 +4,7 @@
 // Pure, so the tests and the app share it.
 import type { Task } from '../core/types';
 import { isDone, type TimeCfg } from '../core/time';
-import { WARN_MS, activeOn, dayEnd, hasLimit, windowOf } from '../game/deadlines';
+import { WARN_MS, activeOn, dayEnd, hasLimit, stakesOf, windowOf } from '../game/deadlines';
 import { locale, t } from '../i18n';
 import { partyHours, type NudgeState, type PushPrefs } from './nudges';
 
@@ -65,14 +65,15 @@ function warnText(task: Task, end: number, at: number): Pick<Alarm, 'title' | 'b
   const due = new Date(end).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' });
   const name = clip(task.title, 60);
   const misses = task.misses ?? 0;
+  const stakes = stakesOf(task);
   return {
-    title: task.stakes === 'must' ? t('⚠️ {left} left: {name}', { left, name }) : t('⏳ {left} left: {name}', { left, name }),
+    title: stakes === 'must' ? t('⚠️ {left} left: {name}', { left, name }) : t('⏳ {left} left: {name}', { left, name }),
     body:
       misses > 0
         ? t("Missed {misses}× in a row already. Don't make it {next}. Due {at}.", { misses, next: misses + 1, at: due })
-        : task.stakes === 'must'
+        : stakes === 'must'
           ? t('A must-do, due {at}. Missing it costs gold.', { at: due })
-          : task.stakes === 'flexible'
+          : stakes === 'flexible'
             ? t('Due {at}. Missing it costs a little gold.', { at: due })
             : t('Due {at}.', { at: due }),
   };
@@ -81,13 +82,20 @@ function warnText(task: Task, end: number, at: number): Pick<Alarm, 'title' | 'b
 function missedText(task: Task): Pick<Alarm, 'title' | 'body'> {
   const name = clip(task.title, 60);
   const n = (task.misses ?? 0) + 1;
+  const stakes = stakesOf(task);
+  // repeating quests: the hero takes the hit as soon as the app notices; one-offs are still asked first
+  const once = task.repeat.kind === 'none';
   return {
-    title: task.stakes === 'must' ? t('💥 Missed: {name}', { name }) : t('⌛ Missed: {name}', { name }),
-    body: !task.stakes
+    title: stakes === 'must' ? t('💥 Missed: {name}', { name }) : t('⌛ Missed: {name}', { name }),
+    body: !stakes
       ? t('Time ran out. Tap to say what happened.')
-      : n > 1
-        ? t('That makes {n}× in a row. Tap to decide: more time, call it off, or take the hit.', { n })
-        : t('Tap to decide: more time, call it off, or take the hit.'),
+      : !once
+        ? n > 1
+          ? t('{n}× in a row: your hero takes the hit. Did it after all? Tap to say so.', { n })
+          : t('Your hero takes the hit. Did it after all? Tap to say so.')
+        : n > 1
+          ? t('That makes {n}× in a row. Tap to decide: more time, call it off, or take the hit.', { n })
+          : t('Tap to decide: more time, call it off, or take the hit.'),
   };
 }
 
@@ -107,7 +115,7 @@ export function alarmsFor(state: NudgeState, now: number, cfg: TimeCfg, prefs: P
       const warnAt = awake(Math.max(now, w.end - WARN_MS), prefs);
       if (w.end - WARN_MS > now && w.end - warnAt >= MIN_WARNING_MS)
         out.push({ key: `warn:${task.id}@${w.end}`, at: warnAt, tag: `deadline-${task.id}`, ...warnText(task, w.end, warnAt) });
-      if (task.repeat.kind === 'none' || task.stakes)
+      if (task.repeat.kind === 'none' || stakesOf(task))
         out.push({ key: `missed:${task.id}@${w.end}`, at: awake(w.end, prefs), tag: `missed-${task.id}`, ...missedText(task) });
     }
   }

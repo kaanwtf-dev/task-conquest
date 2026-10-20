@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../core/types';
 import { dateKey } from '../core/time';
-import { answerCost, askDue, leftLabel, missPenalty, missedAt, missedWindow, moreTimeOptions, needsAnswer, timeLeft, windowOf } from './deadlines';
+import { DEFAULT_STAKES_FROM, answerCost, askDue, leftLabel, missPenalty, missedAt, missedWindow, moreTimeOptions, needsAnswer, refundFor, stakesOf, timeLeft, windowOf } from './deadlines';
 
 const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m).getTime(); // October 2026, local time
 const day = (d: number) => dateKey(new Date(2026, 9, d));
@@ -135,7 +135,40 @@ describe('what happened?', () => {
     expect(answerCost(meds, { more: 3600_000 }, 1000, 5)).toBe(Math.round(full / 2));
     expect(answerCost(meds, 'done', 1000, 5)).toBe(0);
     expect(answerCost({ ...meds, stakes: 'flexible' }, 'cancel', 1000, 5)).toBe(0);
-    expect(answerCost({ ...meds, stakes: undefined }, 'missed', 1000, 5)).toBe(0);
+    expect(answerCost({ ...meds, stakes: 'none' }, 'missed', 1000, 5)).toBe(0);
+  });
+
+  it('repeating quests are flexible unless set otherwise; one-offs only when asked', () => {
+    expect(stakesOf(task())).toBe('flexible');
+    expect(stakesOf(task({ repeat: { kind: 'weekly' } }))).toBe('flexible');
+    expect(stakesOf(task({ stakes: 'must' }))).toBe('must');
+    expect(stakesOf(task({ stakes: 'none' }))).toBeNull();
+    expect(stakesOf(task({ repeat: { kind: 'none' } }))).toBeNull();
+    expect(stakesOf(task({ repeat: { kind: 'none' }, stakes: 'flexible' }))).toBe('flexible');
+  });
+
+  it('a plain daily counts misses from the first day that began after the default came in', () => {
+    const plain = task(); // made on the 1st, no stakes of its own
+    expect(missedAt(plain, at(15, 9), cfg)).toBeNull(); // the 14th was before the default
+    const release = new Date(DEFAULT_STAKES_FROM).getDate(); // the day it came out began before: not counted
+    expect(missedAt(plain, at(release + 1, 9), cfg)).toBeNull();
+    const d = release + 2;
+    expect(missedAt(plain, at(d, 9), cfg)).toEqual({ key: day(d - 1), end: at(d, 0) });
+    expect(missedAt({ ...plain, stakes: 'flexible' }, at(release + 1, 9), cfg)).toEqual({ key: day(release), end: at(release + 1, 0) });
+    expect(missedAt(task({ stakes: 'none' }), at(d, 9), cfg)).toBeNull();
+  });
+
+  it('gives gold back for a hit already taken: all of it when done, half for a must-do skipped or delayed', () => {
+    const paid = (stakes: Task['stakes']) => task({ stakes, pendingMiss: { key: day(15), end: at(16, 0), paid: 40, prevMisses: 1 } });
+    expect(refundFor(paid('flexible'), 'done')).toBe(40);
+    expect(refundFor(paid('flexible'), 'cancel')).toBe(40);
+    expect(refundFor(paid('flexible'), { more: 3600_000 })).toBe(40);
+    expect(refundFor(paid('flexible'), 'missed')).toBe(0);
+    expect(refundFor(paid('must'), 'done')).toBe(40);
+    expect(refundFor(paid('must'), 'cancel')).toBe(20);
+    expect(refundFor(paid('must'), { more: 3600_000 })).toBe(20);
+    // a question from before hits landed right away: answered the old way
+    expect(refundFor(task({ stakes: 'must', pendingMiss: { key: day(15), end: at(16, 0) } }), 'done')).toBeNull();
   });
 
   it('asks until answered, and not again for an hour after it was closed', () => {
