@@ -2,6 +2,25 @@
 @import '@fontsource/pixelify-sans/400.css';
 @import '@fontsource/pixelify-sans/600.css';
 
+/* Pixelify Sans draws its 5 almost like an S ("51" read as "S1"): a clearer 5 in the same pixel style.
+   Same family, only this one character; declared after the font's own faces so it wins for the 5. */
+@font-face {
+  font-family: 'Pixelify Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/pixelify-five-400.woff2') format('woff2');
+  unicode-range: U+0035;
+}
+@font-face {
+  font-family: 'Pixelify Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../assets/fonts/pixelify-five-600.woff2') format('woff2');
+  unicode-range: U+0035;
+}
+
 :root {
   --font-pixel: 'Press Start 2P', ui-monospace, monospace;
   --font-body: 'Pixelify Sans', ui-rounded, system-ui, sans-serif;
