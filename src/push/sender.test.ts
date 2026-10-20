@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RemoteRow } from '../sync/types';
-import { PUSH_ENDPOINT, payload, runReminders, sanitizeHistory, sanitizePrefs, stateFromRows, validZone, type Cloud, type SubRow } from './sender';
+import { PUSH_ENDPOINT, payload, runAlarms, runReminders, sanitizeHistory, sanitizePrefs, stateFromRows, validZone, type Cloud, type SubRow } from './sender';
 import type { PushHistory } from './nudges';
 
 const U = 'user-a';
@@ -28,13 +28,19 @@ const taskRow = (id: string, listId: string, extra: Record<string, unknown> = {}
   data: { id, listId, title: id, difficulty: 2, repeat: { kind: 'daily' }, order: 0, createdAt: 1, timesDone: 0, ...extra },
 });
 
-function fakeCloud(subs: SubRow[], rows: Record<string, RemoteRow[]>) {
+function fakeCloud(subs: SubRow[], rows: Record<string, RemoteRow[]>, alarms: import('./sender').AlarmRow[] = []) {
   const histories = new Map<string, PushHistory>();
   const forgotten: string[] = [];
   const beats: unknown[] = [];
   let last: Partial<import('./sender').RunStats> | null = null;
   const cloud: Cloud = {
     subscriptions: async () => subs.map((s) => ({ ...s, history: histories.get(s.endpoint) ?? s.history })),
+    subscriptionsOf: async (ids) => subs.filter((s) => ids.includes(s.user_id)),
+    takeAlarms: async (now, peek) => {
+      const due = alarms.filter((a) => Date.parse(a.fire_at) <= now);
+      if (!peek) alarms.splice(0, alarms.length, ...alarms.filter((a) => !due.includes(a)));
+      return due;
+    },
     lastStats: async () => last,
     docs: async (u) => rows[u] ?? [],
     saveHistory: async (e, h) => void histories.set(e, h),
@@ -240,5 +246,39 @@ describe('sender input hygiene', () => {
     const p = payload({ title: 't', body: 'b'.repeat(500), tag: 'x', badge: 4.4 }, 'https://app/');
     expect(new TextEncoder().encode(p).length).toBeLessThan(4096);
     expect(JSON.parse(p).app_badge).toBe(4);
+  });
+});
+
+describe('deadline alarms', () => {
+  const alarm = (key: string, user: string, fireAt: number, extra: Partial<import('./sender').AlarmRow> = {}) => ({
+    user_id: user, key, fire_at: new Date(fireAt).toISOString(), title: `💥 Missed: ${key}`, body: 'Tap to decide', tag: `missed-${key}`, ...extra,
+  });
+
+  it("sends the due ones to that player's devices, once, without reading any save", async () => {
+    const alarms = [alarm('Rent', U, NOON - 30_000), alarm('Gym', P, NOON - 60_000), alarm('Later', U, NOON + 3600_000)];
+    const f = fakeCloud([sub(apple('A')), sub(apple('B')), sub(apple('C'), { user_id: P, prefs: { off: ['deadline'] } })], {}, alarms);
+    f.cloud.docs = async () => {
+      throw new Error('alarms must not read saves');
+    };
+    const sent: { to: string; msg: { notification: { title: string; tag: string } } }[] = [];
+    const run = () => runAlarms({ cloud: f.cloud, now: NOON, appUrl: 'https://app/', send: async (s, p) => (sent.push({ to: s.endpoint, msg: JSON.parse(p) }), 'ok') });
+    expect(await run()).toMatchObject({ devices: 3, due: 2, sent: 2 });
+    expect(sent.map((s) => s.to)).toEqual([apple('A'), apple('B')]); // P switched deadline notifications off
+    expect(sent[0].msg.notification).toMatchObject({ title: '💥 Missed: Rent', tag: 'missed-Rent', navigate: 'https://app/' });
+    expect((await run()).sent).toBe(0); // taken: never sent twice
+    expect(alarms.map((a) => a.key)).toEqual(['Later']);
+    expect(f.beats).toHaveLength(0); // the half-hourly run's heartbeat is left alone
+  });
+
+  it('drops stale alarms, forgets dead devices, and only looks in a dry run', async () => {
+    const alarms = [alarm('Old', U, NOON - 3 * 3600_000), alarm('Rent', U, NOON)];
+    const f = fakeCloud([sub(apple('A')), sub(apple('Dead'))], {}, alarms);
+    const sent: string[] = [];
+    const send = async (s: SubRow) => (sent.push(s.endpoint), s.endpoint.endsWith('Dead') ? ('gone' as const) : ('ok' as const));
+    expect(await runAlarms({ cloud: f.cloud, now: NOON, appUrl: 'x', send, peek: true })).toMatchObject({ due: 2, sent: 0 });
+    expect(alarms).toHaveLength(2);
+    expect(await runAlarms({ cloud: f.cloud, now: NOON, appUrl: 'x', send })).toMatchObject({ due: 2, sent: 1, gone: 1 });
+    expect(sent).toEqual([apple('A'), apple('Dead')]); // "Old" was 3 hours late: not sent
+    expect(f.forgotten).toEqual([apple('Dead')]);
   });
 });

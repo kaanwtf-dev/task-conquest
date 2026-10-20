@@ -2,6 +2,7 @@
 // reminder settings the scheduled sender (scripts/push) reads from the cloud. The app icon badge too.
 import type { Settings } from '../core/types';
 import { DEFAULT_PUSH_PREFS, type PushPrefs } from './nudges';
+import type { Alarm } from './alarms';
 import { resolveLang } from '../i18n';
 
 const VAPID = String((import.meta.env as Record<string, unknown>).VITE_VAPID_PUBLIC_KEY ?? '').trim();
@@ -138,4 +139,24 @@ export function setIconBadge(n: number): void {
   } catch {
     // some browsers refuse badges outright
   }
+}
+
+let lastAlarms = '';
+/**
+ * Keeps the player's deadline alarms in the cloud up to date (push/alarms.ts): rewritten when they change,
+ * so every device of the player gets deadline notifications on the minute.
+ */
+export async function saveAlarms(alarms: Alarm[]): Promise<void> {
+  const sig = JSON.stringify(alarms);
+  if (sig === lastAlarms) return;
+  const { getClient } = await import('../sync/supabase');
+  const c = getClient();
+  if (!c) return;
+  const { error } = await c.rpc('set_push_alarms', { p_alarms: alarms });
+  if (!error) lastAlarms = sig;
+}
+
+/** After a sign-out or switching accounts, the next save writes everything again. */
+export function forgetSavedAlarms(): void {
+  lastAlarms = '';
 }

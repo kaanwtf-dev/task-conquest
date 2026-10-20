@@ -6,7 +6,6 @@ import { dateKey, isDone, parseDateKey, periodKey, streak, todayKey, type TimeCf
 import { bossProgress } from '../game/bosses';
 import { todaySections, todayRemaining } from '../state/today';
 import { undeadSave } from '../state/rewards';
-import { WARN_MS, deadlineOf, hasLimit, missedAt, windowOf } from '../game/deadlines';
 import { locale, t, tn } from '../i18n';
 
 export type Slot = 'morning' | 'evening';
@@ -35,7 +34,7 @@ export interface PushHistory {
   comebacks?: number;
   /** party activity up to this time (ms) has been told already */
   partyAt?: number;
-  /** deadline warnings sent: "task id@window end", and misses told: "missed:task id@window end" (the latest few) */
+  /** from before deadline notifications became alarms (push/alarms.ts); kept so old rows still read */
   warned?: string[];
 }
 
@@ -286,80 +285,4 @@ export function partyDigest(state: NudgeState, since: number, until: number): Pi
     body: parts.join(' · '),
     tag: `taskconquest-party-${listId}`.slice(0, 64),
   };
-}
-
-/**
- * A time-limited quest of this player's that ends within WARN_MS and is still open (one warning per quest
- * per window, soonest first), or null. Party lists are left out: the whole party shares those.
- */
-export function deadlineNudge(state: NudgeState, now: number, prefs: PushPrefs, history: PushHistory = {}): { nudge: Nudge; key: string } | null {
-  if (!state.hero || prefs.off.includes('deadline')) return null;
-  const cfg: TimeCfg = { dayStartHour: prefs.dayStartHour, weekStart: prefs.weekStart };
-  const warned = new Set(history.warned ?? []);
-  let best: { task: Task; end: number; key: string } | null = null;
-  for (const x of Object.values(state.tasks)) {
-    const l = state.lists[x.listId];
-    if (x.deleted || !l || l.deleted || l.shared || l.type === 'supply') continue;
-    if (!hasLimit(x, cfg)) continue;
-    const w = windowOf(x, now, cfg);
-    if (!w || w.end <= now || w.end - now > WARN_MS || isDone(x, now, cfg)) continue;
-    const key = `${x.id}@${w.end}`;
-    if (warned.has(key)) continue;
-    if (!best || w.end < best.end) best = { task: x, end: w.end, key };
-  }
-  if (!best) return null;
-  const { task, end } = best;
-  const mins = Math.max(1, Math.round((end - now) / 60_000));
-  const left = mins < 60 ? t('{n} min', { n: mins }) : t('{n}h', { n: Math.round(mins / 60) });
-  const at = new Date(end).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' });
-  const name = clip(task.title, 60);
-  const title = task.stakes === 'must' ? t('⚠️ {left} left: {name}', { left, name }) : t('⏳ {left} left: {name}', { left, name });
-  const misses = task.misses ?? 0;
-  const body =
-    misses > 0
-      ? t("Missed {misses}× in a row already. Don't make it {next}. Due {at}.", { misses, next: misses + 1, at })
-      : task.stakes === 'must'
-        ? t('A must-do, due {at}. Missing it costs gold.', { at })
-        : task.stakes === 'flexible'
-          ? t('Due {at}. Missing it costs a little gold.', { at })
-          : t('Due {at}.', { at });
-  return { nudge: { kind: 'deadline', title, body, tag: `deadline-${task.id}`, badge: 0 }, key: best.key };
-}
-
-/** How long after its time ran out a miss is still worth telling (covers a night: told in the morning). */
-const MISSED_TELL_MS = 12 * 3600_000;
-
-/**
- * A quest of this player's whose time just ran out undone and that the app hasn't settled yet: the newest
- * one not told before, or null. Opening the app asks what happened (more time, call it off, or the hit).
- */
-export function missedNudge(state: NudgeState, now: number, prefs: PushPrefs, history: PushHistory = {}): { nudge: Nudge; key: string } | null {
-  if (!state.hero || prefs.off.includes('deadline')) return null;
-  const cfg: TimeCfg = { dayStartHour: prefs.dayStartHour, weekStart: prefs.weekStart };
-  const told = new Set(history.warned ?? []);
-  let best: { task: Task; end: number; key: string } | null = null;
-  for (const x of Object.values(state.tasks)) {
-    const l = state.lists[x.listId];
-    if (x.deleted || !l || l.deleted || l.shared || l.type === 'supply') continue;
-    let end: number | null = null;
-    if (x.repeat.kind === 'none') {
-      const d = deadlineOf(x, cfg);
-      if (d !== null && d <= now && !x.doneFor && !x.deadlineOutcome) end = d;
-    } else end = (missedAt(x, now, cfg) ?? x.pendingMiss ?? null)?.end ?? null;
-    if (end === null || now - end > MISSED_TELL_MS) continue;
-    const key = `missed:${x.id}@${end}`;
-    if (told.has(key)) continue;
-    if (!best || end > best.end) best = { task: x, end, key };
-  }
-  if (!best) return null;
-  const { task } = best;
-  const name = clip(task.title, 60);
-  const title = task.stakes === 'must' ? t('💥 Missed: {name}', { name }) : t('⌛ Missed: {name}', { name });
-  const n = (task.misses ?? 0) + 1;
-  const body = !task.stakes
-    ? t('Time ran out. Tap to say what happened.')
-    : n > 1
-      ? t('That makes {n}× in a row. Tap to decide: more time, call it off, or take the hit.', { n })
-      : t('Tap to decide: more time, call it off, or take the hit.');
-  return { nudge: { kind: 'deadline', title, body, tag: `missed-${task.id}`.slice(0, 64), badge: 0 }, key: best.key };
 }

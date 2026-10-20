@@ -363,6 +363,66 @@ end $$;
 revoke execute on function public.save_push_subscription(text, text, text, text, jsonb) from public, anon;
 grant execute on function public.save_push_subscription(text, text, text, text, jsonb) to authenticated;
 
+-- Deadline notification alarms: the exact moments a player's deadlines should be told (a warning before, a
+-- note when time ran out), written by the player's app (src/push/alarms.ts) already in their own words. A
+-- job checks for due ones once a minute (cheap: one indexed lookup) and only then calls the reminders
+-- function, which sends them without reading any save.
+create table if not exists public.push_alarms (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  key text not null,
+  fire_at timestamptz not null,
+  title text not null,
+  body text not null,
+  tag text not null,
+  primary key (user_id, key)
+);
+create index if not exists push_alarms_fire_idx on public.push_alarms (fire_at);
+
+alter table public.push_alarms enable row level security;
+
+drop policy if exists "alarms: read own" on public.push_alarms;
+create policy "alarms: read own" on public.push_alarms for select to authenticated
+  using (user_id = (select auth.uid()));
+
+revoke all on public.push_alarms from anon, authenticated;
+grant select on public.push_alarms to authenticated;
+grant all on public.push_alarms to service_role;
+
+-- Replace the signed-in player's upcoming alarms with these: [{key, at (ms), title, body, tag}, ...].
+-- Alarms already due stay until the sender takes them (a rewrite at the very moment one is due must not
+-- lose it); new ones must be in the coming week.
+create or replace function public.set_push_alarms(p_alarms jsonb)
+returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if auth.uid() is null then
+    raise exception 'sign in first' using errcode = '42501';
+  end if;
+  if jsonb_typeof(p_alarms) is distinct from 'array' or jsonb_array_length(p_alarms) > 100 or pg_column_size(p_alarms) > 131072 then
+    raise exception 'invalid alarms' using errcode = '22023';
+  end if;
+  if exists (
+    select 1 from jsonb_array_elements(p_alarms) a
+    where jsonb_typeof(a) is distinct from 'object'
+       or jsonb_typeof(a->'at') is distinct from 'number'
+       or coalesce(length(a->>'key'), 0) not between 1 and 160
+       or coalesce(length(a->>'title'), 0) not between 1 and 200
+       or coalesce(length(a->>'body'), 0) not between 1 and 500
+       or coalesce(length(a->>'tag'), 0) not between 1 and 64
+  ) then
+    raise exception 'invalid alarm' using errcode = '22023';
+  end if;
+  delete from public.push_alarms where user_id = auth.uid() and fire_at > now();
+  insert into public.push_alarms (user_id, key, fire_at, title, body, tag)
+  select auth.uid(), a->>'key', to_timestamp((a->>'at')::double precision / 1000), a->>'title', a->>'body', a->>'tag'
+  from jsonb_array_elements(p_alarms) a
+  where to_timestamp((a->>'at')::double precision / 1000) between now() and now() + interval '8 days'
+  on conflict (user_id, key) do nothing;
+end $$;
+
+revoke execute on function public.set_push_alarms(jsonb) from public, anon;
+grant execute on function public.set_push_alarms(jsonb) to authenticated;
+
 -- When the reminder sender last ran (Options shows it, so a stalled schedule gets noticed).
 create table if not exists public.push_status (
   id int primary key default 1 check (id = 1),

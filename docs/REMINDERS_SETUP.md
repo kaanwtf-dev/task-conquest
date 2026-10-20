@@ -4,11 +4,14 @@ Task Conquest can send each player up to two reminders a day, plus a warning bef
 
 - **Morning:** today's plan. If they have been away for a few days, a "your hero misses you" nudge instead.
 - **Evening:** a streak about to end, a party member who got things done, dailies left, or a boss that is nearly down.
-- **Deadlines:** a heads-up a few hours before a time-limited quest runs out, and a note when its time ran out undone (opening the app asks what happened).
+- **Deadlines:** a heads-up a few hours before a time-limited quest runs out, and a note within about a minute of its time running out undone (opening the app asks what happened).
 
 Players switch reminders on in the app (Options › Reminders, or the card that appears on the quest screen). Each player picks the times and which kinds they want.
 
-The reminders are sent by a Supabase Edge Function, `reminders`, that a scheduled database job (pg_cron) calls every half hour. Both run inside the Supabase project and are free on the free plan.
+The reminders are sent by a Supabase Edge Function, `reminders`, that scheduled database jobs (pg_cron) call. Both run inside the Supabase project and are free on the free plan.
+
+- Every half hour the function sends the morning and evening reminders and party news.
+- Deadline notifications are *alarms*: each player's app works out the exact moments they are due and keeps them in the `push_alarms` table. A second job looks once a minute for alarms that are due (a single indexed lookup) and only then calls the function, which sends just those without reading anyone's save. So deadline notifications arrive on the minute, and the cost stays flat however many players there are.
 
 ## 1. Update the database
 
@@ -37,7 +40,7 @@ In **Edge Functions › Secrets** (or **Project Settings › Edge Functions**), 
 
 ## 4. Schedule it
 
-Open `supabase/functions/reminders/cron.sql`, put your `CRON_SECRET` where it says `CRON_SECRET_HERE`, paste it into the SQL editor and run it. It calls the function at :07 and :37 past every hour. Running it again replaces the schedule.
+Open `supabase/functions/reminders/cron.sql`, put your `CRON_SECRET` where it says `CRON_SECRET_HERE` (twice), paste it into the SQL editor and run it. It calls the function at :07 and :37 past every hour, and with `?mode=alarms` on any minute an alarm is due. Running it again replaces the schedules.
 
 ## 5. Check it works
 

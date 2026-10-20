@@ -1,7 +1,7 @@
 // The reminder sender's connections, for any runtime with fetch (the Supabase function in
 // supabase/functions/reminders): the cloud it reads the saves from, and the push services it posts to.
 import type { RemoteRow } from '../sync/types';
-import type { Cloud, RunStats, SendResult, Sender } from './sender';
+import type { AlarmRow, Cloud, RunStats, SendResult, Sender, SubRow } from './sender';
 
 type Fetch = typeof fetch;
 
@@ -40,6 +40,18 @@ export function makeCloud(baseUrl: string, secret: string, fetchFn: Fetch = fetc
 
   return {
     subscriptions: () => all('push_subscriptions?select=endpoint,user_id,p256dh,auth,tz,prefs,history,updated_at&order=endpoint'),
+    async subscriptionsOf(userIds) {
+      const out: SubRow[] = [];
+      for (let i = 0; i < userIds.length; i += 40)
+        out.push(...(await all<SubRow>(`push_subscriptions?select=endpoint,user_id,p256dh,auth,tz,prefs,history,updated_at&user_id=${enc(inList(userIds.slice(i, i + 40)))}&order=endpoint`)));
+      return out;
+    },
+    async takeAlarms(now, peek) {
+      const path = `push_alarms?select=user_id,key,fire_at,title,body,tag&fire_at=lte.${enc(new Date(now).toISOString())}`;
+      // taken off the table as they are read: a second run at the same moment finds nothing to send twice
+      const rows = (await rest<AlarmRow[]>(path, peek ? {} : { method: 'DELETE', headers: { Prefer: 'return=representation' } })) ?? [];
+      return rows.sort((a, b) => Date.parse(a.fire_at) - Date.parse(b.fire_at));
+    },
     async lastStats() {
       const rows = await rest<{ stats: RunStats | null }[]>('push_status?select=stats&id=eq.1');
       return rows?.[0]?.stats ?? null;

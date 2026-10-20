@@ -11,8 +11,6 @@ import {
   NUDGE_KINDS,
   PARTY_GAP_MS,
   afterSlot,
-  deadlineNudge,
-  missedNudge,
   partyDigest,
   partyHours,
   pickNudge,
@@ -36,8 +34,22 @@ export interface SubRow {
   updated_at?: string;
 }
 
+/** A deadline notification the app scheduled (push_alarms), ready to send. */
+export interface AlarmRow {
+  user_id: string;
+  key: string;
+  fire_at: string;
+  title: string;
+  body: string;
+  tag: string;
+}
+
 export interface Cloud {
   subscriptions(): Promise<SubRow[]>;
+  /** The devices of these players. */
+  subscriptionsOf(userIds: string[]): Promise<SubRow[]>;
+  /** Alarms due by `now`, taken off the table (so two runs never send one twice); `peek` leaves them there. */
+  takeAlarms(now: number, peek: boolean): Promise<AlarmRow[]>;
   /** What the last run wrote (to know whether this signing key has ever been accepted). */
   lastStats(): Promise<Partial<RunStats> | null>;
   /** The player's own live docs, plus the live docs of the party lists they belong to. */
@@ -51,7 +63,7 @@ export interface Cloud {
 export type SendResult = 'ok' | 'gone' | 'config' | 'retry';
 export type Sender = (sub: SubRow, payload: string, opts: { ttl: number; topic: string }) => Promise<SendResult>;
 
-export type Mode = 'run' | 'dry-run' | 'test';
+export type Mode = 'run' | 'dry-run' | 'test' | 'alarms';
 export interface RunStats {
   devices: number;
   due: number;
@@ -238,9 +250,8 @@ export async function runReminders(opts: {
     } else {
       const slot = slotAt(now, prefs);
       const partyOn = !prefs.off.includes('party') && partyHours(now, prefs) && now - (history.partyAt ?? 0) >= PARTY_GAP_MS;
-      // deadline warnings: any waking hour (the same hours as party news)
-      const deadlinesOn = !prefs.off.includes('deadline') && partyHours(now, prefs);
-      if (!slot && !partyOn && !deadlinesOn) return;
+      // deadline warnings and misses go out as alarms (runAlarms), on the minute
+      if (!slot && !partyOn) return;
       const state = await saveOf(sub.user_id);
       setZone(validZone(sub.tz)); // another device's turn may have run while the save loaded
       setLang(prefs.lang ?? 'en');
@@ -251,23 +262,6 @@ export async function runReminders(opts: {
         const picked = pickNudge(state, now, slot, prefs, history);
         nudge = picked;
         next = afterSlot(history, state, now, slot, prefs, picked);
-      }
-      // a quest whose time just ran out comes before warnings about ones still running
-      if (!nudge && deadlinesOn) {
-        const m = missedNudge(state, now, prefs, history);
-        if (m) {
-          nudge = m.nudge;
-          next = { ...next, warned: [...(next.warned ?? []), m.key].slice(-30) };
-          topic = 'missed';
-        }
-      }
-      if (!nudge && deadlinesOn) {
-        const d = deadlineNudge(state, now, prefs, history);
-        if (d) {
-          nudge = d.nudge;
-          next = { ...next, warned: [...(next.warned ?? []), d.key].slice(-30) };
-          topic = 'deadline';
-        }
       }
       if (!nudge && partyOn) {
         // what the party did since the last digest (a new device starts with the last hour)
@@ -292,6 +286,53 @@ export async function runReminders(opts: {
     } else if (r === 'config') refused.push(sub);
     else stats.failed++;
   }
+}
+
+/** An alarm the job couldn't send for this long (it was down) is stale news: dropped. */
+export const ALARM_STALE_MS = 2 * 3600_000;
+
+/** A short push "topic" per quest (letters and digits only), so a phone that was off gets the latest per quest. */
+function topicOf(tag: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < tag.length; i++) h = Math.imul(h ^ tag.charCodeAt(i), 16777619);
+  return `a${(h >>> 0).toString(36)}`;
+}
+
+/**
+ * Sends the deadline alarms that are due (written by the players' apps, already in their words) to each
+ * player's devices that have deadline notifications on. Reads no saves: it runs every minute.
+ */
+export async function runAlarms(opts: { cloud: Cloud; send: Sender; now: number; appUrl: string; peek?: boolean }): Promise<RunStats> {
+  const { cloud, send, now, appUrl, peek = false } = opts;
+  const stats: RunStats = { devices: 0, due: 0, sent: 0, gone: 0, failed: 0, config: 0 };
+  const due = (await cloud.takeAlarms(now, peek)).filter((a) => now - Date.parse(a.fire_at) <= ALARM_STALE_MS);
+  if (!due.length) return stats;
+  const subs = await cloud.subscriptionsOf([...new Set(due.map((a) => a.user_id))]);
+  stats.devices = subs.length;
+  const dropped = new Set<string>();
+  try {
+    for (const alarm of due) {
+      for (const sub of subs) {
+        if (sub.user_id !== alarm.user_id || dropped.has(sub.endpoint) || !PUSH_ENDPOINT.test(sub.endpoint)) continue;
+        const prefs = sanitizePrefs(sub.prefs);
+        if (prefs.off.includes('deadline')) continue;
+        stats.due++;
+        if (peek) continue;
+        setLang(prefs.lang ?? 'en'); // marks the message with the player's language
+        const r = await send(sub, payload({ title: alarm.title, body: alarm.body, tag: alarm.tag }, appUrl), { ttl: ALARM_STALE_MS / 1000, topic: topicOf(alarm.tag) });
+        if (r === 'ok') stats.sent++;
+        else if (r === 'gone') {
+          stats.gone++;
+          dropped.add(sub.endpoint);
+          await cloud.forget(sub.endpoint).catch(() => undefined);
+        } else if (r === 'config') stats.config++;
+        else stats.failed++;
+      }
+    }
+  } finally {
+    setLang('en');
+  }
+  return stats;
 }
 
 export type { NudgeKind };

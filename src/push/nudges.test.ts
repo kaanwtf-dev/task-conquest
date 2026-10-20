@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Hero, Task, TaskList } from '../core/types';
 import { dateKey } from '../core/time';
 import { bossFor } from '../game/bosses';
-import { DEFAULT_PUSH_PREFS, afterSlot, deadlineNudge, missedNudge, partyDigest, pickNudge, slotAt, type NudgeState, type PushPrefs } from './nudges';
+import { DEFAULT_PUSH_PREFS, afterSlot, partyDigest, pickNudge, slotAt, type NudgeState, type PushPrefs } from './nudges';
 
 const at = (d: number, h: number) => new Date(2026, 9, d, h).getTime(); // October 2026, local time
 const day = (d: number) => dateKey(new Date(2026, 9, d));
@@ -156,60 +156,5 @@ describe('party digest', () => {
     const P = list('P', { type: 'supply', name: 'Mine' });
     const tasks = [task('Milk', 'P', { repeat: { kind: 'none' }, doneFor: 'once', doneBy: 'Luna', doneAt: at(15, 17) + 60_000 })];
     expect(partyDigest(state(hero(), tasks, [S, P]), since, until)).toBeNull();
-  });
-});
-
-describe('deadline warning', () => {
-  const lists = [list('D', { type: 'daily' }), list('Q'), list('S', { type: 'weekly', shared: true })];
-  const rent = task('Pay rent', 'Q', { repeat: { kind: 'none' }, deadline: at(15, 14), stakes: 'must' });
-
-  it('warns about the soonest open quest ending within 3 hours, once per window', () => {
-    const meds = task('Meds', 'D', { byTime: '13:00', stakes: 'flexible', misses: 2 });
-    const st = state(hero(), [rent, meds], lists);
-    expect(deadlineNudge(st, at(15, 9), prefs())).toBeNull(); // nothing that close yet
-    const d = deadlineNudge(st, at(15, 11), prefs())!;
-    expect(d.nudge.title).toBe('⏳ 2h left: Meds');
-    expect(d.nudge.body).toBe("Missed 2× in a row already. Don't make it 3. Due 1:00 PM.");
-    const next = deadlineNudge(st, at(15, 11), prefs(), { warned: [d.key] })!;
-    expect(next.nudge.title).toBe('⚠️ 3h left: Pay rent');
-    expect(next.nudge.body).toBe('A must-do, due 2:00 PM. Missing it costs gold.');
-  });
-
-  it('stays quiet for done quests, party lists, past deadlines, or when switched off', () => {
-    const shared = task('Chore', 'S', { repeat: { kind: 'none' }, deadline: at(15, 12) });
-    expect(deadlineNudge(state(hero(), [{ ...rent, doneFor: 'once' }, shared], lists), at(15, 12), prefs())).toBeNull();
-    expect(deadlineNudge(state(hero(), [rent], lists), at(15, 15), prefs())).toBeNull();
-    expect(deadlineNudge(state(hero(), [rent], lists), at(15, 12), prefs({ off: ['deadline'] }))).toBeNull();
-  });
-});
-
-describe('missed quest notification', () => {
-  const lists = [list('D', { type: 'daily' }), list('Q'), list('S', { shared: true })];
-  const meds = task('Meds', 'D', { byTime: '10:00', stakes: 'must', misses: 1, createdAt: at(1, 9) });
-  const rent = task('Pay rent', 'Q', { repeat: { kind: 'none' }, deadline: at(15, 14), stakes: 'flexible', createdAt: at(1, 9) });
-
-  it('leaves out misses more than 12 hours old and deadlines still running', () => {
-    // 9:00 on the 15th: the meds window ended 23 hours ago, rent is due at 14:00
-    expect(missedNudge(state(hero(), [meds, rent], lists), at(15, 9), prefs())).toBeNull();
-  });
-
-  it('says how many times in a row it would make, and tells each miss once', () => {
-    const st = state(hero(), [{ ...meds, missedEnd: at(14, 10) }, rent], lists);
-    const a = missedNudge(st, at(15, 11), prefs())!;
-    expect(a.nudge.title).toBe('💥 Missed: Meds');
-    expect(a.nudge.body).toBe('That makes 2× in a row. Tap to decide: more time, call it off, or take the hit.');
-    expect(missedNudge(st, at(15, 11), prefs(), { warned: [a.key] })).toBeNull();
-    const b = missedNudge(st, at(15, 15), prefs(), { warned: [a.key] })!;
-    expect(b.nudge.title).toBe('⌛ Missed: Pay rent');
-    expect(b.nudge.body).toBe('Tap to decide: more time, call it off, or take the hit.');
-  });
-
-  it('stays quiet once the app settled it, for old misses, party lists, or when switched off', () => {
-    const settled = { ...meds, missedEnd: at(15, 10), pendingMiss: null };
-    const answered = { ...rent, deadlineOutcome: 'missed' as const };
-    expect(missedNudge(state(hero(), [settled, answered], lists), at(15, 15), prefs())).toBeNull();
-    expect(missedNudge(state(hero(), [{ ...meds, missedEnd: at(14, 10) }], lists), at(15, 23), prefs())).toBeNull(); // 13h ago
-    expect(missedNudge(state(hero(), [{ ...rent, listId: 'S' }], lists), at(15, 15), prefs())).toBeNull();
-    expect(missedNudge(state(hero(), [rent], lists), at(15, 15), prefs({ off: ['deadline'] }))).toBeNull();
   });
 });

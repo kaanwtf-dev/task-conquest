@@ -8,6 +8,7 @@ import UpdateBanner from './ui/components/UpdateBanner';
 import UndoBar from './ui/components/UndoBar';
 import { PushKeeper } from './ui/components/Reminders';
 import DeadlineAsk from './ui/components/DeadlineAsk';
+import { nextDeadline } from './game/deadlines';
 import WhatsNew from './ui/components/WhatsNew';
 import { playMusic, setMusicVolume, stopMusic } from './audio/music';
 import { setSfxVolume } from './audio/sfx';
@@ -86,12 +87,25 @@ export default function App() {
     const timer = setTimeout(go, 2500);
     const every = setInterval(go, 5 * 60_000);
     document.addEventListener('visibilitychange', go);
+    window.addEventListener('pageshow', go);
     return () => {
       clearTimeout(timer);
       clearInterval(every);
       document.removeEventListener('visibilitychange', go);
+      window.removeEventListener('pageshow', go);
     };
   }, [hasHero, checkDeadlines]);
+  // and right when the next time limit runs out, not up to five minutes later
+  const tasks = useStore((s) => s.tasks);
+  const timeCfg = useStore((s) => s.settings);
+  useEffect(() => {
+    if (!hasHero) return;
+    const at = Date.now();
+    const next = nextDeadline(Object.values(tasks), at, timeCfg);
+    if (next === null) return;
+    const timer = setTimeout(() => document.visibilityState === 'visible' && checkDeadlines(), Math.min(next - at + 1000, 2_000_000_000));
+    return () => clearTimeout(timer);
+  }, [hasHero, tasks, timeCfg, checkDeadlines]);
 
   const sfxVolume = useStore((s) => s.settings.sfx);
   useEffect(() => setSfxVolume(sfxVolume), [sfxVolume]);

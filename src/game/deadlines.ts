@@ -168,10 +168,22 @@ export function missedWindow(task: Task, now: number, cfg: TimeCfg): string | nu
   return missedAt(task, now, cfg)?.key ?? null;
 }
 
-function activeOn(task: Task, at: number, cfg: TimeCfg): boolean {
+/** Is a repeating quest on for the logical day `at` is in ("some days" quests are off on the others)? */
+export function activeOn(task: Task, at: number, cfg: TimeCfg): boolean {
   const r = task.repeat;
   if (r.kind === 'days') return r.days.includes(logicalDate(at, cfg).getDay());
   return true;
+}
+
+/** The soonest moment after `now` when one of these quests' time runs out, or null (to wake up right then). */
+export function nextDeadline(tasks: Task[], now: number, cfg: TimeCfg): number | null {
+  let best: number | null = null;
+  for (const task of tasks) {
+    if (task.deleted || !hasLimit(task, cfg)) continue;
+    const w = windowOf(task, now, cfg);
+    if (w && w.end > now && (best === null || w.end < best)) best = w.end;
+  }
+  return best;
 }
 
 /** A closed "what happened?" question comes back after this long. */

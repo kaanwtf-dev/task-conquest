@@ -10,14 +10,17 @@ import {
   currentSubscription,
   disablePush,
   enablePush,
+  forgetSavedAlarms,
   pushPermission,
   pushPrefs,
   pushSupport,
   renewPush,
+  saveAlarms,
   setIconBadge,
   updatePushPrefs,
 } from '../../push/client';
 import type { NudgeKind } from '../../push/nudges';
+import { alarmsFor } from '../../push/alarms';
 import { useNow } from './common';
 import { t, tk } from '../../i18n';
 
@@ -318,5 +321,21 @@ export function PushKeeper() {
     }, 1500);
     return () => clearTimeout(timer);
   }, [key, userId, mine]);
+
+  // deadline notifications: the moments they are due, kept in the cloud for the minute job (push/alarms.ts),
+  // from any signed-in device (the one getting the notification may not be the one the quest was set on)
+  const hero = useStore((s) => s.hero);
+  useEffect(() => {
+    if (!userId) {
+      forgetSavedAlarms();
+      return;
+    }
+    const timer = setTimeout(() => {
+      const at = Date.now();
+      const alarms = alarmsFor({ hero, lists, tasks }, at, settings, pushPrefs(settings));
+      void saveAlarms(alarms).catch(() => undefined);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [userId, hero ? hero.name : null, lists, tasks, settings, hour]);
   return null;
 }

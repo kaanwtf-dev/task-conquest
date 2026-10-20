@@ -3,7 +3,7 @@
 // time, may call it off, or takes the hit. Unanswered questions count as missed after a while (store).
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store';
-import { answerCost, deadlineOf, moreTimeOptions, needsAnswer, type MissAnswer } from '../../game/deadlines';
+import { SNOOZE_MS, answerCost, deadlineOf, moreTimeOptions, needsAnswer, nextDeadline, type MissAnswer } from '../../game/deadlines';
 import { heroGold, heroLevel } from '../../game/progression';
 import { iconFor } from '../../pixel/iconGen';
 import { PxImg, Sheet, useNow } from './common';
@@ -17,8 +17,28 @@ const AFTER_HIT_MS = 1800;
 export default function DeadlineAsk() {
   useNow(60_000); // a minute later, newly overdue quests are asked about
   const cfg = useStore((s) => s.settings);
+  const tasks = useStore((s) => s.tasks);
   const [holdUntil, setHoldUntil] = useState(0);
   const [, rerender] = useState(0);
+  // ask right when a deadline passes (or a closed question is due again), and as soon as the app is back on
+  // screen: a phone pauses the minute timer while the app is in the background
+  useEffect(() => {
+    const at = Date.now();
+    const all = Object.values(tasks);
+    let next = nextDeadline(all, at, cfg);
+    for (const x of all) if (x.askedAt && x.askedAt + SNOOZE_MS > at && (next === null || x.askedAt + SNOOZE_MS < next)) next = x.askedAt + SNOOZE_MS;
+    const timer = next === null ? undefined : setTimeout(() => rerender((n) => n + 1), Math.min(next - at + 500, 2_000_000_000));
+    const wake = () => document.visibilityState === 'visible' && rerender((n) => n + 1);
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('focus', wake);
+    window.addEventListener('pageshow', wake);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', wake);
+      window.removeEventListener('focus', wake);
+      window.removeEventListener('pageshow', wake);
+    };
+  }, [tasks, cfg]);
   useEffect(() => {
     if (!holdUntil) return;
     const id = setTimeout(() => rerender((n) => n + 1), Math.max(0, holdUntil - Date.now()) + 50);

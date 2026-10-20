@@ -130,3 +130,70 @@ exception when insufficient_privilege then null;
 end $$;
 reset role;
 select 'HEARTBEAT OK';
+
+-- ---------------------------------------------------------------- deadline alarms
+set role anon;
+do $$ begin
+  perform set_push_alarms('[]');
+  raise exception 'PUSH TEST FAILED: anon set alarms';
+exception when insufficient_privilege then null;
+end $$;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'A', false);
+-- two alarms in the coming hours, one already past (ignored), one too far ahead (ignored)
+select set_push_alarms(jsonb_build_array(
+  jsonb_build_object('key', 'warn:t1@1', 'at', extract(epoch from now() + interval '1 hour') * 1000, 'title', 'Soon', 'body', 'b', 'tag', 'deadline-t1'),
+  jsonb_build_object('key', 'missed:t1@1', 'at', extract(epoch from now() + interval '4 hours') * 1000, 'title', 'Missed', 'body', 'b', 'tag', 'missed-t1'),
+  jsonb_build_object('key', 'old', 'at', extract(epoch from now() - interval '1 hour') * 1000, 'title', 'x', 'body', 'b', 'tag', 't'),
+  jsonb_build_object('key', 'far', 'at', extract(epoch from now() + interval '30 days') * 1000, 'title', 'x', 'body', 'b', 'tag', 't')
+));
+select _expect((select count(*) from push_alarms) = 2, 'A has the two upcoming alarms');
+
+-- a rewrite replaces the upcoming ones, but one already due stays for the sender
+reset role;
+update push_alarms set fire_at = now() - interval '10 seconds' where key = 'warn:t1@1';
+set role authenticated;
+select set_push_alarms(jsonb_build_array(
+  jsonb_build_object('key', 'missed:t2@2', 'at', extract(epoch from now() + interval '2 hours') * 1000, 'title', 'Other', 'body', 'b', 'tag', 'missed-t2')
+));
+select _expect((select string_agg(key, ',' order by key) from push_alarms) = 'missed:t2@2,warn:t1@1', 'due alarm kept, upcoming replaced');
+
+-- junk and oversized lists are refused
+do $$ begin
+  perform set_push_alarms('{"key":"x"}');
+  raise exception 'PUSH TEST FAILED: accepted a non-array';
+exception when invalid_parameter_value then null;
+end $$;
+do $$ begin
+  perform set_push_alarms('[{"key":"x","at":"soon","title":"t","body":"b","tag":"t"}]');
+  raise exception 'PUSH TEST FAILED: accepted a non-numeric time';
+exception when invalid_parameter_value then null;
+end $$;
+do $$ begin
+  perform set_push_alarms(jsonb_build_array(jsonb_build_object('key', 'x', 'at', 1, 'title', repeat('t', 300), 'body', 'b', 'tag', 't')));
+  raise exception 'PUSH TEST FAILED: accepted a huge title';
+exception when invalid_parameter_value then null;
+end $$;
+do $$ begin
+  perform set_push_alarms((select jsonb_agg(jsonb_build_object('key', 'k' || i, 'at', 1, 'title', 't', 'body', 'b', 'tag', 't')) from generate_series(1, 101) i));
+  raise exception 'PUSH TEST FAILED: accepted 101 alarms';
+exception when invalid_parameter_value then null;
+end $$;
+
+-- no direct writes, and nobody sees anyone else's alarms
+do $$ begin
+  insert into push_alarms (user_id, key, fire_at, title, body, tag) values (auth.uid(), 'x', now(), 't', 'b', 't');
+  raise exception 'PUSH TEST FAILED: direct insert allowed';
+exception when insufficient_privilege then null;
+end $$;
+do $$ begin
+  delete from push_alarms;
+  raise exception 'PUSH TEST FAILED: direct delete allowed';
+exception when insufficient_privilege then null;
+end $$;
+select set_config('request.jwt.claim.sub', :'B', false);
+select _expect((select count(*) from push_alarms) = 0, 'B sees none of A''s alarms');
+select set_push_alarms('[]');
+reset role;
+select _expect((select count(*) from push_alarms where user_id = :'A') = 2, 'B clearing its own alarms leaves A''s alone');

@@ -3,7 +3,8 @@ import type { Hero, Task, TaskList } from '../core/types';
 import { dateKey } from '../core/time';
 import { bossFor } from '../game/bosses';
 import { setLang, t } from '../i18n';
-import { DEFAULT_PUSH_PREFS, deadlineNudge, pickNudge, type NudgeState } from './nudges';
+import { DEFAULT_PUSH_PREFS, pickNudge, type NudgeState } from './nudges';
+import { alarmsFor } from './alarms';
 import { payload, testNudge } from './sender';
 
 const at = (d: number, h: number) => new Date(2026, 9, d, h).getTime(); // October 2026, local time
@@ -37,9 +38,11 @@ describe('reminders in Turkish', () => {
     expect(n.body).toBe('Gün sıfırlanmadan bir görev bitir, seri yaşasın (1 görev bekliyor).');
 
     const end = at(15, 18);
-    const d = deadlineNudge(state(h, [task('Vergi', 'Q', { repeat: { kind: 'none' }, deadline: end, stakes: 'must' })]), end - 30 * 60_000, DEFAULT_PUSH_PREFS);
-    expect(d?.nudge.title).toBe('⚠️ 30 dk kaldı: Vergi');
-    expect(d?.nudge.body).toBe('Şart görev, son saat 18:00. Kaçırırsan altın gider.');
+    const cfg = { dayStartHour: 0, weekStart: 1 };
+    const [warn, missed] = alarmsFor(state(h, [task('Vergi', 'Q', { repeat: { kind: 'none' }, deadline: end, stakes: 'must' })]), at(15, 12), cfg, DEFAULT_PUSH_PREFS);
+    expect(warn.title).toBe(`⚠️ ${t('{n}h', { n: 3 })} kaldı: Vergi`);
+    expect(warn.body).toBe('Şart görev, son saat 18:00. Kaçırırsan altın gider.');
+    expect(missed.title).toBe('💥 Kaçırdın: Vergi');
   });
 
   it('sends the test reminder in Turkish, marked as Turkish', () => {

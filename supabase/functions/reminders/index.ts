@@ -1,6 +1,9 @@
 // Task Conquest reminders, as a Supabase Edge Function. A pg_cron job (supabase/functions/reminders/cron.sql)
 // calls it every half hour; it sends the reminder notifications that are due (src/push/sender.ts).
 //
+// A second job calls it with ?mode=alarms once a minute, but only when a deadline alarm the apps scheduled
+// (push_alarms) is due; that run sends just those, reading no saves.
+//
 // Paste the bundled single file (npm run build:reminders → dist-functions/reminders.ts) into the Supabase
 // dashboard as a function named "reminders". Function secrets it reads:
 //   VAPID_PRIVATE_KEY  the private half of VITE_VAPID_PUBLIC_KEY
@@ -8,7 +11,7 @@
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
 // Responses and logs hold counts only, never player data.
 import webpush from 'npm:web-push@3.6.7';
-import { runReminders, type Mode } from '../../../src/push/sender';
+import { runAlarms, runReminders, type Mode } from '../../../src/push/sender';
 import { makeCloud, makeSender, type WebPushLib } from '../../../src/push/backend';
 import { useZone, zonedDate } from '../../../src/push/zone';
 
@@ -72,8 +75,9 @@ async function handle(req: Request): Promise<Response> {
   const cronSecret = Deno.env.get('CRON_SECRET') ?? '';
   if (cronSecret.length < 16 || req.headers.get('x-cron-secret') !== cronSecret) return json(401, { error: 'unauthorized' });
 
-  const mode = (new URL(req.url).searchParams.get('mode') ?? 'run') as Mode;
-  if (!['run', 'dry-run', 'test'].includes(mode)) return json(400, { error: `unknown mode "${mode}" (run, dry-run or test)` });
+  const mode = (new URL(req.url).searchParams.get('mode') ?? 'run') as Mode | 'alarms-dry-run';
+  if (!['run', 'dry-run', 'test', 'alarms', 'alarms-dry-run'].includes(mode))
+    return json(400, { error: `unknown mode "${mode}" (run, dry-run, test, alarms or alarms-dry-run)` });
 
   const url = Deno.env.get('SUPABASE_URL') ?? '';
   const secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -84,11 +88,22 @@ async function handle(req: Request): Promise<Response> {
   if (!zonesWork()) return json(500, { error: 'time zones are not available in this runtime, so reminders would go out at the wrong hours' });
 
   const started = Date.now();
+  if (mode === 'alarms' || mode === 'alarms-dry-run') {
+    const stats = await runAlarms({
+      cloud: makeCloud(url, secret),
+      send: makeSender(webpush as unknown as WebPushLib, { vapidPublic: VAPID_PUBLIC, vapidPrivate, subject: APP_URL, log: console.log }),
+      now: started,
+      appUrl: APP_URL,
+      peek: mode === 'alarms-dry-run',
+    });
+    console.log(`mode=${mode} devices=${stats.devices} due=${stats.due} sent=${stats.sent} gone=${stats.gone} failed=${stats.failed} config=${stats.config}`);
+    return json(stats.config ? 500 : 200, stats.config ? { ...stats, error: 'a push service refused the VAPID keys' } : stats);
+  }
   const stats = await runReminders({
     cloud: makeCloud(url, secret),
     send: makeSender(webpush as unknown as WebPushLib, { vapidPublic: VAPID_PUBLIC, vapidPrivate, subject: APP_URL, log: console.log }),
     now: started,
-    mode,
+    mode: mode as Mode,
     appUrl: APP_URL,
     key: VAPID_PUBLIC,
     deadline: started + TIME_BUDGET_MS,
