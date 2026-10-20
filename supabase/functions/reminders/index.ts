@@ -95,6 +95,7 @@ async function handle(req: Request): Promise<Response> {
       now: started,
       appUrl: APP_URL,
       peek: mode === 'alarms-dry-run',
+      deadline: started + 60_000, // the job calls again next minute: what's left goes back for it
     });
     console.log(`mode=${mode} devices=${stats.devices} due=${stats.due} sent=${stats.sent} gone=${stats.gone} failed=${stats.failed} config=${stats.config}`);
     return json(stats.config ? 500 : 200, stats.config ? { ...stats, error: 'a push service refused the VAPID keys' } : stats);

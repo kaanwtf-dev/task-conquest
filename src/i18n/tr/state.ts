@@ -143,4 +143,13 @@ export const TR_STATE: Record<string, string> = {
   'Your hero takes the hit. Did it after all? Tap to say so.': 'Kahramanın darbeyi yiyor. Aslında yaptın mı? Söylemek için dokun.',
   '+{gold}g back': '+{gold} altın geri',
   '"{title}" was sorted out: {gold}g back.': '"{title}" halledildi: {gold} altın geri.',
+  'It was due {at}.': 'Son saat {at} idi.',
+  '{names} +{n} more': '{names} ve {n} tane daha',
+  '⚠️ {left} left: {n} quests': '⚠️ {left} kaldı: {n} görev',
+  '⏳ {left} left: {n} quests': '⏳ {left} kaldı: {n} görev',
+  "💥 Time's up: {n} quests": '💥 Süre doldu: {n} görev',
+  "⌛ Time's up: {n} quests": '⌛ Süre doldu: {n} görev',
+  'Your hero takes the hits. Did some after all? Tap to say so.': 'Kahramanın darbeleri yiyor. Bazılarını aslında yaptın mı? Söylemek için dokun.',
+  'Tap to say what happened.': 'Ne olduğunu söylemek için dokun.',
+  'Time ran out.': 'Süre doldu.',
 };

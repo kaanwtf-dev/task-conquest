@@ -52,6 +52,15 @@ export function makeCloud(baseUrl: string, secret: string, fetchFn: Fetch = fetc
       const rows = (await rest<AlarmRow[]>(path, peek ? {} : { method: 'DELETE', headers: { Prefer: 'return=representation' } })) ?? [];
       return rows.sort((a, b) => Date.parse(a.fire_at) - Date.parse(b.fire_at));
     },
+    async putBack(rows) {
+      if (!rows.length) return;
+      // ignore-duplicates: a row the app wrote again meanwhile stays as it is
+      await rest('push_alarms?on_conflict=user_id,key', {
+        method: 'POST',
+        body: JSON.stringify(rows),
+        headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      });
+    },
     async lastStats() {
       const rows = await rest<{ stats: RunStats | null }[]>('push_status?select=stats&id=eq.1');
       return rows?.[0]?.stats ?? null;
@@ -91,7 +100,7 @@ export interface WebPushLib {
   generateRequestDetails(
     sub: { endpoint: string; keys: { p256dh: string; auth: string } },
     payload: string,
-    opts: { headers: Record<string, string>; contentEncoding: 'aes128gcm'; TTL: number; urgency: 'normal'; topic: string },
+    opts: { headers: Record<string, string>; contentEncoding: 'aes128gcm'; TTL: number; urgency: 'normal' | 'high'; topic: string },
   ): { endpoint: string; method: string; headers: Record<string, string | number>; body: Uint8Array | null };
 }
 
@@ -106,7 +115,7 @@ export function makeSender(
   const fetchFn = opts.fetchFn ?? fetch;
   // one signed VAPID token per push service per run (Apple asks senders not to mint them more than hourly)
   const auth = new Map<string, Record<string, string>>();
-  return async (sub, body, { ttl, topic }) => {
+  return async (sub, body, { ttl, topic, urgency = 'normal' }) => {
     const audience = new URL(sub.endpoint).origin;
     let vapid = auth.get(audience);
     if (!vapid) {
@@ -119,7 +128,7 @@ export function makeSender(
         headers: vapid,
         contentEncoding: 'aes128gcm',
         TTL: ttl,
-        urgency: 'normal',
+        urgency,
         topic,
       });
     } catch {
@@ -129,13 +138,15 @@ export function makeSender(
     // a busy push service (429, 5xx, no answer) gets one more try a moment later
     for (let attempt = 1; ; attempt++) {
       let status: number | undefined;
+      let timedOut = false;
       try {
         const res = await fetchFn(req.endpoint, { method: 'POST', headers, body: req.body as BodyInit | null, signal: AbortSignal.timeout(15_000) });
         await res.arrayBuffer().catch(() => undefined);
         status = res.status;
         if (status >= 200 && status < 300) return 'ok';
-      } catch {
+      } catch (e) {
         status = undefined;
+        timedOut = (e as Error | undefined)?.name === 'TimeoutError';
       }
       const result: SendResult = status === 404 || status === 410 ? 'gone' : status === 401 || status === 403 ? 'config' : 'retry';
       const busy = result === 'retry' && (!status || status === 429 || status >= 500);
@@ -143,8 +154,10 @@ export function makeSender(
         await new Promise((r) => setTimeout(r, opts.retryDelayMs ?? 3000));
         continue;
       }
-      opts.log?.(`push service answered ${status ?? 'no response'} (${result})`);
-      return result;
+      // no answer in time: the push may well have arrived, so it is not one to send again later
+      const again = busy && !timedOut;
+      opts.log?.(`push service answered ${status ?? (timedOut ? 'too slowly' : 'no response')} (${again ? 'busy' : result})`);
+      return again ? 'busy' : result;
     }
   };
 }

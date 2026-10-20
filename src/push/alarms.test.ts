@@ -55,22 +55,81 @@ describe('notification alarms', () => {
     expect(missed.body).toBe('3× in a row: your hero takes the hit. Did it after all? Tap to say so.');
   });
 
-  it('a plain daily is flexible by default: warned before the day ends, told when it was missed', () => {
+  it('a plain daily is flexible by default: warned before the day ends, told the moment it ran out', () => {
+    // from the 21st: plain dailies only count once the default stakes came in (October 20th)
     const plain = task('Read', 'D');
-    expect(keys([plain], at(15, 9)).slice(0, 2)).toEqual(['warn:Read@15 21:00', 'missed:Read@16 9:00']);
-    const [, missed] = alarmsFor(state([plain]), at(15, 9), cfg, prefs());
+    expect(keys([plain], at(22, 9)).slice(0, 2)).toEqual(['warn:Read@22 21:00', 'missed:Read@23 0:00']);
+    const [, missed] = alarmsFor(state([plain]), at(22, 9), cfg, prefs());
     expect(missed.body).toBe('Your hero takes the hit. Did it after all? Tap to say so.');
+    // a day that began before the default: nothing to tell (the app won't charge it either)
+    expect(keys([plain], at(15, 9))).toEqual([]);
   });
 
-  it('keeps quiet at night: a midnight miss is told in the morning, a warning moves to when people are up', () => {
+  it("time's up goes out the moment time runs out, even at night; only warnings wait for the morning", () => {
     const read = task('Read', 'D', { stakes: 'flexible' }); // due by the end of the day (midnight)
-    expect(keys([read], at(15, 9)).slice(0, 2)).toEqual(['warn:Read@15 21:00', 'missed:Read@16 9:00']);
+    expect(keys([read], at(15, 9)).slice(0, 2)).toEqual(['warn:Read@15 21:00', 'missed:Read@16 0:00']);
     expect(awake(at(15, 23), prefs({ morningHour: 7 }))).toBe(at(16, 7));
     expect(awake(at(15, 5), prefs())).toBe(at(15, 9));
     expect(awake(at(15, 12), prefs())).toBe(at(15, 12));
     // a 7:00 deadline: the 4:00 warning would come too late once the night is over, so there is none
     const early = task('Gym', 'Q', { repeat: { kind: 'none' }, deadline: at(16, 7), stakes: 'must' });
-    expect(keys([early], at(15, 20), prefs({ morningHour: 9 }))).toEqual(['missed:Gym@16 9:00']);
+    expect(keys([early], at(15, 20), prefs({ morningHour: 9 }))).toEqual(['missed:Gym@16 7:00']);
+    // a 10:00 deadline: the 7:00 warning waits for 9:00, and is still planned when the app opens at 7:30
+    const exam = task('Exam', 'Q', { repeat: { kind: 'none' }, deadline: at(16, 10), stakes: 'must' });
+    expect(keys([exam], at(15, 20))).toEqual(['warn:Exam@16 9:00', 'missed:Exam@16 10:00']);
+    expect(keys([exam], at(16, 7, 30))).toEqual(['warn:Exam@16 9:00', 'missed:Exam@16 10:00']);
+  });
+
+  it('opening the app after midnight keeps the "time\'s up" that is about to go out, and only that one', () => {
+    const rent = task('Rent', 'Q', { repeat: { kind: 'none' }, due: day(15), stakes: 'must' }); // ends at midnight
+    // a device a few minutes ahead still plans it (the cloud ignores alarms already in the past)
+    expect(keys([rent], at(16, 0, 3))).toEqual(['missed:Rent@16 0:00']);
+    expect(keys([rent], at(16, 0, 30))).toEqual([]);
+    expect(keys([{ ...rent, doneFor: 'once' }], at(16, 0, 3))).toEqual([]);
+  });
+
+  it('a miss the app has already counted is told with its real count, and not at all once answered', () => {
+    const read = task('Read', 'D', { stakes: 'flexible' });
+    // a device clock a little ahead: the app counted the miss (first in a row) before the cloud sent it
+    const charged = { ...read, misses: 1, missedEnd: at(16, 0), pendingMiss: { key: day(15), end: at(16, 0), paid: 5, prevMisses: 0 } };
+    const [missed] = alarmsFor(state([charged]), at(16, 0, 1), cfg, prefs());
+    expect(missed).toMatchObject({ key: `missed:Read@${at(16, 0)}`, body: 'Your hero takes the hit. Did it after all? Tap to say so.' });
+    expect(keys([{ ...charged, pendingMiss: null }], at(16, 0, 1))[0]).not.toBe('missed:Read@16 0:00');
+  });
+
+  it('keeps planning past the night summer time ends, with a late day start', () => {
+    const was = process.env.TZ;
+    process.env.TZ = 'America/New_York'; // clocks go back on Sunday November 1st, 2026
+    try {
+      const read = task('Read', 'D', { stakes: 'must' });
+      const ends = alarmsFor(state([read]), new Date(2026, 9, 31, 12).getTime(), { dayStartHour: 4, weekStart: 1 }, prefs())
+        .filter((a) => a.key.startsWith('missed'))
+        .map((a) => new Date(a.at).getDate());
+      expect(ends).toEqual([1, 2, 3]);
+    } finally {
+      process.env.TZ = was;
+    }
+  });
+
+  it('quests whose time runs out at the same moment share one notification', () => {
+    const tasks = ['Read', 'Walk', 'Floss'].map((n, i) => task(n, 'D', { order: i }));
+    const alarms = alarmsFor(state(tasks), at(22, 9), cfg, prefs());
+    const [warn, missed] = alarms;
+    expect(warn).toMatchObject({ key: `warn:@${at(23, 0)}`, at: at(22, 21), title: '⏳ 3h left: 3 quests', body: 'Read, Walk, Floss. Due 12:00 AM.', tag: `deadline-${at(23, 0)}` });
+    expect(missed).toMatchObject({ key: `missed:@${at(23, 0)}`, at: at(23, 0), title: "⌛ Time's up: 3 quests", tag: `missed-${at(23, 0)}` });
+    expect(missed.body).toBe('Read, Walk, Floss. Your hero takes the hits. Did some after all? Tap to say so.');
+    // a must-do among them shows in the title; many names are cut short
+    const many = [...tasks, task('Meds', 'D', { stakes: 'must', order: 9 }), task('Plants', 'D', { order: 10 })];
+    const [, m2] = alarmsFor(state(many), at(22, 9), cfg, prefs());
+    expect(m2.title).toBe("💥 Time's up: 5 quests");
+    expect(m2.body).toBe('Read, Walk, Floss, Meds +1 more. Your hero takes the hits. Did some after all? Tap to say so.');
+  });
+
+  it('a "done by" daily without stakes still says when its time is up', () => {
+    const walk = task('Walk', 'D', { byTime: '18:00', stakes: 'none' });
+    const [warn, missed] = alarmsFor(state([walk]), at(15, 9), cfg, prefs());
+    expect(warn).toMatchObject({ key: `warn:Walk@${at(15, 18)}`, body: 'Due 6:00 PM.' });
+    expect(missed).toMatchObject({ key: `missed:Walk@${at(15, 18)}`, at: at(15, 18), title: '⌛ Missed: Walk', body: 'It was due 6:00 PM.' });
   });
 
   it('skips the days a "some days" quest is off, and follows more time asked for today', () => {
@@ -85,6 +144,6 @@ describe('notification alarms', () => {
     const laundry = task('Laundry', 'D', { repeat: { kind: 'weekly' }, stakes: 'flexible' });
     // Thursday the 15th; the week ends Monday the 19th at midnight (alarms only cover the next 3 days)
     expect(keys([laundry], at(15, 9))).toEqual([]);
-    expect(keys([laundry], at(18, 9))).toEqual(['warn:Laundry@18 21:00', 'missed:Laundry@19 9:00']);
+    expect(keys([laundry], at(18, 9))).toEqual(['warn:Laundry@18 21:00', 'missed:Laundry@19 0:00']);
   });
 });

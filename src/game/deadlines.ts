@@ -20,6 +20,16 @@ export function stakesOf(task: Pick<Task, 'stakes' | 'repeat'>): Stakes | null {
   return task.repeat.kind === 'none' ? null : 'flexible';
 }
 
+/**
+ * What missing the window that `at` falls in costs. A repeating quest without stakes of its own only counts
+ * from the periods that began after the default came in (DEFAULT_STAKES_FROM).
+ */
+export function stakesAt(task: Task, at: number, cfg: TimeCfg): Stakes | null {
+  const s = stakesOf(task);
+  if (!s || task.stakes || task.repeat.kind === 'none') return s;
+  return (periodWindow(task, at, cfg)?.start ?? 0) < DEFAULT_STAKES_FROM ? null : s;
+}
+
 const DAY = 86_400_000;
 /** One-off quests: warn this long before the deadline. */
 export const WARN_MS = 3 * 3600_000;
@@ -149,7 +159,7 @@ export function missedAt(task: Task, now: number, cfg: TimeCfg): { key: string; 
   if (task.deleted || task.repeat.kind === 'none' || !stakesOf(task)) return null;
   const from = task.createdAt;
   // without stakes of its own, a period that began before the default came in doesn't count
-  const tooEarly = (at: number) => !task.stakes && (periodWindow(task, at, cfg)?.start ?? 0) < DEFAULT_STAKES_FROM;
+  const tooEarly = (at: number) => !stakesAt(task, at, cfg);
   // windows up to the last counted one are settled (older saves only remember its key)
   const counted = (key: string, end: number) => (task.missedEnd !== undefined ? end <= task.missedEnd : task.missedFor === key);
   const by = byTimeOf(task);

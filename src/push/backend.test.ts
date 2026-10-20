@@ -51,7 +51,24 @@ describe('sending a push', () => {
     const busy = service(503, 201);
     expect(await sender(busy.fetchFn)(sub('https://web.push.apple.com/a'), 'x', { ttl: 1, topic: 't' })).toBe('ok');
     expect(busy.got).toHaveLength(2); // one retry
-    expect(await sender(service(503, 503).fetchFn)(sub('https://web.push.apple.com/a'), 'x', { ttl: 1, topic: 't' })).toBe('retry');
+    expect(await sender(service(503, 503).fetchFn)(sub('https://web.push.apple.com/a'), 'x', { ttl: 1, topic: 't' })).toBe('busy');
+    expect(await sender(service(400).fetchFn)(sub('https://web.push.apple.com/a'), 'x', { ttl: 1, topic: 't' })).toBe('retry'); // refused, not busy
+    // no answer in time: it may have arrived, so it is not one to put back and send again
+    const slow = (async () => {
+      throw new DOMException('timed out', 'TimeoutError');
+    }) as unknown as typeof fetch;
+    expect(await sender(slow)(sub('https://web.push.apple.com/a'), 'x', { ttl: 1, topic: 't' })).toBe('retry');
+    const down = (async () => {
+      throw new TypeError('fetch failed');
+    }) as unknown as typeof fetch;
+    expect(await sender(down)(sub('https://web.push.apple.com/a'), 'x', { ttl: 1, topic: 't' })).toBe('busy');
+  });
+
+  it('sends normal urgency unless told otherwise (deadline notes go out high)', async () => {
+    const s = service(201, 201);
+    await sender(s.fetchFn)(sub('https://fcm.googleapis.com/fcm/send/a'), 'x', { ttl: 1, topic: 't' });
+    await sender(s.fetchFn)(sub('https://fcm.googleapis.com/fcm/send/a'), 'x', { ttl: 1, topic: 't', urgency: 'high' });
+    expect(s.got.map((r) => r.headers.Urgency)).toEqual(['normal', 'high']);
   });
 
   it('drops a device whose keys no browser would make, without a request', async () => {

@@ -50,6 +50,8 @@ export interface Cloud {
   subscriptionsOf(userIds: string[]): Promise<SubRow[]>;
   /** Alarms due by `now`, taken off the table (so two runs never send one twice); `peek` leaves them there. */
   takeAlarms(now: number, peek: boolean): Promise<AlarmRow[]>;
+  /** Alarms taken but not delivered (a push service was busy): back on the table, so the next minute tries again. */
+  putBack(rows: AlarmRow[]): Promise<void>;
   /** What the last run wrote (to know whether this signing key has ever been accepted). */
   lastStats(): Promise<Partial<RunStats> | null>;
   /** The player's own live docs, plus the live docs of the party lists they belong to. */
@@ -59,9 +61,13 @@ export interface Cloud {
   heartbeat(stats: RunStats): Promise<void>;
 }
 
-/** 'gone': the device dropped the subscription; 'config': the push service refused our keys (fix the setup). */
-export type SendResult = 'ok' | 'gone' | 'config' | 'retry';
-export type Sender = (sub: SubRow, payload: string, opts: { ttl: number; topic: string }) => Promise<SendResult>;
+/**
+ * 'gone': the device dropped the subscription; 'config': the push service refused our keys (fix the setup);
+ * 'busy': the push service was down or overloaded (worth trying again later); 'retry': it refused this push.
+ */
+export type SendResult = 'ok' | 'gone' | 'config' | 'retry' | 'busy';
+/** 'high' urgency: delivered at once even to a phone that is asleep (deadline notes); 'normal' may wait. */
+export type Sender = (sub: SubRow, payload: string, opts: { ttl: number; topic: string; urgency?: 'normal' | 'high' }) => Promise<SendResult>;
 
 export type Mode = 'run' | 'dry-run' | 'test' | 'alarms';
 export interface RunStats {
@@ -290,6 +296,8 @@ export async function runReminders(opts: {
 
 /** An alarm the job couldn't send for this long (it was down) is stale news: dropped. */
 export const ALARM_STALE_MS = 2 * 3600_000;
+/** A push service that stays busy: its alarms are tried again each minute for this long, then given up. */
+const ALARM_RETRY_MS = 30 * 60_000;
 
 /** A short push "topic" per quest (letters and digits only), so a phone that was off gets the latest per quest. */
 function topicOf(tag: string): string {
@@ -302,16 +310,36 @@ function topicOf(tag: string): string {
  * Sends the deadline alarms that are due (written by the players' apps, already in their words) to each
  * player's devices that have deadline notifications on. Reads no saves: it runs every minute.
  */
-export async function runAlarms(opts: { cloud: Cloud; send: Sender; now: number; appUrl: string; peek?: boolean }): Promise<RunStats> {
-  const { cloud, send, now, appUrl, peek = false } = opts;
+export async function runAlarms(opts: {
+  cloud: Cloud;
+  send: Sender;
+  now: number;
+  appUrl: string;
+  peek?: boolean;
+  /** stop starting new alarms after this (ms); the rest go back for the next minute */
+  deadline?: number;
+  clock?: () => number;
+}): Promise<RunStats> {
+  const { cloud, send, now, appUrl, peek = false, deadline } = opts;
+  const clock = opts.clock ?? Date.now;
   const stats: RunStats = { devices: 0, due: 0, sent: 0, gone: 0, failed: 0, config: 0 };
   const due = (await cloud.takeAlarms(now, peek)).filter((a) => now - Date.parse(a.fire_at) <= ALARM_STALE_MS);
   if (!due.length) return stats;
-  const subs = await cloud.subscriptionsOf([...new Set(due.map((a) => a.user_id))]);
-  stats.devices = subs.length;
-  const dropped = new Set<string>();
+  // whatever was taken but not delivered because a push service (or the database) was busy goes back
+  const back: AlarmRow[] = [];
+  let done = 0;
   try {
+    const subs = await cloud.subscriptionsOf([...new Set(due.map((a) => a.user_id))]);
+    stats.devices = subs.length;
+    const dropped = new Set<string>();
     for (const alarm of due) {
+      if (deadline !== undefined && clock() > deadline) {
+        if (!peek) back.push(...due.slice(done)); // never tried: no device has them
+        stats.cut = true;
+        break;
+      }
+      let delivered = false;
+      let busy = false;
       for (const sub of subs) {
         if (sub.user_id !== alarm.user_id || dropped.has(sub.endpoint) || !PUSH_ENDPOINT.test(sub.endpoint)) continue;
         const prefs = sanitizePrefs(sub.prefs);
@@ -319,18 +347,34 @@ export async function runAlarms(opts: { cloud: Cloud; send: Sender; now: number;
         stats.due++;
         if (peek) continue;
         setLang(prefs.lang ?? 'en'); // marks the message with the player's language
-        const r = await send(sub, payload({ title: alarm.title, body: alarm.body, tag: alarm.tag }, appUrl), { ttl: ALARM_STALE_MS / 1000, topic: topicOf(alarm.tag) });
-        if (r === 'ok') stats.sent++;
-        else if (r === 'gone') {
+        const r = await send(sub, payload({ title: alarm.title, body: alarm.body, tag: alarm.tag }, appUrl), {
+          ttl: ALARM_STALE_MS / 1000,
+          topic: topicOf(alarm.tag),
+          urgency: 'high', // a deadline can't wait for a sleeping phone's next wake-up
+        });
+        if (r === 'ok') {
+          stats.sent++;
+          delivered = true;
+        } else if (r === 'gone') {
           stats.gone++;
           dropped.add(sub.endpoint);
           await cloud.forget(sub.endpoint).catch(() => undefined);
         } else if (r === 'config') stats.config++;
-        else stats.failed++;
+        else {
+          stats.failed++;
+          if (r === 'busy') busy = true;
+        }
       }
+      // tried again next minute, but only while no device has it yet (no doubles) and it isn't stale
+      if (busy && !delivered && now - Date.parse(alarm.fire_at) < ALARM_RETRY_MS) back.push(alarm);
+      done++;
     }
+  } catch (e) {
+    if (!peek) back.push(...due.slice(done));
+    throw e;
   } finally {
     setLang('en');
+    if (back.length && !peek) await cloud.putBack(back).catch(() => undefined);
   }
   return stats;
 }

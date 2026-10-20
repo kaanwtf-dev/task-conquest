@@ -13,9 +13,12 @@ self.addEventListener('push', (event) => {
   }
   const n = msg && typeof msg.notification === 'object' && msg.notification ? msg.notification : msg;
   const url = typeof n.navigate === 'string' && n.navigate.startsWith(scope) ? n.navigate : scope;
+  const tag = typeof n.tag === 'string' && n.tag ? n.tag : 'taskconquest';
   const shown = self.registration.showNotification(typeof n.title === 'string' && n.title ? n.title : 'Task Conquest', {
     body: typeof n.body === 'string' ? n.body : 'Your quests await.',
-    tag: typeof n.tag === 'string' ? n.tag : 'taskconquest',
+    tag,
+    // a quest's new warning or "time's up" replaces its older one, and must still ring (Chrome is silent otherwise)
+    renotify: /^(missed|deadline)-/.test(tag),
     icon: scope + 'icon-192.png',
     data: { url },
   });

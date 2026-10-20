@@ -4,7 +4,7 @@ Task Conquest can send each player up to two reminders a day, plus a warning bef
 
 - **Morning:** today's plan. If they have been away for a few days, a "your hero misses you" nudge instead.
 - **Evening:** a streak about to end, a party member who got things done, dailies left, or a boss that is nearly down.
-- **Deadlines:** a heads-up a few hours before a time-limited quest runs out, and a note within about a minute of its time running out undone (opening the app asks what happened).
+- **Deadlines:** a heads-up a few hours before a time-limited quest runs out (moved out of the night), and a note within about a minute of its time running out undone, night or not (opening the app asks what happened). Quests whose time runs out at the same moment share one note.
 
 Players switch reminders on in the app (Options › Reminders, or the card that appears on the quest screen). Each player picks the times and which kinds they want.
 
@@ -23,9 +23,15 @@ Re-running the file is safe.
 
 ## 2. Create the function
 
-1. Build the single-file function: `npm run build:reminders`. It writes `dist-functions/reminders.ts`.
-2. In Supabase, open **Edge Functions** and choose **Deploy a new function › Via Editor**.
-3. Name it `reminders`, replace the example code with the whole of `dist-functions/reminders.ts`, and click **Deploy**.
+**Automatically from GitHub (recommended).** The workflow `.github/workflows/deploy-reminders.yml` builds and deploys the `reminders` function every time code it is built from changes on `main`, and whenever you run it by hand. It needs one repository secret:
+
+1. In Supabase, click your avatar › **Account preferences › Access Tokens › Generate new token**. Name it `GitHub deploy` and copy it.
+2. On GitHub, open the repository › **Settings › Secrets and variables › Actions › New repository secret**. Name: `SUPABASE_ACCESS_TOKEN`, value: the token.
+3. Open the **Actions** tab › **Deploy reminders function** › **Run workflow**. A green check means the function is live.
+
+The workflow only deploys this one function (from a folder of its own), never database changes or project settings. Without the secret it does nothing.
+
+**By hand.** Build the single-file function with `npm run build:reminders` (it writes `dist-functions/reminders.ts`). In Supabase, open **Edge Functions**, choose **Deploy a new function › Via Editor** (or open `reminders`), name it `reminders`, replace the code with the whole of `dist-functions/reminders.ts`, and click **Deploy**.
 
 ## 3. Give the function its two secrets
 
@@ -56,7 +62,7 @@ Open `supabase/functions/reminders/cron.sql`, put your `CRON_SECRET` where it sa
    );
    ```
 
-Within a minute every device with reminders on gets a "Test reminder". Options › Reminders shows when the job last ran. The function's **Logs** tab shows each run's counts (devices, sent, gone, failed) and any setup error, such as a wrong private key.
+Within a minute every device with reminders on gets a "Test reminder". Options › Reminders shows when the job last ran. For deadline notifications, tap **test deadline** in Options › Reminders: a test goes through the exact path real deadlines take (planned by the app, kept in `push_alarms`, sent by the minute job) about a minute later, and the app then tells you whether the cloud sent it or the minute job never picked it up. The function's **Logs** tab shows each run's counts (devices, sent, gone, failed) and any setup error, such as a wrong private key.
 
 ## Notes
 

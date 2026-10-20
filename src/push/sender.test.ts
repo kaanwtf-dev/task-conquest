@@ -41,6 +41,7 @@ function fakeCloud(subs: SubRow[], rows: Record<string, RemoteRow[]>, alarms: im
       if (!peek) alarms.splice(0, alarms.length, ...alarms.filter((a) => !due.includes(a)));
       return due;
     },
+    putBack: async (rows) => void alarms.push(...rows.filter((r) => !alarms.some((a) => a.user_id === r.user_id && a.key === r.key))),
     lastStats: async () => last,
     docs: async (u) => rows[u] ?? [],
     saveHistory: async (e, h) => void histories.set(e, h),
@@ -280,5 +281,50 @@ describe('deadline alarms', () => {
     expect(await runAlarms({ cloud: f.cloud, now: NOON, appUrl: 'x', send })).toMatchObject({ due: 2, sent: 1, gone: 1 });
     expect(sent).toEqual([apple('A'), apple('Dead')]); // "Old" was 3 hours late: not sent
     expect(f.forgotten).toEqual([apple('Dead')]);
+  });
+
+  it('goes out with high urgency, and a busy push service gets it again next minute (never a device that has it)', async () => {
+    const alarms = [alarm('Rent', U, NOON), alarm('Gym', U, NOON)];
+    const f = fakeCloud([sub(apple('A')), sub(apple('B'))], {}, alarms);
+    const calls: string[] = [];
+    const urgencies = new Set<string | undefined>();
+    // device A's push service is down; B gets Rent but its service is down for Gym
+    const send = async (s: SubRow, p: string, o: { urgency?: string }) => {
+      urgencies.add(o.urgency);
+      const key = JSON.parse(p).notification.tag.slice('missed-'.length);
+      calls.push(`${s.endpoint.slice(-1)}:${key}`);
+      return s.endpoint.endsWith('A') || key === 'Gym' ? ('busy' as const) : ('ok' as const);
+    };
+    expect(await runAlarms({ cloud: f.cloud, now: NOON, appUrl: 'x', send })).toMatchObject({ sent: 1, failed: 3 });
+    expect([...urgencies]).toEqual(['high']);
+    expect(alarms.map((a) => a.key)).toEqual(['Gym']); // Rent reached B: not sent again; Gym reached nobody: back
+    // the database failing before anything was sent: everything taken goes back
+    f.cloud.subscriptionsOf = async () => {
+      throw new Error('HTTP 503');
+    };
+    await expect(runAlarms({ cloud: f.cloud, now: NOON + 60_000, appUrl: 'x', send })).rejects.toThrow('503');
+    expect(alarms.map((a) => a.key)).toEqual(['Gym']);
+    expect(calls).toHaveLength(4);
+  });
+
+  it('a service busy for half an hour is given up on, and a long run leaves the rest for the next minute', async () => {
+    const busy = async () => 'busy' as const;
+    const late = [alarm('Late', U, NOON - 31 * 60_000)];
+    const f = fakeCloud([sub(apple('A'))], {}, late);
+    await runAlarms({ cloud: f.cloud, now: NOON, appUrl: 'x', send: busy });
+    expect(late).toEqual([]);
+    // the time budget runs out after the first alarm: the untried one goes back, unsent
+    const alarms = [alarm('One', U, NOON - 60_000), alarm('Two', U, NOON)];
+    const g = fakeCloud([sub(apple('A'))], {}, alarms);
+    let t = NOON;
+    const sent: string[] = [];
+    const send = async (_s: SubRow, p: string) => {
+      t += 70_000;
+      sent.push(JSON.parse(p).notification.tag);
+      return 'ok' as const;
+    };
+    expect(await runAlarms({ cloud: g.cloud, now: NOON, appUrl: 'x', send, deadline: NOON + 60_000, clock: () => t })).toMatchObject({ sent: 1, cut: true });
+    expect(sent).toEqual(['missed-One']);
+    expect(alarms.map((a) => a.key)).toEqual(['Two']);
   });
 });

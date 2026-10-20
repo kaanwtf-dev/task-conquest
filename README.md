@@ -60,7 +60,7 @@ The app is a static site. Build it with `npm run build` and publish the `dist` f
 
 1. Add an entry at the top of `src/whatsNew.ts` (new version number, a title, a few short lines) and, if it helps, a small screenshot in `public/whats-new/`. Players who already play see it once, the next time they open the app; new players don't.
 2. `npm run release`. It type-checks, runs every test (and the database rule tests when a local Postgres is set up), builds, and only then writes `release/task-conquest-netlify.zip`. Nothing is packaged if anything fails.
-3. Unzip it and drag the folder onto the Netlify project's **Deploys** page. Open apps pick up the new version and offer to update. If the reminders function changed, paste `release/reminders-function.ts` into the Supabase function editor too.
+3. Unzip it and drag the folder onto the Netlify project's **Deploys** page. Open apps pick up the new version and offer to update. The reminders function deploys itself from GitHub (`.github/workflows/deploy-reminders.yml`, see [docs/REMINDERS_SETUP.md](docs/REMINDERS_SETUP.md)); without that set up, paste `release/reminders-function.ts` into the Supabase function editor instead.
 
 ## Development
 

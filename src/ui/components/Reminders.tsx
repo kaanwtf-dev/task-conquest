@@ -7,10 +7,13 @@ import { sum } from '../../game/progression';
 import { todayRemaining, todaySections } from '../../state/today';
 import { sfx, unlockAudio } from '../../audio/sfx';
 import {
+  alarmWaiting,
+  cloudAlarms,
   currentSubscription,
   disablePush,
   enablePush,
   forgetSavedAlarms,
+  planTestAlarm,
   pushPermission,
   pushPrefs,
   pushSupport,
@@ -22,7 +25,7 @@ import {
 import type { NudgeKind } from '../../push/nudges';
 import { alarmsFor } from '../../push/alarms';
 import { useNow } from './common';
-import { t, tk } from '../../i18n';
+import { locale, t, tk } from '../../i18n';
 
 const KIND_LABEL: Record<NudgeKind, string> = {
   plan: tk("today's plan"),
@@ -137,6 +140,74 @@ async function preview() {
   }
 }
 
+const when = (at: number) => new Date(at).toLocaleString(locale(), { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+
+/**
+ * Deadline notifications, checked end to end: the next one the cloud holds, and a test that goes through the
+ * very same path (planned by the app, kept in the cloud, sent by the minute job) a minute from now.
+ */
+function DeadlineCheck() {
+  const [next, setNext] = useState<Awaited<ReturnType<typeof cloudAlarms>> | undefined>(undefined);
+  const [test, setTest] = useState<{ at: number; key: string; result?: 'sent' | 'stuck' } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void cloudAlarms().then(setNext, () => setNext(null));
+  }, []);
+  // a while after the test was due: still in the cloud means it was never sent (checked again if the
+  // cloud can't be read, e.g. the phone just woke up offline)
+  useEffect(() => {
+    if (!test || test.result) return;
+    const id = setTimeout(
+      () =>
+        void alarmWaiting(test.key)
+          .catch(() => null)
+          .then((waiting) => {
+            setTest(waiting === null ? { ...test } : { ...test, result: waiting ? 'stuck' : 'sent' });
+            if (waiting !== null) void cloudAlarms().then(setNext, () => undefined);
+          }),
+      Math.max(0, test.at - Date.now()) + 90_000,
+    );
+    return () => clearTimeout(id);
+  }, [test]);
+  const run = async () => {
+    sfx.tick();
+    setBusy(true);
+    const at = planTestAlarm(t('⌛ Test: time is up!'), t('Deadline notifications reach this device.'));
+    const st = useStore.getState();
+    const ok = await saveAlarms(alarmsFor({ hero: st.hero, lists: st.lists, tasks: st.tasks }, Date.now(), st.settings, pushPrefs(st.settings))).catch(() => false);
+    setBusy(false);
+    if (!ok) {
+      fx.emit({ type: 'toast', text: t('Could not reach the cloud'), small: t('Check your connection and try again.') });
+      return;
+    }
+    setTest({ at, key: `test:@${at}` });
+    void cloudAlarms().then(setNext, () => undefined);
+  };
+  const first = next?.find((r) => !r.key.startsWith('test:'));
+  return (
+    <div className="reminders-row">
+      <span className="muted small reminders-status">
+        {test
+          ? test.result === 'sent'
+            ? t('The cloud sent the test. Nothing came? Allow notifications for Task Conquest and turn off Focus / Do Not Disturb.')
+            : test.result === 'stuck'
+              ? t("The test is still waiting in the cloud: the deadline job in Supabase is not running, or this device's push service is busy. Try again in a few minutes.")
+              : t('Test deadline notification at {time}. Lock your phone and wait.', { time: when(test.at) })
+          : next === undefined
+            ? ''
+            : next === null
+              ? t('Could not read your deadline notifications.')
+              : first
+                ? t('Next deadline notification: {time}, “{title}”.', { time: when(first.at), title: first.title })
+                : t('No deadline notifications planned right now.')}
+      </span>
+      <button className="pill" disabled={busy || (!!test && !test.result)} onClick={() => void run()}>
+        {t('test deadline')}
+      </button>
+    </div>
+  );
+}
+
 export function RemindersOption() {
   const settings = useStore((s) => s.settings);
   const update = useStore((s) => s.updateSettings);
@@ -198,6 +269,7 @@ export function RemindersOption() {
               {t('preview')}
             </button>
           </div>
+          {!prefs.off.includes('deadline') && <DeadlineCheck />}
           <div className="reminders-row">
             <span className="muted small">{t('Morning')}</span>
             {MORNING.map((h) => (
@@ -323,19 +395,63 @@ export function PushKeeper() {
   }, [key, userId, mine]);
 
   // deadline notifications: the moments they are due, kept in the cloud for the minute job (push/alarms.ts),
-  // from any signed-in device (the one getting the notification may not be the one the quest was set on)
+  // from any signed-in device (the one getting the notification may not be the one the quest was set on).
+  // Written soon after a change, at once when the app goes to the background (a timer may never fire
+  // there), again each time the app comes back, and retried when the cloud could not be reached.
   const hero = useStore((s) => s.hero);
+  const [kick, setKick] = useState(0);
+  const pending = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (!userId) {
       forgetSavedAlarms();
       return;
     }
-    const timer = setTimeout(() => {
-      const at = Date.now();
-      const alarms = alarmsFor({ hero, lists, tasks }, at, settings, pushPrefs(settings));
-      void saveAlarms(alarms).catch(() => undefined);
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [userId, hero ? hero.name : null, lists, tasks, settings, hour]);
+    let retry: number | undefined;
+    let tries = 0;
+    let alive = true; // a save still on its way when this ends (sign-out, a newer change) must not retry
+    const write = () => {
+      if (!alive) return;
+      pending.current = null;
+      const st = useStore.getState();
+      const alarms = alarmsFor({ hero: st.hero, lists: st.lists, tasks: st.tasks }, Date.now(), st.settings, pushPrefs(st.settings));
+      const again = () => {
+        if (!alive) return;
+        tries++;
+        pending.current = write; // going to the background still writes it at once
+        clearTimeout(retry);
+        retry = window.setTimeout(write, Math.min(30_000 * 2 ** (tries - 1), 10 * 60_000));
+      };
+      void saveAlarms(alarms).then((ok) => (ok ? (tries = 0) : again()), again);
+    };
+    pending.current = write;
+    const timer = setTimeout(write, 800);
+    return () => {
+      alive = false;
+      pending.current = null;
+      clearTimeout(timer);
+      clearTimeout(retry);
+    };
+  }, [userId, hero ? hero.name : null, lists, tasks, settings, hour, kick]);
+  useEffect(() => {
+    const hide = () => {
+      if (document.visibilityState === 'hidden') pending.current?.();
+    };
+    const back = () => {
+      if (document.visibilityState !== 'visible') return;
+      forgetSavedAlarms();
+      setKick((n) => n + 1);
+    };
+    const leave = () => pending.current?.();
+    document.addEventListener('visibilitychange', hide);
+    document.addEventListener('visibilitychange', back);
+    window.addEventListener('pagehide', leave);
+    window.addEventListener('online', back);
+    return () => {
+      document.removeEventListener('visibilitychange', hide);
+      document.removeEventListener('visibilitychange', back);
+      window.removeEventListener('pagehide', leave);
+      window.removeEventListener('online', back);
+    };
+  }, []);
   return null;
 }

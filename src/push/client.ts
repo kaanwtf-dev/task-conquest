@@ -142,21 +142,60 @@ export function setIconBadge(n: number): void {
 }
 
 let lastAlarms = '';
+/** A test alarm the player asked for in Options: kept in every rewrite until it has gone out. */
+let testAlarm: Alarm | null = null;
 /**
  * Keeps the player's deadline alarms in the cloud up to date (push/alarms.ts): rewritten when they change,
- * so every device of the player gets deadline notifications on the minute.
+ * so every device of the player gets deadline notifications on the minute. False when the cloud refused or
+ * could not be reached (the caller tries again).
  */
-export async function saveAlarms(alarms: Alarm[]): Promise<void> {
-  const sig = JSON.stringify(alarms);
-  if (sig === lastAlarms) return;
+export async function saveAlarms(alarms: Alarm[]): Promise<boolean> {
+  // kept a few minutes past its time (the cloud ignores it then), for a device whose clock runs ahead
+  if (testAlarm && testAlarm.at <= Date.now() - 10 * 60_000) testAlarm = null;
+  const all = testAlarm ? [...alarms, testAlarm].sort((a, b) => a.at - b.at).slice(0, 100) : alarms;
+  const sig = JSON.stringify(all);
+  if (sig === lastAlarms) return true;
   const { getClient } = await import('../sync/supabase');
   const c = getClient();
-  if (!c) return;
-  const { error } = await c.rpc('set_push_alarms', { p_alarms: alarms });
-  if (!error) lastAlarms = sig;
+  if (!c) return true; // no cloud set up: nothing to keep
+  const { error } = await c.rpc('set_push_alarms', { p_alarms: all });
+  if (error) {
+    lastAlarms = '';
+    return false;
+  }
+  lastAlarms = sig;
+  return true;
 }
 
-/** After a sign-out or switching accounts, the next save writes everything again. */
+/** After a sign-out or switching accounts (or coming back to the app), the next save writes everything again. */
 export function forgetSavedAlarms(): void {
   lastAlarms = '';
+}
+
+/** Plans a test deadline notification a minute from now, through the very path real deadlines take. */
+export function planTestAlarm(title: string, body: string): number {
+  const at = Math.ceil((Date.now() + 60_000) / 60_000) * 60_000; // the job looks once a minute, on the minute
+  testAlarm = { key: `test:@${at}`, at, title, body, tag: `missed-test-${at}` };
+  lastAlarms = '';
+  return at;
+}
+
+/** The player's next deadline notifications as the cloud holds them (what will actually be sent). */
+export async function cloudAlarms(): Promise<{ key: string; at: number; title: string }[] | null> {
+  const { getClient } = await import('../sync/supabase');
+  const c = getClient();
+  if (!c) return null;
+  const { data, error } = await c.from('push_alarms').select('key,fire_at,title').gte('fire_at', new Date().toISOString()).order('fire_at').limit(5);
+  if (error || !data) return null;
+  return (data as { key: string; fire_at: string; title: string }[]).map((r) => ({ key: r.key, at: Date.parse(r.fire_at), title: r.title }));
+}
+
+/** Whether this alarm is still in the cloud, i.e. not sent yet (null: the cloud couldn't be read). */
+export async function alarmWaiting(key: string): Promise<boolean | null> {
+  const { getClient } = await import('../sync/supabase');
+  const c = getClient();
+  if (!c) return null;
+  const { data, error } = await c.from('push_alarms').select('key').eq('key', key).limit(1);
+  if (error || !data) return null;
+  return data.length > 0;
 }

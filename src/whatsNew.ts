@@ -15,6 +15,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '1.5',
+    date: '2026-10-21',
+    title: tk("Time's up notifications fixed"),
+    items: [
+      tk("Fixed: the “time's up” notification now comes the moment a deadline passes, at night too. Before, it waited until morning and could get lost if you opened the app."),
+      tk('Quests that run out at the same time come as one notification instead of a pile.'),
+      tk('Deadline notifications go out at top priority, so a sleeping phone shows them right away.'),
+      tk('Daily quests with a “done by” time also tell you when time is up, even without stakes.'),
+      tk('New in Options › Reminders: see your next deadline notification, and send yourself a test.'),
+    ],
+  },
+  {
     version: '1.4',
     date: '2026-10-20',
     title: tk('Dailies and weeklies count now'),
