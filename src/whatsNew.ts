@@ -15,6 +15,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '1.9',
+    date: '2026-10-21',
+    title: tk('Clearer install step'),
+    items: [
+      tk('The Home Screen step for new players is shorter and easier to read, with the three reasons to install at a glance.'),
+      tk('Choosing to stay in the browser now asks “Are you sure?” first, with one tap to install instead.'),
+    ],
+  },
+  {
     version: '1.8',
     date: '2026-10-21',
     title: tk('Home Screen first'),

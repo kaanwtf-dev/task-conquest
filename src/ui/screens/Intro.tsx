@@ -1,6 +1,6 @@
 // First-run walkthrough: a few short illustrated cards on what Task Conquest is and how it works.
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { InstallButton } from '../components/InstallGuide';
+import { InstallButton, useStartInstall } from '../components/InstallGuide';
 import { installPlatform } from '../../install';
 import { useStore } from '../../state/store';
 import { heroLook } from '../../game/look';
@@ -22,6 +22,8 @@ interface Card {
   title: string;
   body: string;
   art: () => React.ReactNode;
+  /** under the text (the art box has a fixed height) */
+  extra?: () => React.ReactNode;
   /** the main button's label, when not "Next" */
   next?: string;
 }
@@ -42,6 +44,9 @@ export default function Intro() {
   const items = useStore((s) => s.items);
   const update = useStore((s) => s.updateSettings);
   const [i, setI] = useState(0);
+  // "Continue in the browser" asks once more: the app is the better way to play
+  const [sure, setSure] = useState(false);
+  const [startInstall, installSheet] = useStartInstall();
   const [{ askFirst, ios }] = useState(() => {
     const p = installPlatform();
     return { askFirst: (p.startsWith('ios-') || p === 'android') && !installed(), ios: p.startsWith('ios-') };
@@ -95,12 +100,15 @@ export default function Intro() {
   // on a phone or tablet still in the browser: the very first thing to do, right after the language
   const installFirst: Card = {
     title: t('First: put it on your Home Screen'),
-    body: ios
-      ? t('On iPhone and iPad, reminders and deadline notifications only work from the Home Screen app. It also opens full screen and works offline. Add it now, then open Task Conquest from your Home Screen and start there.')
-      : t('It then opens full screen like a real app, works offline and can send you reminders. Add it now, then open Task Conquest from your Home Screen and start there.'),
-    art: () => (
+    body: t('Add it, then open Task Conquest from your Home Screen and play there.'),
+    art: () => <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" className="intro-install-icon" />,
+    extra: () => (
       <div className="intro-install intro-install-first">
-        <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" className="intro-install-icon" />
+        <ul className="intro-why">
+          <li>🔔 {ios ? t('Reminders when time runs out (on iPhone, only in the app)') : t('Reminders when time runs out')}</li>
+          <li>📱 {t('Opens full screen, like a real app')}</li>
+          <li>✈️ {t('Works without internet')}</li>
+        </ul>
         <InstallButton className="btn" />
       </div>
     ),
@@ -297,6 +305,7 @@ export default function Intro() {
               <p id="intro-body" className="intro-body">
                 {card.body}
               </p>
+              {card.extra?.()}
               {i === 0 && <LangPick />}
             </div>
             <div className="intro-foot">
@@ -308,10 +317,31 @@ export default function Intro() {
                   <span key={n} className={n === i ? 'on' : ''} />
                 ))}
               </div>
-              <button className={`btn intro-next ${card.next ? 'ghost small' : ''}`} onClick={() => (last ? finish() : go(i + 1))}>
+              <button className={`btn intro-next ${card.next ? 'ghost small' : ''}`} onClick={() => (last ? finish() : card.next ? (sfx.tick(), setSure(true)) : go(i + 1))}>
                 {last ? t("Let's go!") : (card.next ?? t('Next'))}
               </button>
             </div>
+            {sure && (
+              <div className="intro-sure" role="alertdialog" aria-labelledby="intro-sure-title">
+                <div className="win intro-sure-box">
+                  <h3 id="intro-sure-title" className="win-title">
+                    {t('Are you sure?')}
+                  </h3>
+                  <p>
+                    {ios
+                      ? t('Task Conquest works much better as an app: full screen, works offline, and on iPhone it is the only way to get reminders.')
+                      : t('Task Conquest works much better as an app: full screen, works offline, and it can send you reminders.')}
+                  </p>
+                  <button className="btn" onClick={() => (setSure(false), startInstall())}>
+                    📲 {t('Install the app')}
+                  </button>
+                  <button className="btn ghost small" onClick={() => (setSure(false), go(i + 1))}>
+                    {t('Stay in the browser')}
+                  </button>
+                </div>
+              </div>
+            )}
+            {installSheet}
           </div>
         </div>
       )}
