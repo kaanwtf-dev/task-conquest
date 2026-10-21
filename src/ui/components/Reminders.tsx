@@ -174,7 +174,7 @@ function DeadlineCheck() {
     setBusy(true);
     const at = planTestAlarm(t('⌛ Test: time is up!'), t('Deadline notifications reach this device.'));
     const st = useStore.getState();
-    const ok = await saveAlarms(alarmsFor({ hero: st.hero, lists: st.lists, tasks: st.tasks }, Date.now(), st.settings, pushPrefs(st.settings))).catch(() => false);
+    const ok = await saveAlarms(alarmsFor({ hero: st.hero, lists: st.lists, tasks: st.tasks, accountId: st.accountId }, Date.now(), st.settings, pushPrefs(st.settings))).catch(() => false);
     setBusy(false);
     if (!ok) {
       fx.emit({ type: 'toast', text: t('Could not reach the cloud'), small: t('Check your connection and try again.') });
@@ -413,7 +413,7 @@ export function PushKeeper() {
       if (!alive) return;
       pending.current = null;
       const st = useStore.getState();
-      const alarms = alarmsFor({ hero: st.hero, lists: st.lists, tasks: st.tasks }, Date.now(), st.settings, pushPrefs(st.settings));
+      const alarms = alarmsFor({ hero: st.hero, lists: st.lists, tasks: st.tasks, accountId: st.accountId }, Date.now(), st.settings, pushPrefs(st.settings));
       const again = () => {
         if (!alive) return;
         tries++;

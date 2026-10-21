@@ -1,6 +1,6 @@
 // Time-sensitive quests: a deadline (one-off quests) or a daily "by" time / the period's end (repeating
 // ones), what is at stake when it is missed ("flexible" or "must do"), and the countdown bar behind the row.
-import type { Task } from '../core/types';
+import type { Task, TaskList } from '../core/types';
 import { t } from '../i18n';
 import { isDone, logicalDate, parseDateKey, periodKey, weekStartDate, type TimeCfg } from '../core/time';
 
@@ -18,6 +18,16 @@ export function stakesOf(task: Pick<Task, 'stakes' | 'repeat'>): Stakes | null {
   if (task.stakes === 'flexible' || task.stakes === 'must') return task.stakes;
   if (task.stakes === 'none') return null;
   return task.repeat.kind === 'none' ? null : 'flexible';
+}
+
+/**
+ * Whose deadline it is. On a party list, the quest's own maker gets its notifications, its "what happened?"
+ * question and its hit (older quests that don't say who made them: the list's owner); nobody else does.
+ */
+export function deadlineIsMine(task: Pick<Task, 'createdBy'>, list: Pick<TaskList, 'shared' | 'ownerId'>, heroName: string | undefined, accountId: string | null | undefined): boolean {
+  if (!list.shared) return true;
+  if (task.createdBy) return !!heroName && task.createdBy === heroName;
+  return !list.ownerId || !accountId || list.ownerId === accountId;
 }
 
 /**

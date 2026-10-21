@@ -15,6 +15,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '1.6',
+    date: '2026-10-21',
+    title: tk('Party quests count too'),
+    items: [
+      tk('Fixed: quests on a party list (like a shared “Daily Quests”) now send a “time’s up” notification, ask what happened, and hurt when missed, just like your own lists.'),
+      tk('Only the one who made a party quest gets its notifications and its hit. Your friends are never punished for your quests, or you for theirs.'),
+      tk('The “time’s up” notification now asks: “Did you do it?” Tap it and the app asks what happened.'),
+    ],
+  },
+  {
     version: '1.5',
     date: '2026-10-21',
     title: tk("Time's up notifications fixed"),

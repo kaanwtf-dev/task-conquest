@@ -314,4 +314,8 @@ export const TR_COMPONENTS: Record<string, string> = {
   'Deadline notifications go out at top priority, so a sleeping phone shows them right away.': 'Son tarih bildirimleri en yüksek öncelikle gider, uyuyan telefon bile hemen gösterir.',
   'Daily quests with a “done by” time also tell you when time is up, even without stakes.': '“Şu saate kadar” süresi olan günlük görevler, cezası olmasa bile süre dolunca haber verir.',
   'New in Options › Reminders: see your next deadline notification, and send yourself a test.': 'Ayarlar › Hatırlatıcılar’da yeni: sıradaki son tarih bildirimini gör ve kendine bir deneme gönder.',
+  "Party quests count too": "Parti görevleri de sayılıyor",
+  "Fixed: quests on a party list (like a shared “Daily Quests”) now send a “time’s up” notification, ask what happened, and hurt when missed, just like your own lists.": "Düzeltildi: parti listesindeki görevler (paylaşılan “Daily Quests” gibi) artık kendi listelerin gibi “süre doldu” bildirimi gönderiyor, ne olduğunu soruyor ve kaçırılınca can yakıyor.",
+  "Only the one who made a party quest gets its notifications and its hit. Your friends are never punished for your quests, or you for theirs.": "Bir parti görevinin bildirimi ve darbesi sadece onu oluşturana gider. Arkadaşların senin görevlerin için, sen de onlarınki için asla cezalandırılmazsın.",
+  "The “time’s up” notification now asks: “Did you do it?” Tap it and the app asks what happened.": "“Süre doldu” bildirimi artık soruyor: “Yaptın mı?” Dokun, uygulama ne olduğunu sorsun.",
 };

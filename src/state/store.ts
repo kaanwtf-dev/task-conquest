@@ -11,7 +11,7 @@ import { baseXp, heroGold, heroLevel, sum } from '../game/progression';
 import { guessAisle } from '../pixel/keywords';
 import { guessDifficulty } from '../game/difficulty';
 import { pickSynced, sanitizeSynced, touchesSynced } from './syncedSettings';
-import { AUTO_MISS_MS, answerCost, deadlineOf, missPenalty, missedAt, refundFor, stakesOf, type MissAnswer } from '../game/deadlines';
+import { AUTO_MISS_MS, answerCost, deadlineIsMine, deadlineOf, missPenalty, missedAt, refundFor, stakesOf, type MissAnswer } from '../game/deadlines';
 import { hashStr } from '../core/rng';
 import { itemDisplayName, sellPrice, starterItems, upgradeCost } from '../game/loot';
 import { makeBuff, potionName, potionStackId } from '../game/potions';
@@ -477,8 +477,8 @@ export const useStore = create<State>()(
           };
           for (const task of Object.values(s.tasks)) {
             const list = s.lists[task.listId];
-            // party lists: nobody's hero is punished for a quest the whole party shares
-            if (task.deleted || !list || list.deleted || list.shared || list.type === 'supply') continue;
+            // party lists: only the quest's maker answers for it
+            if (task.deleted || !list || list.deleted || list.type === 'supply' || !deadlineIsMine(task, list, s.hero.name, s.accountId)) continue;
             if (task.repeat.kind === 'none') {
               const end = deadlineOf(task, s.settings);
               if (end !== null && at - end > AUTO_MISS_MS && !task.doneFor && !task.deadlineOutcome) miss(task.id);

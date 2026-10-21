@@ -4,7 +4,7 @@
 // Pure, so the tests and the app share it.
 import type { Task } from '../core/types';
 import { isDone, type TimeCfg } from '../core/time';
-import { WARN_MS, activeOn, byTimeOf, dayEnd, hasLimit, stakesAt, windowOf, type Stakes } from '../game/deadlines';
+import { WARN_MS, activeOn, byTimeOf, dayEnd, deadlineIsMine, hasLimit, stakesAt, windowOf, type Stakes } from '../game/deadlines';
 import { locale, t } from '../i18n';
 import { partyHours, type NudgeState, type PushPrefs } from './nudges';
 
@@ -125,8 +125,8 @@ function missedText({ task, end, stakes, counted }: Note): Pick<Alarm, 'title' |
       : !stakes
         ? t('It was due {at}.', { at: dueAt(end) })
         : n > 1
-          ? t('{n}× in a row: your hero takes the hit. Did it after all? Tap to say so.', { n })
-          : t('Your hero takes the hit. Did it after all? Tap to say so.'),
+          ? t("Did you do it? Tap to answer. If not, that's {n}× in a row and your hero takes the hit.", { n })
+          : t('Did you do it? Tap to answer. If not, your hero takes the hit.'),
   };
 }
 
@@ -153,7 +153,7 @@ function groupText(notes: Note[]): Pick<Alarm, 'title' | 'body'> {
   const ask = notes.some((x) => x.task.repeat.kind === 'none');
   return {
     title: must ? t("💥 Time's up: {n} quests", { n }) : t("⌛ Time's up: {n} quests", { n }),
-    body: `${list}. ${hit ? t('Your hero takes the hits. Did some after all? Tap to say so.') : ask ? t('Tap to say what happened.') : t('Time ran out.')}`,
+    body: `${list}. ${hit ? t('Did you do them? Tap to answer. If not, your hero takes the hits.') : ask ? t('Tap to say what happened.') : t('Time ran out.')}`,
   };
 }
 
@@ -161,15 +161,15 @@ function groupText(notes: Note[]): Pick<Alarm, 'title' | 'body'> {
  * Every alarm this player's quests need over the next few days, soonest first: a warning WARN_MS before
  * each deadline (moved out of the quiet night hours, while still worth it) and a "time's up" the moment it
  * runs out, night or not (one-off quests, repeating ones whose miss costs something or that have a "done by"
- * time). Quests due at the same moment share one notification. Party lists are left out: the whole party
- * shares those.
+ * time). Quests due at the same moment share one notification. On party lists, only the quests this player
+ * made.
  */
 export function alarmsFor(state: NudgeState, now: number, cfg: TimeCfg, prefs: PushPrefs): Alarm[] {
   if (!state.hero) return [];
   const notes: Note[] = [];
   for (const task of Object.values(state.tasks)) {
     const l = state.lists[task.listId];
-    if (task.deleted || !l || l.deleted || l.shared || l.type === 'supply' || !hasLimit(task, cfg)) continue;
+    if (task.deleted || !l || l.deleted || l.type === 'supply' || !deadlineIsMine(task, l, state.hero.name, state.accountId) || !hasLimit(task, cfg)) continue;
     const once = task.repeat.kind === 'none';
     const timed = once || byTimeOf(task) !== null;
     for (const w of windowsAhead(task, now - RECENT_MS, now, cfg)) {

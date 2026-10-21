@@ -52,6 +52,8 @@ export interface NudgeState {
   hero: Hero | null;
   lists: Record<string, TaskList>;
   tasks: Record<string, Task>;
+  /** this player's account (whose party-list quests are theirs, for those that don't name their maker) */
+  accountId?: string | null;
 }
 
 /** How long the player's slot stays open: a scheduler that runs late (or skips a run) still delivers. */

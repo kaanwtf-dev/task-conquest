@@ -152,4 +152,7 @@ export const TR_STATE: Record<string, string> = {
   'Your hero takes the hits. Did some after all? Tap to say so.': 'Kahramanın darbeleri yiyor. Bazılarını aslında yaptın mı? Söylemek için dokun.',
   'Tap to say what happened.': 'Ne olduğunu söylemek için dokun.',
   'Time ran out.': 'Süre doldu.',
+  "Did you do it? Tap to answer. If not, that's {n}× in a row and your hero takes the hit.": "Yaptın mı? Cevaplamak için dokun. Yapmadıysan üst üste {n}. kez olur ve kahramanın darbeyi yer.",
+  "Did you do it? Tap to answer. If not, your hero takes the hit.": "Yaptın mı? Cevaplamak için dokun. Yapmadıysan kahramanın darbeyi yer.",
+  "Did you do them? Tap to answer. If not, your hero takes the hits.": "Yaptın mı? Cevaplamak için dokun. Yapmadıysan kahramanın darbeleri yer.",
 };

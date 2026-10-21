@@ -3,7 +3,7 @@
 // time, may call it off, or takes the hit. Unanswered questions count as missed after a while (store).
 import { useEffect, useState } from 'react';
 import { useStore } from '../../state/store';
-import { SNOOZE_MS, answerCost, deadlineOf, moreTimeOptions, needsAnswer, nextDeadline, refundFor, stakesOf, type MissAnswer } from '../../game/deadlines';
+import { SNOOZE_MS, answerCost, deadlineIsMine, deadlineOf, moreTimeOptions, needsAnswer, nextDeadline, refundFor, stakesOf, type MissAnswer } from '../../game/deadlines';
 import { heroGold, heroLevel } from '../../game/progression';
 import { LATEST_VERSION } from '../../whatsNew';
 import { iconFor } from '../../pixel/iconGen';
@@ -51,8 +51,8 @@ export default function DeadlineAsk() {
     return Object.values(s.tasks)
       .filter((x) => {
         const l = s.lists[x.listId];
-        // party lists: someone else may have done it, nobody gets asked
-        return !!l && !l.deleted && !l.shared && l.type !== 'supply' && needsAnswer(x, at, cfg);
+        // party lists: only the quest's maker is asked
+        return !!l && !l.deleted && l.type !== 'supply' && deadlineIsMine(x, l, s.hero?.name, s.accountId) && needsAnswer(x, at, cfg);
       })
       .sort((a, b) => endOf(a, cfg) - endOf(b, cfg))
       .map((x) => x.id)

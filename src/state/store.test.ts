@@ -183,6 +183,25 @@ describe('store: time-limited quests', () => {
     expect(gold()).toBeLessThan(g2);
   });
 
+  it("party lists: the quest's maker takes the hit and is asked; a party member's quest leaves this hero alone", () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 22, 8));
+    const daily = listOf('daily');
+    st().updateList(daily.id, { shared: true });
+    st().addTask(daily.id, 'Take magnesium');
+    st().addTask(daily.id, 'Feed the cat');
+    const by = (t: string) => Object.values(st().tasks).find((x) => x.title === t && !x.deleted)!.id;
+    st().updateTask(by('Take magnesium'), { byTime: '21:30', stakes: 'flexible' });
+    st().updateTask(by('Feed the cat'), { byTime: '21:30', stakes: 'flexible', createdBy: 'Somebody else' });
+    useStore.setState((x) => ({ hero: { ...x.hero!, gold: { ...x.hero!.gold, test: 1000 } } }));
+    vi.setSystemTime(new Date(2026, 9, 22, 21, 31));
+    const g = gold();
+    st().checkDeadlines();
+    expect(st().tasks[by('Take magnesium')]).toMatchObject({ misses: 1, pendingMiss: { key: '2026-10-22' } });
+    expect(st().tasks[by('Feed the cat')].pendingMiss ?? null).toBeNull();
+    expect(gold()).toBeLessThan(g);
+  });
+
   it('one-off quests: "missed" costs gold once, "done" completes it, more time moves the deadline, cancel removes it', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2026, 9, 12, 8));

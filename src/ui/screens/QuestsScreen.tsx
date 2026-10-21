@@ -26,7 +26,7 @@ import TaskEditSheet from './TaskEditSheet';
 import BackupWarning, { useBackupDue } from '../components/BackupWarning';
 import { InstallCard } from '../components/InstallGuide';
 import { TipNudge } from '../components/Support';
-import { WARN_MS, hasLimit, leftLabel, stakesOf, timeLeft, windowOf } from '../../game/deadlines';
+import { WARN_MS, deadlineIsMine, hasLimit, leftLabel, stakesOf, timeLeft, windowOf } from '../../game/deadlines';
 import { todaySections } from '../../state/today';
 import BossBar from '../components/BossBar';
 import PartyStrip from '../components/PartyStrip';
@@ -281,11 +281,11 @@ function QuickAdd({ list, dueToday }: { list?: TaskList; dueToday?: boolean }) {
 
 let lastToggle = { t: 0, id: '', y: 0 };
 
-/** What missing this quest costs here: repeating quests are flexible unless set otherwise; party lists never cost. */
+/** What missing this quest costs this player: repeating quests are flexible unless set otherwise; on party lists, only their own. */
 function useStakes(task: Task) {
   return useStore((s) => {
     const l = s.lists[task.listId];
-    return l && !l.shared && l.type !== 'supply' ? stakesOf(task) : null;
+    return l && l.type !== 'supply' && deadlineIsMine(task, l, s.hero?.name, s.accountId) ? stakesOf(task) : null;
   });
 }
 

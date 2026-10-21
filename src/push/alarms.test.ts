@@ -37,7 +37,7 @@ describe('notification alarms', () => {
       task('Done', 'Q', { ...base, doneFor: 'once' }),
       task('Answered', 'Q', { ...base, deadlineOutcome: 'missed' }),
       task('Gone', 'Q', { ...base, deleted: true }),
-      task('Shared', 'S', base),
+      task('Shared', 'S', { ...base, createdBy: 'Bob' }), // a party member's quest is theirs to answer for
       task('Milk', 'G', base),
       task('Someday', 'Q', { repeat: { kind: 'none' } }),
       task('No stakes daily', 'D', { stakes: 'none' }),
@@ -46,13 +46,23 @@ describe('notification alarms', () => {
     expect(alarmsFor({ ...state([task('Rent', 'Q', base)]), hero: null }, at(15, 9), cfg, prefs())).toEqual([]);
   });
 
+  it('on a party list, the quests this player made get their alarms (older ones: those on lists they own)', () => {
+    const mag = task('Magnesium', 'S', { byTime: '21:30', stakes: 'flexible', createdBy: 'Aria' });
+    expect(keys([mag], at(15, 9)).slice(0, 2)).toEqual(['warn:Magnesium@15 18:30', 'missed:Magnesium@15 21:30']);
+    const old = task('Old', 'S', { byTime: '21:30', stakes: 'flexible' });
+    const owned = (ownerId: string, accountId: string) =>
+      alarmsFor({ ...state([old]), lists: { S: list('S', { shared: true, ownerId }) }, accountId }, at(15, 9), cfg, prefs()).length;
+    expect(owned('me', 'me')).toBeGreaterThan(0);
+    expect(owned('friend', 'me')).toBe(0);
+  });
+
   it('a daily "done by" quest gets alarms for today and the next days, but not for today once done', () => {
     const meds = task('Meds', 'D', { byTime: '20:00', stakes: 'must', misses: 2 });
     expect(keys([meds], at(15, 9))).toEqual(['warn:Meds@15 17:00', 'missed:Meds@15 20:00', 'warn:Meds@16 17:00', 'missed:Meds@16 20:00', 'warn:Meds@17 17:00', 'missed:Meds@17 20:00']);
     expect(keys([{ ...meds, doneFor: day(15) }], at(15, 9))).toEqual(['warn:Meds@16 17:00', 'missed:Meds@16 20:00', 'warn:Meds@17 17:00', 'missed:Meds@17 20:00']);
     const [warn, missed] = alarmsFor(state([meds]), at(15, 9), cfg, prefs());
     expect(warn.body).toBe("Missed 2× in a row already. Don't make it 3. Due 8:00 PM.");
-    expect(missed.body).toBe('3× in a row: your hero takes the hit. Did it after all? Tap to say so.');
+    expect(missed.body).toBe("Did you do it? Tap to answer. If not, that's 3× in a row and your hero takes the hit.");
   });
 
   it('a plain daily is flexible by default: warned before the day ends, told the moment it ran out', () => {
@@ -60,7 +70,7 @@ describe('notification alarms', () => {
     const plain = task('Read', 'D');
     expect(keys([plain], at(22, 9)).slice(0, 2)).toEqual(['warn:Read@22 21:00', 'missed:Read@23 0:00']);
     const [, missed] = alarmsFor(state([plain]), at(22, 9), cfg, prefs());
-    expect(missed.body).toBe('Your hero takes the hit. Did it after all? Tap to say so.');
+    expect(missed.body).toBe('Did you do it? Tap to answer. If not, your hero takes the hit.');
     // a day that began before the default: nothing to tell (the app won't charge it either)
     expect(keys([plain], at(15, 9))).toEqual([]);
   });
@@ -93,7 +103,7 @@ describe('notification alarms', () => {
     // a device clock a little ahead: the app counted the miss (first in a row) before the cloud sent it
     const charged = { ...read, misses: 1, missedEnd: at(16, 0), pendingMiss: { key: day(15), end: at(16, 0), paid: 5, prevMisses: 0 } };
     const [missed] = alarmsFor(state([charged]), at(16, 0, 1), cfg, prefs());
-    expect(missed).toMatchObject({ key: `missed:Read@${at(16, 0)}`, body: 'Your hero takes the hit. Did it after all? Tap to say so.' });
+    expect(missed).toMatchObject({ key: `missed:Read@${at(16, 0)}`, body: 'Did you do it? Tap to answer. If not, your hero takes the hit.' });
     expect(keys([{ ...charged, pendingMiss: null }], at(16, 0, 1))[0]).not.toBe('missed:Read@16 0:00');
   });
 
@@ -117,12 +127,12 @@ describe('notification alarms', () => {
     const [warn, missed] = alarms;
     expect(warn).toMatchObject({ key: `warn:@${at(23, 0)}`, at: at(22, 21), title: '⏳ 3h left: 3 quests', body: 'Read, Walk, Floss. Due 12:00 AM.', tag: `deadline-${at(23, 0)}` });
     expect(missed).toMatchObject({ key: `missed:@${at(23, 0)}`, at: at(23, 0), title: "⌛ Time's up: 3 quests", tag: `missed-${at(23, 0)}` });
-    expect(missed.body).toBe('Read, Walk, Floss. Your hero takes the hits. Did some after all? Tap to say so.');
+    expect(missed.body).toBe('Read, Walk, Floss. Did you do them? Tap to answer. If not, your hero takes the hits.');
     // a must-do among them shows in the title; many names are cut short
     const many = [...tasks, task('Meds', 'D', { stakes: 'must', order: 9 }), task('Plants', 'D', { order: 10 })];
     const [, m2] = alarmsFor(state(many), at(22, 9), cfg, prefs());
     expect(m2.title).toBe("💥 Time's up: 5 quests");
-    expect(m2.body).toBe('Read, Walk, Floss, Meds +1 more. Your hero takes the hits. Did some after all? Tap to say so.');
+    expect(m2.body).toBe('Read, Walk, Floss, Meds +1 more. Did you do them? Tap to answer. If not, your hero takes the hits.');
   });
 
   it('a "done by" daily without stakes still says when its time is up', () => {
