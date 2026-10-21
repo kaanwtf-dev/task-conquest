@@ -655,7 +655,9 @@ export class SyncEngine {
       }
       if (!cur && remote.deleted) continue; // never had it: nothing to delete
       if (!cur || sameDoc(cur, remote) || newer(cur, remote) === remote) {
-        const unshared = m.kind === 'list' && cur && (cur as TaskList).shared && !(remote as TaskList).shared;
+        // (unless its owner disbanded the party: then it is private again on purpose)
+        const unshared =
+          m.kind === 'list' && cur && (cur as TaskList).shared && !(remote as TaskList).shared && !(remote as TaskList).disbandedAt;
         if (unshared) {
           // a list never stops being shared: a copy edited before it was shared (an offline device) must not
           // un-share it, or moves out of it would stop copying and members would keep ghost tasks

@@ -46,6 +46,8 @@ export interface TaskList extends Meta {
   order: number;
   createdAt: number;
   shared?: boolean;
+  /** when its owner disbanded the party (the list is private again; members kept their own copies) */
+  disbandedAt?: number;
   chestFor?: string; // period key of the last quest-complete chest (one chest per list per period)
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { isForeignList, useStore, visibleLists } from '../../state/store';
 import { useSync, joinByCode, resolveConflict, resolveAccountSwitch, restartSync, signOutHere, syncNow } from '../../state/sync';
 import { cloudIsBuiltIn, getSyncConfig, requestPasswordReset, setSyncConfig, signIn, signUp } from '../../sync/supabase';
-import { createInvite, listParty } from '../../sync/party';
+import { createInvite, disbandList, listParty } from '../../sync/party';
 import { iconFor } from '../../pixel/iconGen';
 import type { Appearance } from '../../pixel/sprites/hero';
 import { memberSprite } from '../components/PartyStrip';
@@ -12,6 +12,7 @@ import { PxImg, Sheet, rich, themeStyle } from '../components/common';
 import { Field } from './TaskEditSheet';
 import Leaderboard from '../components/Leaderboard';
 import { sfx } from '../../audio/sfx';
+import { fx } from '../../state/fx';
 import { locale, t } from '../../i18n';
 
 export default function PartyScreen() {
@@ -285,7 +286,7 @@ function ListParty({ list }: { list: TaskList }) {
     try {
       const inv = await createInvite(list.id);
       setInvite(inv);
-      s.updateList(list.id, { shared: true, ownerId: list.ownerId ?? myId ?? undefined });
+      s.updateList(list.id, { shared: true, ownerId: list.ownerId ?? myId ?? undefined, disbandedAt: undefined });
       sfx.loot();
     } catch (e) {
       alert(e instanceof Error ? e.message : t('Could not create an invite. Is this list synced yet?'));
@@ -310,6 +311,30 @@ function ListParty({ list }: { list: TaskList }) {
   };
 
   const mine = !isForeignList(list, s.accountId ?? myId);
+  const others = (members ?? []).filter((m) => m.userId !== myId).length;
+  // the owner ends the party: the list is theirs alone again; everyone else keeps a private copy
+  const disband = async () => {
+    const ok = confirm(
+      others > 0
+        ? t('Disband "{name}"? You keep the list. The other {n} members each keep their own private copy of it.', { name: list.name, n: others })
+        : t('Make "{name}" private? Its invite codes stop working.', { name: list.name }),
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const copies = await disbandList(list.id);
+      s.updateList(list.id, { shared: false, disbandedAt: Date.now() });
+      partyRoster.drop(list.id);
+      setMembers(null);
+      setInvite(null);
+      sfx.tick();
+      fx.emit({ type: 'toast', text: copies > 0 ? t('Party disbanded') : t('List is private'), small: list.name });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t('Could not do that right now. Try again in a moment.'));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div className="win party-list" style={themeStyle(list.theme)}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -328,6 +353,9 @@ function ListParty({ list }: { list: TaskList }) {
           <button className="btn small" onClick={shareLink}>
             {t('Send link')}
           </button>
+          <button className="btn ghost small" aria-label={t('Close')} onClick={() => setInvite(null)}>
+            ✕
+          </button>
         </div>
       )}
       {members && members.length > 0 && (
@@ -342,6 +370,11 @@ function ListParty({ list }: { list: TaskList }) {
             </div>
           ))}
         </div>
+      )}
+      {list.shared && mine && (
+        <button className="btn ghost small" style={{ marginTop: 8 }} disabled={busy || members === null} onClick={() => void disband()}>
+          {others > 0 ? t('Disband party') : t('Make private')}
+        </button>
       )}
       {list.shared && !mine && (
         <button

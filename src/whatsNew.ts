@@ -15,6 +15,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '1.7',
+    date: '2026-10-21',
+    title: tk('Party lists: disband and make private'),
+    items: [
+      tk('New: the owner of a party list can disband it on the Party tab. You keep the list, and everyone else keeps their own private copy, so nobody loses a quest.'),
+      tk('A party list with only you in it can be made private again with one tap.'),
+      tk('Fixed: Invite no longer gets stuck. If the cloud does not answer, you get a message after a few seconds, and the invite code can be closed.'),
+    ],
+  },
+  {
     version: '1.6',
     date: '2026-10-21',
     title: tk('Party quests count too'),

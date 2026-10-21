@@ -372,6 +372,22 @@ describe('party lists', () => {
     expect(phone.snap.lists.S).toMatchObject({ name: 'Groceries!', shared: true, ownerId: A });
   });
 
+  it("a disbanded party list turns private on the owner's other devices, and the members drop it", async () => {
+    const { server, mac, phone, bo } = await party();
+    bo.addTask('b1', 'S', 'Bread'); // bo has been using the list (and has synced since)
+    await bo.engine.syncNow();
+    await mac.engine.syncNow();
+    // the owner disbands on the mac (the server removed bo and gave bo a copy of its own)
+    mac.snap = { ...mac.snap, lists: { ...mac.snap.lists, S: { ...mac.snap.lists.S, shared: false, disbandedAt: mac.now(), updatedAt: mac.now() } } };
+    server.leaveList(B, 'S');
+    await mac.engine.syncNow();
+    await phone.engine.syncNow();
+    expect(phone.snap.lists.S).toMatchObject({ shared: false });
+    expect(fromRow(server.rows.get('S')!, A)!.doc).toMatchObject({ shared: false });
+    await bo.engine.syncNow();
+    expect(bo.snap.lists.S).toBeUndefined();
+  });
+
   it('a list left while offline stays gone until the server hears about it', async () => {
     const { server, mac, bo } = await party();
     bo.engine.purgeList('S', true); // the leave hasn't reached the server: membership still lists S

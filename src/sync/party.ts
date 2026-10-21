@@ -41,24 +41,37 @@ export function inviteUrl(code: string): string {
   return `${origin}${base}#join=${code}`;
 }
 
+/** A party call that gets no answer in this long gives up with a message, instead of a button stuck forever. */
+const RPC_TIMEOUT_MS = 15_000;
+const SLOW = 'party call timed out';
+
 function friendly(res: RpcResult<unknown>): Error {
   const e = res.error!;
+  if (e.message === SLOW || /abort|timeout/i.test(e.message)) return new Error(t('The cloud is not answering. Try again in a moment.'));
   const err = toRemoteError(e, res.status);
   if (err.name === 'SyncOfflineError') return new Error(t('You are offline. Try again when connected.'));
   if (/invalid invite code/i.test(e.message)) return new Error(t('That invite code does not exist.'));
   if (/not a member/i.test(e.message)) return new Error(t('This list is not in the cloud yet. Try again in a moment.'));
   if (/sign in first/i.test(e.message)) return new Error(t('Sign in first.'));
+  if (/only the party owner/i.test(e.message)) return new Error(t('Only the party owner can do that.'));
   return err;
 }
 
+/** Waits at most `ms` for `p`; afterwards resolves with `late` (a stalled request must not hang the UI). */
+function within<T>(p: Promise<T>, ms: number, late: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([p, new Promise<T>((ok) => (timer = setTimeout(() => ok(late), ms)))]).finally(() => clearTimeout(timer));
+}
+
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<RpcResult<T>> {
-  return (await client().rpc(fn, args)) as RpcResult<T>;
+  const call = client().rpc(fn, args).abortSignal(AbortSignal.timeout(RPC_TIMEOUT_MS)) as unknown as Promise<RpcResult<T>>;
+  return within(call, RPC_TIMEOUT_MS + 1000, { data: null, error: { message: SLOW }, status: 0 });
 }
 
 export async function createInvite(listId: string): Promise<{ code: string; url: string }> {
   let res = await rpc<string>('create_invite', { p_list_id: listId });
   if (res.error && /not a member/i.test(res.error.message)) {
-    await flushSync(); // a brand-new list may exist only on this device so far
+    await within(flushSync(), RPC_TIMEOUT_MS, undefined); // a brand-new list may exist only on this device so far
     res = await rpc<string>('create_invite', { p_list_id: listId });
   }
   if (res.error || typeof res.data !== 'string') throw friendly(res.error ? res : { ...res, error: { message: t('No invite code returned') } });
@@ -72,6 +85,16 @@ export async function joinList(code: string): Promise<string> {
   const res = await rpc<string>('join_list', { p_code: clean });
   if (res.error || typeof res.data !== 'string') throw friendly(res.error ? res : { ...res, error: { message: 'invalid invite code' } });
   return res.data;
+}
+
+/**
+ * The owner ends a party list: it is theirs alone again, and every other member keeps a private copy.
+ * Returns how many members got a copy.
+ */
+export async function disbandList(listId: string): Promise<number> {
+  const res = await rpc<number>('disband_list', { p_list_id: listId });
+  if (res.error) throw friendly(res);
+  return typeof res.data === 'number' ? res.data : 0;
 }
 
 /** Follow with SyncEngine.purgeList(listId). */
