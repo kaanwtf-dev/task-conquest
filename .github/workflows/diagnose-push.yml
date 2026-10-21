@@ -1,0 +1,32 @@
+# Read-only health check of the deadline notification system, run by hand from the Actions tab. Prints only
+# counts, times and status codes (never quest titles, keys or secrets): this repository's logs are public.
+name: Diagnose notifications
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: sqshacllpzozxqpetwyo
+    steps:
+      - name: Query
+        run: |
+          q() {
+            echo "== $1"
+            jq -n --arg q "$2" '{query: $q, read_only: true}' > body.json
+            curl -sS -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' \
+              --data @body.json | jq -c '.[]? // .' | head -60
+          }
+          q "alarm table" "select count(*) as rows, count(*) filter (where fire_at <= now()) as overdue, count(*) filter (where key like 'missed:%') as missed_rows, count(*) filter (where key like 'warn:%') as warn_rows, min(fire_at) as soonest, max(fire_at) as latest, count(distinct user_id) as players from public.push_alarms"
+          q "alarm rows by hour (UTC), next 2 days" "select date_trunc('hour', fire_at) as hour, count(*) filter (where key like 'missed%') as missed, count(*) filter (where key like 'warn%') as warn from public.push_alarms group by 1 order by 1 limit 60"
+          q "devices" "select count(*) as devices, count(*) filter (where prefs->'off' ? 'deadline') as deadlines_off, max(updated_at) as last_seen, string_agg(distinct substring(endpoint from 'https://([^/]+)/'), ',') as services from public.push_subscriptions"
+          q "cron jobs" "select jobname, schedule, active from cron.job order by jobname"
+          q "alarm job runs, last 3 hours" "select d.status, count(*) as runs, max(d.start_time) as last from cron.job_run_details d join cron.job j using (jobid) where j.jobname = 'task-conquest-alarms' and d.start_time > now() - interval '3 hours' group by 1"
+          q "function calls, last 30 hours (status and counts only)" "select created, status_code, left(content::text, 160) as result from net._http_response where created > now() - interval '30 hours' order by created desc limit 50"
