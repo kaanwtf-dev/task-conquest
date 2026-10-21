@@ -1,6 +1,7 @@
 // First-run walkthrough: a few short illustrated cards on what Task Conquest is and how it works.
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { InstallButton } from '../components/InstallGuide';
+import { installPlatform } from '../../install';
 import { useStore } from '../../state/store';
 import { heroLook } from '../../game/look';
 import { CLASS_BY_ID } from '../../game/catalog';
@@ -21,6 +22,8 @@ interface Card {
   title: string;
   body: string;
   art: () => React.ReactNode;
+  /** the main button's label, when not "Next" */
+  next?: string;
 }
 
 /** A translated sentence with {placeholders} replaced by elements (the on-screen button names in the install steps). */
@@ -39,6 +42,10 @@ export default function Intro() {
   const items = useStore((s) => s.items);
   const update = useStore((s) => s.updateSettings);
   const [i, setI] = useState(0);
+  const [{ askFirst, ios }] = useState(() => {
+    const p = installPlatform();
+    return { askFirst: (p.startsWith('ios-') || p === 'android') && !installed(), ios: p.startsWith('ios-') };
+  });
   const box = useRef<HTMLDivElement>(null);
   const press = useRef<{ x: number; y: number } | null>(null);
 
@@ -52,6 +59,53 @@ export default function Intro() {
   );
   const friend = spriteUrl('intro:friend', () => heroPix(FRIEND, CLASS_BY_ID.mage.look));
   const slime = spriteUrl('intro:slime', () => monsterPix('slime'));
+
+  // worded for whether this is already the Home Screen app
+  const homeScreen: Card = {
+    title: installed() ? t("You're on the Home Screen") : t('Put it on your Home Screen'),
+    body: installed()
+      ? t('The best way to play: full screen, offline, with reminders. Friends can add it the same way:')
+      : t('It then opens full screen like a real app, works offline, and can send you reminders.'),
+    art: () => (
+      <div className="intro-install">
+        <div className="intro-step">
+          <b>iPhone / iPad</b> (Safari)
+          <ol>
+            <li>{withKeys(t('Tap {key}'), { key: <span className="intro-key">{t('Share')} ⇧</span> })}</li>
+            <li>{withKeys(t('Tap {key}'), { key: <span className="intro-key">{t('Add to Home Screen')}</span> })}</li>
+            <li>{withKeys(t('Tap {key}'), { key: <span className="intro-key">{t('Add')}</span> })}</li>
+          </ol>
+        </div>
+        <div className="intro-step">
+          <b>{'Android'}</b> (Chrome)
+          <ol>
+            <li>{withKeys(t('Tap the {key} menu'), { key: <span className="intro-key">⋮</span> })}</li>
+            <li>
+              {withKeys(t('Tap {key} or {key2}'), {
+                key: <span className="intro-key">{t('Add to Home screen')}</span>,
+                key2: <span className="intro-key">{t('Install app')}</span>,
+              })}
+            </li>
+          </ol>
+        </div>
+        <InstallButton />
+      </div>
+    ),
+  };
+  // on a phone or tablet still in the browser: the very first thing to do, right after the language
+  const installFirst: Card = {
+    title: t('First: put it on your Home Screen'),
+    body: ios
+      ? t('On iPhone and iPad, reminders and deadline notifications only work from the Home Screen app. It also opens full screen and works offline. Add it now, then open Task Conquest from your Home Screen and start there.')
+      : t('It then opens full screen like a real app, works offline and can send you reminders. Add it now, then open Task Conquest from your Home Screen and start there.'),
+    art: () => (
+      <div className="intro-install intro-install-first">
+        <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" className="intro-install-icon" />
+        <InstallButton className="btn" />
+      </div>
+    ),
+    next: t('Continue in the browser'),
+  };
 
   const cards: Card[] = [
     {
@@ -67,6 +121,7 @@ export default function Intro() {
         </SceneBanner>
       ),
     },
+    ...(askFirst ? [installFirst] : []),
     {
       title: t('Tick a task, slay a monster'),
       body: t('Check something off and your hero attacks. You earn XP and gold, and sometimes loot. Harder tasks pay more.'),
@@ -156,38 +211,8 @@ export default function Intro() {
         </div>
       ),
     },
-    // always shown (handy for showing friends how); worded for whether this is already the Home Screen app
-    {
-      title: installed() ? t("You're on the Home Screen") : t('Put it on your Home Screen'),
-      body: installed()
-        ? t('The best way to play: full screen, offline, with reminders. Friends can add it the same way:')
-        : t('It then opens full screen like a real app, works offline, and can send you reminders.'),
-      art: () => (
-        <div className="intro-install">
-          <div className="intro-step">
-            <b>iPhone / iPad</b> (Safari)
-            <ol>
-              <li>{withKeys(t('Tap {key}'), { key: <span className="intro-key">{t('Share')} ⇧</span> })}</li>
-              <li>{withKeys(t('Tap {key}'), { key: <span className="intro-key">{t('Add to Home Screen')}</span> })}</li>
-              <li>{withKeys(t('Tap {key}'), { key: <span className="intro-key">{t('Add')}</span> })}</li>
-            </ol>
-          </div>
-          <div className="intro-step">
-            <b>{'Android'}</b> (Chrome)
-            <ol>
-              <li>{withKeys(t('Tap the {key} menu'), { key: <span className="intro-key">⋮</span> })}</li>
-              <li>
-                {withKeys(t('Tap {key} or {key2}'), {
-                  key: <span className="intro-key">{t('Add to Home screen')}</span>,
-                  key2: <span className="intro-key">{t('Install app')}</span>,
-                })}
-              </li>
-            </ol>
-          </div>
-          <InstallButton />
-        </div>
-      ),
-    },
+    // after the language and before the rest on a phone or tablet browser; else at the end (handy for showing friends how)
+    ...(askFirst ? [] : [homeScreen]),
   ];
   const last = i === cards.length - 1;
   const card = cards[i];
@@ -283,8 +308,8 @@ export default function Intro() {
                   <span key={n} className={n === i ? 'on' : ''} />
                 ))}
               </div>
-              <button className="btn intro-next" onClick={() => (last ? finish() : go(i + 1))}>
-                {last ? t("Let's go!") : t('Next')}
+              <button className={`btn intro-next ${card.next ? 'ghost small' : ''}`} onClick={() => (last ? finish() : go(i + 1))}>
+                {last ? t("Let's go!") : (card.next ?? t('Next'))}
               </button>
             </div>
           </div>

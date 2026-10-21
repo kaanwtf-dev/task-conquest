@@ -331,4 +331,11 @@ export const TR_COMPONENTS: Record<string, string> = {
   "Make private": "Gizli yap",
   "The cloud is not answering. Try again in a moment.": "Bulut cevap vermiyor. Biraz sonra tekrar dene.",
   "Only the party owner can do that.": "Bunu sadece parti sahibi yapabilir.",
+  "First: put it on your Home Screen": "Önce: Ana Ekranına ekle",
+  "On iPhone and iPad, reminders and deadline notifications only work from the Home Screen app. It also opens full screen and works offline. Add it now, then open Task Conquest from your Home Screen and start there.": "iPhone ve iPad’de hatırlatıcılar ve son tarih bildirimleri sadece Ana Ekran uygulamasında çalışır. Ayrıca tam ekran açılır ve çevrimdışı çalışır. Şimdi ekle, sonra Task Conquest’i Ana Ekranından aç ve orada başla.",
+  "It then opens full screen like a real app, works offline and can send you reminders. Add it now, then open Task Conquest from your Home Screen and start there.": "Böylece gerçek bir uygulama gibi tam ekran açılır, çevrimdışı çalışır ve sana hatırlatma gönderebilir. Şimdi ekle, sonra Task Conquest’i Ana Ekranından aç ve orada başla.",
+  "Continue in the browser": "Tarayıcıda devam et",
+  "Home Screen first": "Önce Ana Ekran",
+  "New players on a phone or tablet are now asked, right after picking a language, to put Task Conquest on their Home Screen first, with the steps for their phone.": "Telefon ya da tabletteki yeni oyunculardan artık dil seçtikten hemen sonra, kendi telefonlarına göre adımlarla, Task Conquest’i önce Ana Ekranlarına eklemeleri isteniyor.",
+  "On iPhone that matters most: reminders and deadline notifications only work from the Home Screen app.": "En çok iPhone’da önemli: hatırlatıcılar ve son tarih bildirimleri sadece Ana Ekran uygulamasında çalışır.",
 };

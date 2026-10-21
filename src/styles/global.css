@@ -1995,6 +1995,10 @@ canvas.px {
   background: rgba(8, 6, 18, 0.86);
   z-index: 95; /* over every pop-up: they wait underneath until it closes */
 }
+/* the "how to install" guide can be opened from the intro: it goes over it */
+.sheet-back:has(.install-guide) {
+  z-index: 96;
+}
 .intro {
   position: relative;
   width: min(420px, 100%);
@@ -2305,6 +2309,17 @@ canvas.px {
   gap: 8px;
   font-size: 14px;
   line-height: 1.3;
+}
+.intro-install-first {
+  align-items: center;
+  gap: 14px;
+}
+.intro-install-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  image-rendering: pixelated;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
 }
 .intro-step ol {
   margin: 2px 0 0;

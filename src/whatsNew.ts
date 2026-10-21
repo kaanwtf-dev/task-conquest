@@ -15,6 +15,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '1.8',
+    date: '2026-10-21',
+    title: tk('Home Screen first'),
+    items: [
+      tk('New players on a phone or tablet are now asked, right after picking a language, to put Task Conquest on their Home Screen first, with the steps for their phone.'),
+      tk('On iPhone that matters most: reminders and deadline notifications only work from the Home Screen app.'),
+    ],
+  },
+  {
     version: '1.7',
     date: '2026-10-21',
     title: tk('Party lists: disband and make private'),
