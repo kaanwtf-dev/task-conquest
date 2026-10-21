@@ -103,7 +103,8 @@ begin
     if new.updated_at < old.updated_at then
       return old; -- last write wins: an older write never clobbers the newer server copy
     end if;
-  else
+  elsif coalesce(current_setting('taskconquest.copy_for_member', true), '') <> 'on' then
+    -- (only disband_list() writes rows for someone else: each member's private copy of the list)
     new.owner := coalesce(auth.uid(), new.owner);
   end if;
   new.server_ts := clock_timestamp();
@@ -253,6 +254,60 @@ begin
   end if;
 end $$;
 
+-- The owner disbands a party list: it becomes theirs alone again, and every other member keeps a private
+-- copy of it (the list and its live quests, under new ids) so nobody loses anything. Their apps drop the
+-- party list (no longer a member) and pick the copy up (a list they now own). Returns how many copies.
+create or replace function public.disband_list(p_list_id text) returns int
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_list public.docs;
+  v_member uuid;
+  v_new text;
+  v_now bigint := (extract(epoch from clock_timestamp()) * 1000)::bigint;
+  v_copies int := 0;
+begin
+  if auth.uid() is null then
+    raise exception 'sign in first' using errcode = '42501';
+  end if;
+  if not exists (
+    select 1 from public.list_members m where m.list_id = p_list_id and m.user_id = auth.uid() and m.role = 'owner'
+  ) then
+    raise exception 'only the party owner can disband it' using errcode = '42501';
+  end if;
+  select * into v_list from public.docs d where d.id = p_list_id and d.kind = 'list';
+  perform set_config('taskconquest.copy_for_member', 'on', true);
+  for v_member in
+    select m.user_id from public.list_members m where m.list_id = p_list_id and m.user_id <> auth.uid() order by m.joined_at
+  loop
+    if v_list.id is not null and not v_list.deleted then
+      v_new := gen_random_uuid()::text;
+      -- the copy's owner membership comes from docs_after_insert_list
+      insert into public.docs (id, kind, owner, list_id, data, updated_at)
+      values (v_new, 'list', v_member, v_new,
+        (v_list.data - 'disbandedAt') || jsonb_build_object('id', v_new, 'shared', false, 'ownerId', v_member::text, 'createdAt', v_now, 'updatedAt', v_now),
+        v_now);
+      insert into public.docs (id, kind, owner, list_id, data, updated_at)
+      select c.nid, 'task', v_member, v_new, c.data || jsonb_build_object('id', c.nid, 'listId', v_new, 'updatedAt', v_now), v_now
+      from (
+        select gen_random_uuid()::text as nid, t.data
+        from public.docs t where t.list_id = p_list_id and t.kind = 'task' and not t.deleted
+      ) c;
+      v_copies := v_copies + 1;
+    end if;
+    delete from public.list_members m where m.list_id = p_list_id and m.user_id = v_member;
+  end loop;
+  perform set_config('taskconquest.copy_for_member', 'off', true);
+  delete from public.invites i where i.list_id = p_list_id;
+  -- private again; disbandedAt tells the owner's other devices this un-sharing is meant (see SyncEngine.apply)
+  if v_list.id is not null then
+    update public.docs d
+    set data = d.data || jsonb_build_object('shared', false, 'disbandedAt', v_now, 'updatedAt', greatest(v_now, d.updated_at + 1)),
+        updated_at = greatest(v_now, d.updated_at + 1)
+    where d.id = p_list_id;
+  end if;
+  return v_copies;
+end $$;
+
 create or replace function public.list_party(p_list_id text)
 returns table (user_id uuid, role text, name text, data jsonb)
 language sql stable security definer set search_path = '' as $$
@@ -264,10 +319,10 @@ language sql stable security definer set search_path = '' as $$
 $$;
 
 revoke execute on function public.is_member(text), public.list_taken(text), public.own_doc_id(text, text),
-  public.create_invite(text), public.join_list(text), public.leave_list(text), public.list_party(text)
+  public.create_invite(text), public.join_list(text), public.leave_list(text), public.disband_list(text), public.list_party(text)
   from public, anon;
 grant execute on function public.is_member(text), public.list_taken(text), public.own_doc_id(text, text),
-  public.create_invite(text), public.join_list(text), public.leave_list(text), public.list_party(text)
+  public.create_invite(text), public.join_list(text), public.leave_list(text), public.disband_list(text), public.list_party(text)
   to authenticated;
 
 -- ---------------------------------------------------------------- realtime
