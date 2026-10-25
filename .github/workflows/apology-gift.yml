@@ -1,0 +1,50 @@
+# One time (October 2026): gold back for the players who lost it to the double-charged missed-quest bug, as a
+# gold entry of its own ("apology-2026-10"), so it merges across devices like any other and is never given
+# twice. The players with recorded misses get it (most misses: 1700, the other: 600); anything other than
+# exactly two such players stops it without changing anything. Prints only how many players got it.
+name: Apology gift
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gift:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: sqshacllpzozxqpetwyo
+    steps:
+      - name: Give the gold back
+        run: |
+          read -r -d '' Q <<'SQL' || true
+          do $$
+          declare n int;
+          begin
+            create temp table gift on commit drop as
+            with missed as (
+              select h.id, (
+                select coalesce(sum((t.data->>'missTotal')::int), 0) from public.docs t
+                where t.kind = 'task' and not t.deleted and t.data ? 'missTotal'
+                  and (t.owner = h.owner or t.list_id in (select m.list_id from public.list_members m where m.user_id = h.owner))
+              ) as misses
+              from public.docs h where h.kind = 'hero' and not h.deleted
+            )
+            select id, case when row_number() over (order by misses desc, id) = 1 then 1700 else 600 end as amount
+            from missed where misses > 0;
+            select count(*) into n from gift;
+            if n <> 2 then raise exception 'expected 2 players with misses, found %', n; end if;
+            update public.docs d
+            set data = jsonb_set(d.data, '{gold}', coalesce(d.data->'gold', '{}'::jsonb) || jsonb_build_object('apology-2026-10', g.amount))
+                       || jsonb_build_object('updatedAt', greatest(coalesce((d.data->>'updatedAt')::bigint, 0), d.updated_at) + 1),
+                updated_at = greatest(coalesce((d.data->>'updatedAt')::bigint, 0), d.updated_at) + 1
+            from gift g
+            where d.id = g.id and not coalesce(d.data->'gold', '{}'::jsonb) ? 'apology-2026-10';
+          end $$;
+          select count(*) as players_with_gift from public.docs where kind = 'hero' and data->'gold' ? 'apology-2026-10'
+          SQL
+          jq -n --arg q "$Q" '{query: $q}' > body.json
+          curl -sS -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' --data @body.json | jq -c '.[]? // .'
