@@ -3068,3 +3068,8 @@ body.hurt-shake #root {
   display: flex;
   gap: 8px;
 }
+
+/* "Already playing? Sign in" under the hero-creation title */
+.create-signin {
+  margin-top: 12px;
+}

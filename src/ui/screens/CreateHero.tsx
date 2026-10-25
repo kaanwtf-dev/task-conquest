@@ -7,6 +7,7 @@ import { useStore } from '../../state/store';
 import type { ClassId } from '../../core/types';
 import { HeroPreview, PxImg, themeStyle, useMedia } from '../components/common';
 import { sfx, unlockAudio } from '../../audio/sfx';
+import { SignInSheet } from '../components/SignInSheet';
 import { t, tk } from '../../i18n';
 
 const PANTS = ['#4a3a2a', '#2a2a3a', '#3a4a6a', '#5a2a2a', '#2a4a2a'];
@@ -27,6 +28,7 @@ const LOOK_WORDS: Record<string, string> = {
 export const lookWord = (id: string): string => t(LOOK_WORDS[id] ?? id);
 
 export default function CreateHero() {
+  const [signingIn, setSigningIn] = useState(false);
   const createHero = useStore((s) => s.createHero);
   const wide = useMedia('(min-width: 900px)');
   const [name, setName] = useState('');
@@ -169,6 +171,10 @@ export default function CreateHero() {
         <div className="pixel" style={{ fontSize: 9, color: '#b8c0f0', marginTop: 8 }}>
           {t('CREATE YOUR HERO')}
         </div>
+        <button className="btn ghost small create-signin" onClick={() => (sfx.tick(), setSigningIn(true))}>
+          {t('Already playing? Sign in')}
+        </button>
+        {signingIn && <SignInSheet onClose={() => setSigningIn(false)} />}
       </div>
       {wide ? (
         <div className="create-grid">

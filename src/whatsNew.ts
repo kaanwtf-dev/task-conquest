@@ -15,6 +15,14 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.1',
+    date: '2026-10-25',
+    title: tk('Sign in from the start'),
+    items: [
+      tk('New phone or new Home Screen app? Tap “Already playing? Sign in” on the hero screen and your hero comes back, no need to make a new one first.'),
+    ],
+  },
+  {
     version: '2.0',
     date: '2026-10-25',
     title: tk('Fixed: gold lost for quests you did'),

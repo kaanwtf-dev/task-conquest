@@ -356,4 +356,11 @@ export const TR_COMPONENTS: Record<string, string> = {
   "Tick a quest for the day it was charged for, on any device, and the gold comes back by itself.": "Kesinti yapılan gün için görevi herhangi bir cihazda işaretlersen altın kendiliğinden geri gelir.",
   "Miss streaks and “time’s up” notifications are now based on your latest save, so no more notifications for quests you already did.": "Kaçırma serileri ve “süre doldu” bildirimleri artık en güncel kaydına göre; yani zaten yaptığın görevler için bildirim yok.",
   "Task Conquest has a new home: kaanwtf-dev.github.io/task-conquest. Add it to your Home Screen from there.": "Task Conquest’in yeni adresi: kaanwtf-dev.github.io/task-conquest. Ana Ekranına oradan ekle.",
+  "Sign in from the start": "Baştan giriş yap",
+  "New phone or new Home Screen app? Tap “Already playing? Sign in” on the hero screen and your hero comes back, no need to make a new one first.": "Yeni telefon ya da yeni Ana Ekran uygulaması mı? Kahraman ekranında “Zaten oynuyor musun? Giriş yap”a dokun, kahramanın geri gelsin; önce yenisini yapmana gerek yok.",
+  "Already playing? Sign in": "Zaten oynuyor musun? Giriş yap",
+  "Your hero, quests and gold come back from your account.": "Kahramanın, görevlerin ve altının hesabından geri gelir.",
+  "Signing in…": "Giriş yapılıyor…",
+  "Signed in, but this account has no hero yet. Close this and create one: it will be saved to your account.": "Giriş yapıldı ama bu hesapta henüz kahraman yok. Bunu kapat ve bir tane oluştur: hesabına kaydedilecek.",
+  "Signed in. Your hero will appear as soon as the cloud answers.": "Giriş yapıldı. Kahramanın bulut cevap verir vermez görünecek.",
 };
