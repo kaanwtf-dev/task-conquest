@@ -21,7 +21,7 @@ declare const Deno: {
 };
 
 /** Where a tapped notification opens, and the contact the push services see for this sender. */
-const APP_URL = 'https://taskconquest.netlify.app/';
+const APP_URL = 'https://kaanwtf-dev.github.io/task-conquest/';
 const VAPID_PUBLIC = Deno.env.get('VAPID_PUBLIC_KEY') || 'BMW8HKFT_4chlJTVKPqz8HXqT4Dv8k6p_a4qysL9WRb1wwvexfbgy75TiZ592AVPzSbvz4w8i3bU73l016bljSc';
 /** Supabase ends a function call after 150 s: stop starting new devices well before that. */
 const TIME_BUDGET_MS = 100_000;

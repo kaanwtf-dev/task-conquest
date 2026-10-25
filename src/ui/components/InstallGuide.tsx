@@ -14,7 +14,7 @@ const asset = (path: string) => {
   const env = import.meta.env as Record<string, unknown>;
   return `${typeof env.BASE_URL === 'string' ? env.BASE_URL : '/'}${path}`;
 };
-const SITE = typeof location !== 'undefined' ? location.host : 'taskconquest.netlify.app';
+const SITE = typeof location !== 'undefined' ? location.host : 'kaanwtf-dev.github.io/task-conquest';
 
 /** Whether there is anything to install from here (not already the installed app). */
 export function useCanInstall(): boolean {
