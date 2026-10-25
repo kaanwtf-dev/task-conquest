@@ -15,3 +15,11 @@
   for = "/index.html"
   [headers.values]
     Cache-Control = "no-cache"
+
+# The app moved to GitHub Pages (Netlify deploys were paused). Everything here forwards there, keeping the
+# rest of the address (e.g. an invite link's #join=CODE stays in the browser and survives the redirect).
+[[redirects]]
+  from = "/*"
+  to = "https://kaanwtf-dev.github.io/task-conquest/:splat"
+  status = 301
+  force = true
