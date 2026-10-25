@@ -181,6 +181,25 @@ function watchWindow(wake: () => void, hide: () => void, offline: () => void): (
 
 const running = new Set<SyncEngine>();
 
+/**
+ * A task is otherwise last-write-wins as a whole, so a newer edit made without knowing of a completion (on a
+ * device that hadn't synced yet: a tick elsewhere, a "missed" charge) would erase it. The winner keeps the
+ * loser's completion when that one is newer than any the winner knows of; un-ticking keeps the completion's
+ * time, so this never brings back one that was undone on purpose. Null: nothing to keep.
+ */
+export function keepCompletion(winner: Task, loser: Task): Task | null {
+  if (loser.deleted || winner.deleted || !loser.doneFor || typeof loser.doneAt !== 'number') return null;
+  if (typeof winner.doneAt === 'number' && winner.doneAt >= loser.doneAt) return null;
+  return {
+    ...winner,
+    doneFor: loser.doneFor,
+    doneAt: loser.doneAt,
+    doneBy: loser.doneBy,
+    rewardedFor: loser.rewardedFor,
+    timesDone: Math.max(winner.timesDone ?? 0, loser.timesDone ?? 0),
+  };
+}
+
 /** Sync every started engine now (e.g. so a brand-new list exists in the cloud before inviting to it). */
 export async function flushSync(): Promise<void> {
   await Promise.all([...running].map((e) => e.syncNow()));
@@ -197,6 +216,8 @@ export interface SyncEngineOptions {
 
 export class SyncEngine {
   status: EngineStatus = 'idle';
+  /** When this device last finished hearing from the cloud (ms; 0: not yet). */
+  lastPullAt = 0;
   /** Remote ids the server refused on the last push (no permission / invalid data). */
   lastRejected: string[] = [];
 
@@ -505,6 +526,7 @@ export class SyncEngine {
         const rows = await this.remote.pull(this.st.cursor);
         if (this.stopped) return;
         this.apply(rows);
+        this.lastPullAt = Date.now();
         const cursor = this.maxTs(rows);
         if (cursor) {
           this.st.cursor = cursor;
@@ -664,12 +686,25 @@ export class SyncEngine {
           const c = cur as TaskList;
           put(coll, { ...remote, shared: true, ownerId: (remote as TaskList).ownerId ?? c.ownerId, updatedAt: remote.updatedAt + 1 } as Meta);
           needPush = true;
-        } else if (!cur || !sameDoc(cur, remote)) put(coll, remote);
+        } else if (!cur || !sameDoc(cur, remote)) {
+          const kept = m.kind === 'task' && cur ? keepCompletion(remote as Task, cur as Task) : null;
+          if (kept) {
+            put(coll, { ...kept, updatedAt: remote.updatedAt + 1 } as Meta);
+            needPush = true;
+          } else put(coll, remote);
+        }
         synced[key] = Math.max(synced[key] ?? -Infinity, remote.updatedAt);
       } else if (cur.updatedAt === remote.updatedAt) {
         put(coll, { ...cur, updatedAt: remote.updatedAt + 1 }); // ours wins the tie-break: make it strictly newer
         synced[key] = Math.max(synced[key] ?? -Infinity, remote.updatedAt);
         needPush = true;
+      } else if (m.kind === 'task') {
+        // ours is newer, but the cloud's may hold a completion we never saw
+        const kept = keepCompletion(cur as Task, remote as Task);
+        if (kept) {
+          put(coll, { ...kept, updatedAt: cur.updatedAt + 1 } as Meta);
+          needPush = true;
+        }
       }
     }
     const patch = { ...out } as Partial<LocalSnapshot>;

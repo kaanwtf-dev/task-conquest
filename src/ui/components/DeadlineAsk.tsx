@@ -2,7 +2,7 @@
 // quest's window that ended undone). The player may have done it and forgotten to tick it, may want more
 // time, may call it off, or takes the hit. Unanswered questions count as missed after a while (store).
 import { useEffect, useState } from 'react';
-import { useStore } from '../../state/store';
+import { syncHooks, useStore } from '../../state/store';
 import { SNOOZE_MS, answerCost, deadlineIsMine, deadlineOf, moreTimeOptions, needsAnswer, nextDeadline, refundFor, stakesOf, type MissAnswer } from '../../game/deadlines';
 import { heroGold, heroLevel } from '../../game/progression';
 import { LATEST_VERSION } from '../../whatsNew';
@@ -62,7 +62,8 @@ export default function DeadlineAsk() {
   const task = useStore((s) => (ids[0] ? s.tasks[ids[0]] : undefined));
   // the "what's new" notes go first (they explain these questions after an update)
   const notesDue = useStore((s) => !!s.settings.introSeen && s.settings.seenVersion !== LATEST_VERSION);
-  if (!task || notesDue || Date.now() < holdUntil) return null;
+  // (not from a save that hasn't heard from the cloud since coming back: it may be answered already)
+  if (!task || notesDue || Date.now() < holdUntil || syncHooks.busy?.()) return null;
   return <Ask key={task.id} task={task} count={ids.length} onHit={() => setHoldUntil(Date.now() + AFTER_HIT_MS)} />;
 }
 

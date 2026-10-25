@@ -42,7 +42,7 @@ export function heroLevel(hero: Hero) {
 }
 
 export function heroGold(hero: Hero): number {
-  return sum(hero.gold) - sum(hero.goldSpent);
+  return sum(hero.gold) - sum(hero.goldSpent) - sum(hero.penalties ?? {}) + sum(hero.refunds ?? {});
 }
 
 export function taskXp(level: number, d: Difficulty): number {

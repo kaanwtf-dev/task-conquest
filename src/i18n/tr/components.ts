@@ -350,4 +350,10 @@ export const TR_COMPONENTS: Record<string, string> = {
   "Clearer install step": "Daha anlaşılır yükleme adımı",
   "The Home Screen step for new players is shorter and easier to read, with the three reasons to install at a glance.": "Yeni oyuncular için Ana Ekran adımı artık daha kısa ve okunması kolay; yüklemek için üç neden tek bakışta.",
   "Choosing to stay in the browser now asks “Are you sure?” first, with one tap to install instead.": "Tarayıcıda kalmayı seçince önce “Emin misin?” diye soruyor; tek dokunuşla yüklemek de mümkün.",
+  "Fixed: gold lost for quests you did": "Düzeltildi: yaptığın görevler için kaybedilen altın",
+  "Sorry! A bug charged gold for quests you had done, when the game was open on more than one device or in a browser tab too. Every player who lost gold got it back as a gift.": "Özür dileriz! Oyun birden fazla cihazda ya da ayrıca bir tarayıcı sekmesinde açıkken, bir hata yaptığın görevler için altın kesiyordu. Altın kaybeden her oyuncu onu hediye olarak geri aldı.",
+  "A missed quest is now charged once, never twice, and only after the game has checked the cloud for what you did elsewhere.": "Kaçırılan bir görev artık sadece bir kez kesiliyor, asla iki kez değil; ve ancak oyun başka yerde ne yaptığını buluttan kontrol ettikten sonra.",
+  "Tick a quest for the day it was charged for, on any device, and the gold comes back by itself.": "Kesinti yapılan gün için görevi herhangi bir cihazda işaretlersen altın kendiliğinden geri gelir.",
+  "Miss streaks and “time’s up” notifications are now based on your latest save, so no more notifications for quests you already did.": "Kaçırma serileri ve “süre doldu” bildirimleri artık en güncel kaydına göre; yani zaten yaptığın görevler için bildirim yok.",
+  "Task Conquest has a new home: kaanwtf-dev.github.io/task-conquest. Add it to your Home Screen from there.": "Task Conquest’in yeni adresi: kaanwtf-dev.github.io/task-conquest. Ana Ekranına oradan ekle.",
 };

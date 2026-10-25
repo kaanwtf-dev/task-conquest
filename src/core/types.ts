@@ -181,6 +181,12 @@ export interface Hero extends Meta {
   xp: Counter;
   gold: Counter;
   goldSpent: Counter;
+  /**
+   * Gold lost to missed quests, one entry per miss ("<task>@<window end>"): two devices that both notice the
+   * same miss write the same entry, so it is only ever charged once. `refunds` gives some or all of it back.
+   */
+  penalties?: Counter;
+  refunds?: Counter;
   kills: Counter;
   tasksDone: Counter;
   skillXp: Partial<Record<SkillId, Counter>>;

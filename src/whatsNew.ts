@@ -15,6 +15,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.0',
+    date: '2026-10-25',
+    title: tk('Fixed: gold lost for quests you did'),
+    items: [
+      tk('Sorry! A bug charged gold for quests you had done, when the game was open on more than one device or in a browser tab too. Every player who lost gold got it back as a gift.'),
+      tk('A missed quest is now charged once, never twice, and only after the game has checked the cloud for what you did elsewhere.'),
+      tk('Tick a quest for the day it was charged for, on any device, and the gold comes back by itself.'),
+      tk('Miss streaks and “time’s up” notifications are now based on your latest save, so no more notifications for quests you already did.'),
+      tk('Task Conquest has a new home: kaanwtf-dev.github.io/task-conquest. Add it to your Home Screen from there.'),
+    ],
+  },
+  {
     version: '1.9',
     date: '2026-10-21',
     title: tk('Clearer install step'),

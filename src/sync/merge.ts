@@ -78,7 +78,7 @@ export function unionSorted(a: unknown, b: unknown, keep = Infinity): string[] {
 
 // Fields merged as a CRDT; everything else on the hero is last-write-wins as a block.
 const HERO_CRDT_KEYS = [
-  'xp', 'gold', 'goldSpent', 'kills', 'tasksDone', 'skillXp', 'bossesSlain', 'itemsFound', 'potionsUsed', 'questsCleared',
+  'xp', 'gold', 'goldSpent', 'penalties', 'refunds', 'kills', 'tasksDone', 'skillXp', 'bossesSlain', 'itemsFound', 'potionsUsed', 'questsCleared',
   'activeDays', 'savedDays', 'loginDays', 'owned', 'achievements', 'bossIndex', 'bossDamage', 'bagSize', 'streakSaves', 'bestStreak', 'createdAt', 'updatedAt',
 ] as const;
 
@@ -121,6 +121,9 @@ export function mergeHero(a: Hero, b: Hero): Hero {
     xp: mergeCounter(a.xp, b.xp),
     gold: mergeCounter(a.gold, b.gold),
     goldSpent: mergeCounter(a.goldSpent, b.goldSpent),
+    // one entry per missed quest window, whichever device wrote it: the same miss is never charged twice
+    ...(a.penalties || b.penalties ? { penalties: mergeCounter(a.penalties, b.penalties) } : {}),
+    ...(a.refunds || b.refunds ? { refunds: mergeCounter(a.refunds, b.refunds) } : {}),
     kills: mergeCounter(a.kills, b.kills),
     tasksDone: mergeCounter(a.tasksDone, b.tasksDone),
     skillXp: mergeSkills(a.skillXp, b.skillXp),

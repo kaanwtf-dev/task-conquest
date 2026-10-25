@@ -98,6 +98,9 @@ function chestPeriod(list: TaskList, now: number, cfg: TimeCfg): string {
 export const isForeignList = (list: TaskList, accountId: string | null): boolean => !!accountId && !!list.ownerId && list.ownerId !== accountId;
 
 /** Set by the sync layer. */
+/** One missed window of one quest: the key its penalty (and any refund) is kept under. */
+export const missKey = (taskId: string, end: number): string => `${taskId}@${end}`;
+
 export const syncHooks: {
   /** We left a party list: tell the server (now, or once back online). */
   leave?: (listId: string) => void;
@@ -489,9 +492,17 @@ export const useStore = create<State>()(
               if (task.pendingMiss.paid === undefined) miss(task.id);
               else get().updateTask(task.id, { pendingMiss: null });
             }
+            // ticked for the very period it was charged for (here or on another device): the gold comes back
+            const done0 = get().tasks[task.id];
+            if (done0.pendingMiss?.paid !== undefined && done0.doneFor === done0.pendingMiss.key) get().resolveMiss(task.id, 'done', { auto: true });
             const cur = get().tasks[task.id];
             const m = missedAt(cur, at, s.settings);
             if (!m) continue;
+            // charged already, on another device: one miss costs once (the task may not show it yet)
+            if (get().hero!.penalties?.[missKey(task.id, m.end)] !== undefined) {
+              get().updateTask(task.id, { missedFor: m.key, missedEnd: m.end });
+              continue;
+            }
             // a newer window ended while the last one was still unanswered: that one was missed for sure
             if (cur.pendingMiss?.paid === undefined && cur.pendingMiss) miss(task.id);
             // the hero takes the hit right away; "What happened?" can still give the gold back
@@ -503,7 +514,7 @@ export const useStore = create<State>()(
             const stakes = stakesOf(now0) ?? 'flexible';
             const cost = missPenalty(heroGold(hero), stakes, misses, heroLevel(hero).level);
             get().updateTask(task.id, { pendingMiss: { ...m, paid: cost, prevMisses }, missedFor: m.key, missedEnd: m.end, askedAt: undefined, misses, missTotal: total });
-            if (cost > 0) set({ hero: { ...hero, goldSpent: inc(hero.goldSpent, s.deviceId, cost), updatedAt: now() } });
+            set({ hero: { ...hero, penalties: { ...hero.penalties, [missKey(task.id, m.end)]: cost }, updatedAt: now() } });
             auto++;
             lost += cost;
             fx.emit({ type: 'missed', title: now0.title, gold: cost, misses, total, stakes });
@@ -537,15 +548,24 @@ export const useStore = create<State>()(
             });
             if (refund > 0) {
               const h = get().hero!;
-              set({ hero: { ...h, gold: inc(h.gold, s.deviceId, refund), updatedAt: now() } });
+              const key = missKey(id, p.end);
+              // charged as a keyed penalty: refunded under the same key (two devices answering refund once)
+              if (h.penalties?.[key] !== undefined)
+                set({ hero: { ...h, refunds: { ...h.refunds, [key]: Math.max(h.refunds?.[key] ?? 0, refund) }, updatedAt: now() } });
+              else set({ hero: { ...h, gold: inc(h.gold, s.deviceId, refund), updatedAt: now() } });
               fx.emit({ type: 'toast', text: t('+{gold}g back', { gold: refund }), small: task.title });
               log('quest', t('"{title}" was sorted out: {gold}g back.', { title: task.title, gold: refund }));
             }
             return -refund;
           }
           const cost = answerCost(task, answer, heroGold(hero), heroLevel(hero).level);
+          // the window this answer is about: one charge for it, however many devices answer
+          const end = once ? (deadlineOf(task, s.settings) ?? 0) : (task.pendingMiss?.end ?? 0);
           const pay = () => {
-            if (cost > 0) set({ hero: { ...get().hero!, goldSpent: inc(get().hero!.goldSpent, s.deviceId, cost), updatedAt: now() } });
+            if (cost <= 0) return;
+            const h = get().hero!;
+            const key = missKey(id, end);
+            set({ hero: { ...h, penalties: { ...h.penalties, [key]: Math.max(h.penalties?.[key] ?? 0, cost) }, updatedAt: now() } });
           };
           const settled = once ? { askedAt: ms } : { pendingMiss: null, askedAt: ms };
           const title = task.title;

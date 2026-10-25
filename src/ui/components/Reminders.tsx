@@ -1,7 +1,7 @@
 // Reminder notifications: the Options section, the one-time "want reminders?" card, and the bits that
 // keep the home-screen badge and the cloud copy of the reminder settings current.
 import { useEffect, useRef, useState } from 'react';
-import { useStore } from '../../state/store';
+import { syncHooks, useStore } from '../../state/store';
 import { fx } from '../../state/fx';
 import { sum } from '../../game/progression';
 import { todayRemaining, todaySections } from '../../state/today';
@@ -411,6 +411,13 @@ export function PushKeeper() {
     let alive = true; // a save still on its way when this ends (sign-out, a newer change) must not retry
     const write = () => {
       if (!alive) return;
+      // only from a save that has heard from the cloud since coming back: an asleep copy would plan
+      // "time's up" for quests already done elsewhere
+      if (syncHooks.busy?.()) {
+        clearTimeout(retry);
+        retry = window.setTimeout(write, 3000);
+        return;
+      }
       pending.current = null;
       const st = useStore.getState();
       const alarms = alarmsFor({ hero: st.hero, lists: st.lists, tasks: st.tasks, accountId: st.accountId }, Date.now(), st.settings, pushPrefs(st.settings));

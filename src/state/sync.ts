@@ -491,18 +491,30 @@ export async function signOutHere() {
 }
 
 /** Call once at startup. */
-// Missed quests are charged the moment they are noticed: on opening, wait until this device has heard from
-// the cloud, so two devices don't both charge the same miss before either knows of the other's.
-const openedAt = Date.now();
-const CATCH_UP_MS = 30_000;
-let caughtUp = false;
-syncHooks.busy = () => !caughtUp && Date.now() - openedAt < CATCH_UP_MS;
+// Missed quests are charged (asked about, and their notifications planned) only from a save that has heard
+// from the cloud since the app was last opened or brought back to the screen: a copy that was asleep (a tab
+// on another computer, Safari next to the Home Screen app) must not charge, or overwrite a completion, from
+// what it knew before. Signed out, this device is the only copy.
+let freshFrom = Date.now();
+let authKnown = false;
+if (typeof document !== 'undefined') {
+  const back = () => {
+    if (document.visibilityState === 'visible') freshFrom = Date.now();
+  };
+  document.addEventListener('visibilitychange', back);
+  window.addEventListener('pageshow', back);
+}
+syncHooks.busy = () => {
+  if (!getSyncConfig()) return false;
+  if (!authKnown) return true;
+  if (!useSync.getState().userId) return false;
+  return !engine || engine.lastPullAt < freshFrom;
+};
 function catchUp() {
-  if (caughtUp) return;
-  caughtUp = true;
+  authKnown = true;
   useStore.getState().checkDeadlines();
 }
-// signed in: once the first sync has finished (or can't run: offline, an error, a choice to make)
+// each time a sync has finished: what ran out meanwhile, from the save as the cloud has it
 useSync.subscribe((s, prev) => {
   if (prev.status === 'syncing' && s.status !== 'syncing') catchUp();
 });
