@@ -5,6 +5,7 @@ import { iconFor, firstEmoji } from '../../pixel/iconGen';
 import { AISLES } from '../../pixel/keywords';
 import { todayKey } from '../../core/time';
 import { stakesOf } from '../../game/deadlines';
+import { MAX_REMINDERS } from '../../game/reminders';
 import type { Difficulty, Repeat, Task } from '../../core/types';
 import { PxImg, Sheet, themeStyle } from '../components/common';
 import { sfx } from '../../audio/sfx';
@@ -60,6 +61,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
       askedAt: draft.askedAt,
       deadlineOutcome: draft.deadlineOutcome,
       byTime: draft.byTime,
+      remindAt: draft.remindAt,
       stakes: draft.stakes,
       qty: draft.qty,
       aisle: draft.aisle,
@@ -197,6 +199,7 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
               )}
             </Field>
             <DueField draft={draft} patch={patch} />
+            <RemindAt draft={draft} patch={patch} />
             <TimeLimit draft={draft} patch={patch} />
             <Field label={t('Notes')}>
               <textarea className="text-in" rows={3} aria-label={t('Notes')} value={draft.notes ?? ''} onChange={(e) => patch({ notes: e.target.value || undefined })} style={{ width: '100%', resize: 'vertical' }} />
@@ -307,6 +310,36 @@ function DueField({ draft, patch }: { draft: Task; patch: (p: Partial<Task>) => 
 }
 
 /** A daily "done by" time (daily quests), and what missing the due time costs. */
+/** "Remind me at": up to three times of day, a notification then and no deadline. */
+function RemindAt({ draft, patch }: { draft: Task; patch: (p: Partial<Task>) => void }) {
+  const times = draft.remindAt ?? [];
+  const set = (next: string[]) => patch({ remindAt: next.length ? next : undefined });
+  return (
+    <Field label={t('Remind me at (a notification, no deadline)')}>
+      {times.map((v, i) => (
+        <span key={i} className="remind-time">
+          <input
+            className="text-in"
+            type="time"
+            aria-label={t('Reminder {n}', { n: i + 1 })}
+            style={{ maxWidth: 140 }}
+            value={v}
+            onChange={(e) => set(times.map((x, j) => (j === i ? e.target.value : x)).filter(Boolean))}
+          />
+          <button type="button" className="pill" aria-label={t('Remove reminder')} onClick={() => set(times.filter((_, j) => j !== i))}>
+            ✕
+          </button>
+        </span>
+      ))}
+      {times.length < MAX_REMINDERS && (
+        <button type="button" className="pill" onClick={() => set([...times, times.length ? '21:30' : '09:00'])}>
+          {times.length ? t('+ another time') : t('🔔 Add a reminder')}
+        </button>
+      )}
+    </Field>
+  );
+}
+
 function TimeLimit({ draft, patch }: { draft: Task; patch: (p: Partial<Task>) => void }) {
   const once = draft.repeat.kind === 'none';
   const hasLimit = once ? !!(draft.due || draft.deadline) : true;

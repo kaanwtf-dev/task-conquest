@@ -77,6 +77,10 @@ export interface Task extends Meta {
   deadlineSetAt?: number;
   /** repeating quests: must be done by this time of day ("HH:MM") */
   byTime?: string;
+  /** reminder times of day ("HH:MM", up to 3): a notification then, no deadline; hidden from Today until the first */
+  remindAt?: string[];
+  /** "remind me again in 15 min": hidden from Today until then, with a notification then (ms) */
+  snoozedUntil?: number;
   /** what missing it costs: a little (flexible) or more (must do); none when unset */
   stakes?: 'flexible' | 'must' | 'none';
   /** the last missed window that was counted (period key, or 'deadline') */

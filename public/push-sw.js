@@ -18,7 +18,7 @@ self.addEventListener('push', (event) => {
     body: typeof n.body === 'string' ? n.body : 'Your quests await.',
     tag,
     // a quest's new warning or "time's up" replaces its older one, and must still ring (Chrome is silent otherwise)
-    renotify: /^(missed|deadline)-/.test(tag),
+    renotify: /^(missed|deadline|remind)-/.test(tag),
     icon: scope + 'icon-192.png',
     data: { url },
   });

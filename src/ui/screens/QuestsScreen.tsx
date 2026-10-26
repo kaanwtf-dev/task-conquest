@@ -28,6 +28,7 @@ import { InstallCard } from '../components/InstallGuide';
 import { TipNudge } from '../components/Support';
 import { WARN_MS, deadlineIsMine, hasLimit, leftLabel, stakesOf, timeLeft, windowOf } from '../../game/deadlines';
 import { todaySections } from '../../state/today';
+import { SNOOZE_REMINDER_MS, reminderState, reminderTimes } from '../../game/reminders';
 import BossBar from '../components/BossBar';
 import PartyStrip from '../components/PartyStrip';
 import { PushInvite } from '../components/Reminders';
@@ -111,8 +112,8 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
   const s = useStore(useShallow(listState));
   const cfg = s.settings;
   const lists = visibleLists(s).filter((l) => l.type !== 'supply');
-  const { overdue, dueToday, routine, week, doneToday } = todaySections(s.lists, s.tasks, now, cfg);
-  const total = overdue.length + dueToday.length + routine.length + doneToday.length;
+  const { reminders, overdue, dueToday, routine, week, doneToday } = todaySections(s.lists, s.tasks, now, cfg);
+  const total = reminders.length + overdue.length + dueToday.length + routine.length + doneToday.length;
   const date = new Date(now).toLocaleDateString(locale(), { weekday: 'long', month: 'short', day: 'numeric' });
 
   const section = (label: string, items: Task[], done = false) =>
@@ -156,11 +157,12 @@ function TodayView({ now, wide, onEdit, editTask, closeEdit }: { now: number; wi
       <InstallNudge />
       <TipNudge />
       <PushInvite />
-      {overdue.length + dueToday.length + routine.length + week.length === 0 && (
+      {reminders.length + overdue.length + dueToday.length + routine.length + week.length === 0 && (
         <div className="win tasks">
           <div className="empty">{t('Nothing due today. Go touch some grass, adventurer.')}</div>
         </div>
       )}
+      {section(t('🔔 Time for these'), reminders)}
       {section(t('Overdue'), overdue)}
       {section(t('Due today'), dueToday)}
       {section(t('Daily routine'), routine)}
@@ -302,8 +304,16 @@ interface RowProps {
  * A task row: this wrapper takes the drag-and-drop props (which change for every row whenever the list
  * changes), and the memoized body holds everything costly, so it only re-renders for its own task.
  */
+/** Where the quest's reminder stands (re-checked every minute): 'due' flashes at the top. */
+function useReminder(task: Task): 'none' | 'later' | 'due' {
+  const cfg = useStore((s) => s.settings);
+  const now = useNow(reminderTimes(task).length ? 30_000 : 3_600_000);
+  return reminderState(task, now, cfg);
+}
+
 const TaskRow = memo(function TaskRow({ task, done, inactive, showList, onEdit, sortable }: RowProps) {
   const stakes = useStakes(task);
+  const reminder = useReminder(task);
   const style = sortable
     ? { transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition, opacity: inactive ? 0.45 : 1 }
     : inactive
@@ -312,7 +322,7 @@ const TaskRow = memo(function TaskRow({ task, done, inactive, showList, onEdit, 
   return (
     <div
       ref={sortable?.setNodeRef}
-      className={`task ${done ? 'done' : ''} ${sortable?.isDragging ? 'dragging' : ''} ${stakes && !done ? `stakes-${stakes}` : ''}`}
+      className={`task ${done ? 'done' : ''} ${sortable?.isDragging ? 'dragging' : ''} ${stakes && !done ? `stakes-${stakes}` : ''} ${reminder === 'due' && !done ? 'reminder-due' : ''}`}
       style={style}
       {...(sortable ? { ...sortable.attributes, ...sortable.listeners, role: 'listitem', 'aria-roledescription': t('draggable quest') } : {})}
       onClick={() => onEdit(task.id)}
@@ -374,7 +384,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
       <PxImg className="ticon" src={iconFor(task.title, task.icon)} size={32} />
       <div className="tmain">
         <div className="ttitle">{task.title}</div>
-        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy) || timed || !!task.misses || !!stakes) && (
+        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy) || timed || !!task.misses || !!stakes || reminderTimes(task).length > 0) && (
           <div className="tmeta">
             {listName && <span className="tlist">{listName}</span>}
             {shared && done && task.doneBy && <span className="tlist">✓ {task.doneBy}</span>}
@@ -391,6 +401,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
                 <span>{t('Due {date}', { date: task.due })}</span>
               ))}
             {stakes && !done && <StakesChip stakes={stakes} />}
+            {reminderTimes(task).length > 0 && !done && <ReminderChip task={task} />}
             {timed && <TimeLeft task={task} />}
             {!done && !!task.misses && <span className="overdue">{t('missed {n}×', { n: task.misses })}</span>}
             {task.notes && <span>✎</span>}
@@ -405,6 +416,36 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
 });
 
 /** What missing the quest costs, at a glance: "!!" must do (red), "!" flexible (amber). */
+/** "🔔 9:30 PM" (and, once it is time, "15 min later"). */
+function ReminderChip({ task }: { task: Task }) {
+  const update = useStore((s) => s.updateTask);
+  const reminder = useReminder(task);
+  const times = reminderTimes(task).map((ms) => new Date(2000, 0, 1, 0, 0, 0, ms).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' }));
+  return (
+    <>
+      <span className="reminder-chip" title={t('Reminder')}>
+        🔔 {times.join(' · ')}
+      </span>
+      {reminder === 'due' && (
+        <button
+          className="pill reminder-snooze"
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            sfx.tick();
+            update(task.id, { snoozedUntil: Date.now() + SNOOZE_REMINDER_MS });
+          }}
+        >
+          ⏰ {t('15 min later')}
+        </button>
+      )}
+    </>
+  );
+}
+
 function StakesChip({ stakes }: { stakes: NonNullable<Task['stakes']> }) {
   return (
     <span className={`stakes ${stakes}`} title={stakes === 'must' ? t('Must do: missing it hurts') : t('Flexible: missing it costs a little')}>

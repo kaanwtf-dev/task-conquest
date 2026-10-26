@@ -15,6 +15,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.2',
+    date: '2026-10-26',
+    title: tk('Reminders without deadlines'),
+    items: [
+      tk('New: “Remind me at” on any quest (up to 3 times a day). You get a notification then, with no deadline and nothing to lose.'),
+      tk('Until its reminder time the quest stays out of Today. Then it waits at the top, glowing, until you tick it off.'),
+      tk('Not now? Tap “15 min later” on the quest and it reminds you again.'),
+      tk('Tip: for something like vitamins, set “Remind me at” and “If you miss it: Nothing”.'),
+    ],
+  },
+  {
     version: '2.1',
     date: '2026-10-25',
     title: tk('Sign in from the start'),

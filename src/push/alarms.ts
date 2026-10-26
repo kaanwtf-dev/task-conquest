@@ -6,6 +6,7 @@ import type { Task } from '../core/types';
 import { isDone, type TimeCfg } from '../core/time';
 import { WARN_MS, activeOn, byTimeOf, dayEnd, deadlineIsMine, hasLimit, stakesAt, windowOf, type Stakes } from '../game/deadlines';
 import { locale, t } from '../i18n';
+import { upcomingReminders } from '../game/reminders';
 import { partyHours, type NudgeState, type PushPrefs } from './nudges';
 
 export interface Alarm {
@@ -167,9 +168,16 @@ function groupText(notes: Note[]): Pick<Alarm, 'title' | 'body'> {
 export function alarmsFor(state: NudgeState, now: number, cfg: TimeCfg, prefs: PushPrefs): Alarm[] {
   if (!state.hero) return [];
   const notes: Note[] = [];
+  const out: Alarm[] = [];
   for (const task of Object.values(state.tasks)) {
     const l = state.lists[task.listId];
-    if (task.deleted || !l || l.deleted || l.type === 'supply' || !deadlineIsMine(task, l, state.hero.name, state.accountId) || !hasLimit(task, cfg)) continue;
+    if (task.deleted || !l || l.deleted || l.type === 'supply' || !deadlineIsMine(task, l, state.hero.name, state.accountId)) continue;
+    // "remind me at": a nudge at the time the player chose, night or not (no deadline, nothing at stake)
+    for (const at of upcomingReminders(task, now, now + ALARM_DAYS * DAY, cfg)) {
+      const name = clip(task.title, 60);
+      out.push({ key: `remind:${task.id}@${at}`, at, tag: `remind-${task.id}`, title: t('🔔 Time for: {name}', { name }), body: t('Tap to open it and tick it off.') });
+    }
+    if (!hasLimit(task, cfg)) continue;
     const once = task.repeat.kind === 'none';
     const timed = once || byTimeOf(task) !== null;
     for (const w of windowsAhead(task, now - RECENT_MS, now, cfg)) {
@@ -193,7 +201,6 @@ export function alarmsFor(state: NudgeState, now: number, cfg: TimeCfg, prefs: P
     if (g) g.push(x);
     else groups.set(k, [x]);
   }
-  const out: Alarm[] = [];
   for (const g of groups.values()) {
     const { kind, task, end, at } = g[0];
     const tag = kind === 'warn' ? 'deadline' : 'missed';
