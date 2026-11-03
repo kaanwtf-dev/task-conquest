@@ -1,0 +1,117 @@
+# One time (November 2026): every missed-quest charge since 2.0 given back in full, for every player. Charges
+# up to the cutoff below (window ends up to 2026-11-03 14:30 UTC) only, so running it again later never gives
+# back newer ones. Each charge is refunded under its own key (refunds[key] = penalties[key]): it merges across
+# devices like any other refund and is never given twice. The "What happened?" questions about those charges are
+# taken away too, so none of them turns into a "missed" banner later. Stops without changing anything if the
+# numbers look wrong. A second pass a few minutes later puts back anything a device that was open right then
+# wrote over. Prints only counts and gold amounts.
+name: Refund missed-quest charges (one time)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refund:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: sqshacllpzozxqpetwyo
+      CUTOFF_MS: '1793716200000'
+    steps:
+      - name: Write the queries
+        run: |
+          cat > refund.sql <<'SQL'
+          do $$
+          declare n int; g numeric;
+          begin
+            select count(distinct h.id), coalesce(sum(p.value::numeric - coalesce((h.data->'refunds'->>p.key)::numeric, 0)), 0)
+              into n, g
+            from public.docs h, jsonb_each_text(coalesce(h.data->'penalties', '{}'::jsonb)) p
+            where h.kind = 'hero' and not h.deleted
+              and split_part(p.key, '@', 2) ~ '^[0-9]+$' and split_part(p.key, '@', 2)::bigint <= CUTOFF
+              and p.value::numeric > coalesce((h.data->'refunds'->>p.key)::numeric, 0);
+            if n > 10 or g > 60000 then raise exception 'refund stopped, nothing changed: % players, %g', n, g; end if;
+          end $$;
+          with due as (
+            select h.id, h.owner, p.key, p.value::numeric as pen, coalesce((h.data->'refunds'->>p.key)::numeric, 0) as ref
+            from public.docs h, jsonb_each_text(coalesce(h.data->'penalties', '{}'::jsonb)) p
+            where h.kind = 'hero' and not h.deleted
+              and split_part(p.key, '@', 2) ~ '^[0-9]+$' and split_part(p.key, '@', 2)::bigint <= CUTOFF
+          ),
+          todo as (
+            select id, owner, jsonb_object_agg(key, pen) as add, count(*) as n, sum(pen - ref) as gold
+            from due where pen > ref group by id, owner
+          ),
+          upd as (
+            update public.docs d
+            set data = jsonb_set(d.data, '{refunds}', (case when jsonb_typeof(d.data->'refunds') = 'object' then d.data->'refunds' else '{}'::jsonb end) || t.add)
+                       || jsonb_build_object('updatedAt', greatest(coalesce((d.data->>'updatedAt')::bigint, 0), d.updated_at) + 1),
+                updated_at = greatest(coalesce((d.data->>'updatedAt')::bigint, 0), d.updated_at) + 1
+            from todo t where d.id = t.id
+            returning d.id
+          )
+          select dense_rank() over (order by t.owner) as player, t.n as charges_given_back, t.gold as gold_given_back
+          from todo t join upd u on u.id = t.id
+          SQL
+          cat > questions.sql <<'SQL'
+          with cleared as (
+            update public.docs t
+            set data = t.data || jsonb_build_object('pendingMiss', null, 'updatedAt',
+                         greatest(coalesce((t.data->>'updatedAt')::bigint, 0), t.updated_at, (extract(epoch from now()) * 1000)::bigint) + 1),
+                updated_at = greatest(coalesce((t.data->>'updatedAt')::bigint, 0), t.updated_at, (extract(epoch from now()) * 1000)::bigint) + 1
+            where t.kind = 'task' and not t.deleted and jsonb_typeof(t.data->'pendingMiss') = 'object'
+              and exists (
+                select 1 from public.docs h
+                where h.kind = 'hero' and not h.deleted
+                  and (h.data->'penalties') ? (t.id || '@' || (t.data->'pendingMiss'->>'end'))
+                  and coalesce((h.data->'refunds'->>(t.id || '@' || (t.data->'pendingMiss'->>'end')))::numeric, 0)
+                      >= (h.data->'penalties'->>(t.id || '@' || (t.data->'pendingMiss'->>'end')))::numeric
+              )
+            returning 1
+          )
+          select count(*) as questions_taken_away from cleared
+          SQL
+          cat > check.sql <<'SQL'
+          select dense_rank() over (order by h.owner) as player,
+            (select count(*) from jsonb_object_keys(coalesce(h.data->'penalties', '{}'::jsonb))) as charges,
+            (select coalesce(sum(value::numeric), 0) from jsonb_each_text(coalesce(h.data->'penalties', '{}'::jsonb))) as charged,
+            (select coalesce(sum(value::numeric), 0) from jsonb_each_text(coalesce(h.data->'refunds', '{}'::jsonb))) as refunded,
+            (select coalesce(sum(p.value::numeric - least(p.value::numeric, coalesce((h.data->'refunds'->>p.key)::numeric, 0))), 0)
+               from jsonb_each_text(coalesce(h.data->'penalties', '{}'::jsonb)) p
+               where split_part(p.key, '@', 2) ~ '^[0-9]+$' and split_part(p.key, '@', 2)::bigint <= CUTOFF) as still_owed_up_to_cutoff
+          from public.docs h where h.kind = 'hero' and not h.deleted and h.data ? 'penalties'
+          SQL
+          sed -i "s/CUTOFF/$CUTOFF_MS/g" refund.sql check.sql
+          cat > run.sh <<'SH'
+          #!/usr/bin/env bash
+          # run.sh <title> <file>: one query through the Management API; fails the job on an error
+          set -euo pipefail
+          jq -n --rawfile q "$2" '{query: $q}' > body.json
+          resp=$(curl -sS -X POST "https://api.supabase.com/v1/projects/$PROJECT_REF/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H 'Content-Type: application/json' --data @body.json)
+          echo "== $1"
+          echo "$resp" | jq -c '.[]? // .'
+          echo "$resp" | jq -e 'type == "array"' > /dev/null
+          SH
+          chmod +x run.sh
+
+      - name: Before
+        run: ./run.sh "before (per player, no names)" check.sql
+
+      - name: Give the gold back
+        run: |
+          ./run.sh "given back" refund.sql
+          ./run.sh "questions" questions.sql
+
+      - name: After
+        run: ./run.sh "after" check.sql
+
+      - name: Second pass (anything written over in the meantime)
+        run: |
+          sleep 180
+          ./run.sh "given back again (empty: nothing was written over)" refund.sql
+          ./run.sh "questions again" questions.sql
+          ./run.sh "final" check.sql
