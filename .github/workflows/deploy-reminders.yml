@@ -74,4 +74,5 @@ jobs:
       - name: Deploy
         if: steps.token.outputs.ok == 'true'
         working-directory: deploy
-        run: supabase functions deploy reminders --project-ref "$PROJECT_REF" --use-api
+        # --yes: newer CLIs ask before deploying, which a job cannot answer
+        run: supabase functions deploy reminders --project-ref "$PROJECT_REF" --use-api --yes
