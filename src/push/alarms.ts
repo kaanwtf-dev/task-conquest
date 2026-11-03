@@ -3,7 +3,7 @@
 // looks for due ones once a minute and the reminders function sends them, without reading any save.
 // Pure, so the tests and the app share it.
 import type { Task } from '../core/types';
-import { isDone, type TimeCfg } from '../core/time';
+import { doneIn, periodKey, type TimeCfg } from '../core/time';
 import { WARN_MS, activeOn, byTimeOf, dayEnd, deadlineIsMine, hasLimit, stakesAt, windowOf, type Stakes } from '../game/deadlines';
 import { locale, t } from '../i18n';
 import { upcomingReminders } from '../game/reminders';
@@ -68,7 +68,7 @@ function windowsAhead(task: Task, since: number, now: number, cfg: TimeCfg): Win
     const w = windowOf(task, probe, cfg);
     if (!w) break;
     // done already (this window), or a day a "some days" quest is off: nothing to tell
-    if (w.end > since && !out.some((o) => o.end === w.end) && activeOn(task, probe, cfg) && !isDone(task, probe, cfg)) out.push({ ...w, probe });
+    if (w.end > since && !out.some((o) => o.end === w.end) && activeOn(task, probe, cfg) && !doneIn(task, periodKey(task.repeat, probe, cfg))) out.push({ ...w, probe });
     // always forward: where summer time ends, a window can end an hour before the logical day does
     probe = Math.max(w.end, dayEnd(probe, cfg), probe + 3600_000) + 1000;
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Task, TaskList } from '../core/types';
 import { dateKey } from '../core/time';
-import { reminderState, reminderTimes, upcomingReminders } from './reminders';
+import { reminderState, reminderTimes, remindersOn, upcomingReminders } from './reminders';
 import { todaySections } from '../state/today';
 import { alarmsFor } from '../push/alarms';
 import { DEFAULT_PUSH_PREFS } from '../push/nudges';
@@ -15,6 +15,17 @@ const list = { id: 'D', name: 'Daily', type: 'daily', theme: 'forest', skill: 'l
 describe('remind me at', () => {
   it('keeps valid times only, soonest first, at most three', () => {
     expect(reminderTimes({ remindAt: ['21:30', 'junk', '09:00', '09:00', '12:00', '15:00'] })).toEqual([9, 12, 15].map((h) => h * 3600_000));
+  });
+
+  it('is at its time by the clock on the wall, also on the days the clocks change', () => {
+    // Nov 1 2026 (summer time ends in the US) and Mar 8 2026 (it starts): 21:30 stays 21:30 wherever that happens
+    for (const day of [new Date(2026, 10, 1, 12), new Date(2026, 2, 8, 12), new Date(2026, 9, 25, 12)]) {
+      const [when] = remindersOn(task(), day.getTime(), cfg);
+      expect([new Date(when).getDate(), new Date(when).getHours(), new Date(when).getMinutes()]).toEqual([day.getDate(), 21, 30]);
+    }
+    // a time before the day starts belongs to the end of the logical day, on the next calendar day
+    const late = remindersOn(task({ remindAt: ['01:15'] }), new Date(2026, 10, 1, 12).getTime(), { dayStartHour: 4, weekStart: 1 });
+    expect([new Date(late[0]).getDate(), new Date(late[0]).getHours(), new Date(late[0]).getMinutes()]).toEqual([2, 1, 15]);
   });
 
   it('is out of the way until its time, then due until done or snoozed', () => {

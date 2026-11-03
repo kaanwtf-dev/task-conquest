@@ -2,6 +2,7 @@
 // changes, merges them in (LWW per doc, CRDT for the hero) and pushes local edits it has not sent yet.
 // Dirty tracking never touches the store: a persisted map remembers the updatedAt last exchanged per doc.
 import type { Difficulty, Hero, ListType, Meta, Repeat, SkillId, Task, TaskList } from '../core/types';
+import { keepCompletion } from '../game/deadlines';
 import type { ThemeId } from '../pixel/themes';
 import { canon, lineage, newer, rekeyCounters, resolveHero, sameDoc } from './merge';
 import { SyncOfflineError } from './types';
@@ -180,25 +181,6 @@ function watchWindow(wake: () => void, hide: () => void, offline: () => void): (
 }
 
 const running = new Set<SyncEngine>();
-
-/**
- * A task is otherwise last-write-wins as a whole, so a newer edit made without knowing of a completion (on a
- * device that hadn't synced yet: a tick elsewhere, a "missed" charge) would erase it. The winner keeps the
- * loser's completion when that one is newer than any the winner knows of; un-ticking keeps the completion's
- * time, so this never brings back one that was undone on purpose. Null: nothing to keep.
- */
-export function keepCompletion(winner: Task, loser: Task): Task | null {
-  if (loser.deleted || winner.deleted || !loser.doneFor || typeof loser.doneAt !== 'number') return null;
-  if (typeof winner.doneAt === 'number' && winner.doneAt >= loser.doneAt) return null;
-  return {
-    ...winner,
-    doneFor: loser.doneFor,
-    doneAt: loser.doneAt,
-    doneBy: loser.doneBy,
-    rewardedFor: loser.rewardedFor,
-    timesDone: Math.max(winner.timesDone ?? 0, loser.timesDone ?? 0),
-  };
-}
 
 /** Sync every started engine now (e.g. so a brand-new list exists in the cloud before inviting to it). */
 export async function flushSync(): Promise<void> {

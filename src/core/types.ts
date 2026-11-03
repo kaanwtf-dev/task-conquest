@@ -60,6 +60,13 @@ export interface Task extends Meta {
   due?: string; // YYYY-MM-DD
   doneFor?: string | null; // period key this task is completed for
   rewardedFor?: string | null; // prevents farming by toggling
+  /**
+   * Its recent periods (key -> when it was ticked off, or minus when that tick was taken back), the last few
+   * in time order. `doneFor` only holds the latest completion, which the next one replaces: without this,
+   * doing a quest again in the next period made the period before look missed. Copies merge per period,
+   * newest change wins.
+   */
+  doneLog?: Record<string, number>;
   doneAt?: number;
   doneBy?: string; // display name of whoever completed it (shared lists)
   createdBy?: string;

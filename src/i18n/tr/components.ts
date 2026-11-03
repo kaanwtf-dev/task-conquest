@@ -378,4 +378,9 @@ export const TR_COMPONENTS: Record<string, string> = {
   "Remove reminder": "Hatırlatıcıyı kaldır",
   "+ another time": "+ bir saat daha",
   "🔔 Add a reminder": "🔔 Hatırlatıcı ekle",
+  "Fixed: “missed” for quests you did": "Düzeltildi: yaptığın görevler için “kaçırıldı”",
+  "Found it: doing a quest again the next day (or week) wiped out the record of the day before, so the game charged you for a day you had done it, with a “MISSED” banner right after you ticked it.": "Bulduk: bir görevi ertesi gün (ya da hafta) tekrar yapmak önceki günün kaydını siliyordu; oyun da yaptığın bir gün için altın kesiyor ve işaretler işaretlemez “KAÇIRILDI” uyarısı gösteriyordu.",
+  "Got a “What happened?” for something you did? Tap “I did it” and all the gold comes back.": "Yaptığın bir şey için “Ne oldu?” mu geldi? “Yaptım”a dokun, altının tamamı geri gelsin.",
+  "Each quest now remembers the recent days it was done, and taken back, on all your devices, so doing it again never makes an earlier day look missed.": "Her görev artık yapıldığı (ve geri alındığı) son günleri tüm cihazlarında hatırlıyor; tekrar yapmak önceki bir günü asla kaçırılmış göstermez.",
+  "Changing how often a quest repeats, or when your day or week starts, no longer charges the period that just ended, and what you already did in the new period still counts.": "Bir görevin tekrar sıklığını ya da günün veya haftanın başlangıcını değiştirmek artık az önce biten dönem için kesinti yapmaz; yeni dönemde zaten yaptıkların da sayılır.",
 };

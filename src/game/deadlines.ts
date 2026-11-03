@@ -1,6 +1,7 @@
 // Time-sensitive quests: a deadline (one-off quests) or a daily "by" time / the period's end (repeating
 // ones), what is at stake when it is missed ("flexible" or "must do"), and the countdown bar behind the row.
-import type { Task, TaskList } from '../core/types';
+import type { Repeat, Task, TaskList } from '../core/types';
+import { canon } from '../sync/merge';
 import { t } from '../i18n';
 import { isDone, logicalDate, parseDateKey, periodKey, weekStartDate, type TimeCfg } from '../core/time';
 
@@ -12,6 +13,87 @@ export type Stakes = 'flexible' | 'must';
  * update could tell them.
  */
 export const DEFAULT_STAKES_FROM = Date.UTC(2026, 9, 20, 18);
+
+/** How many periods a quest's doneLog keeps: plenty for the period just ended to be checked. */
+export const DONE_LOG_SIZE = 16;
+
+/** Period keys in time order ("2026-10-09" < "2026-10-10", "i…:9" < "i…:10"). */
+const byPeriod = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true });
+
+/**
+ * The newest DONE_LOG_SIZE periods of a doneLog, in time order: every device trims a log the same way, so
+ * two copies that have heard of the same periods hold the very same log.
+ */
+export function trimLog(log: Record<string, number>): Record<string, number> {
+  const keys = Object.keys(log).filter((k) => k !== '__proto__' && Number.isFinite(log[k]) && log[k] !== 0).sort(byPeriod);
+  return Object.fromEntries(keys.slice(-DONE_LOG_SIZE).map((k) => [k, log[k]]));
+}
+
+/**
+ * The quest's doneLog once it is ticked off for `key` at `at`, keeping the completion this tick replaces in
+ * doneFor (saves from before doneLog only had that one).
+ */
+export function loggedDone(task: Task, key: string, at: number): Record<string, number> {
+  const log = { ...(task.doneLog ?? {}) };
+  if (task.doneFor && task.doneFor !== 'once' && task.doneFor !== key && log[task.doneFor] === undefined && typeof task.doneAt === 'number')
+    log[task.doneFor] = task.doneAt;
+  log[key] = at;
+  return trimLog(log);
+}
+
+/** The quest's doneLog once the tick for `key` is taken back at `at` (remembered, so no copy brings it back). */
+export function loggedUndone(task: Task, key: string, at: number): Record<string, number> {
+  return trimLog({ ...(task.doneLog ?? {}), [key]: -at });
+}
+
+/** Two copies' doneLogs as one: per period, the newer change wins (a tick, or taking it back). */
+export function mergeLogs(a: Record<string, number> | undefined, b: Record<string, number> | undefined): Record<string, number> {
+  const out: Record<string, number> = { ...(a ?? {}) };
+  for (const [k, v] of Object.entries(b ?? {})) {
+    if (!Number.isFinite(v) || v === 0) continue;
+    const cur = out[k];
+    if (cur === undefined || Math.abs(v) > Math.abs(cur) || (Math.abs(v) === Math.abs(cur) && v > cur)) out[k] = v;
+  }
+  return trimLog(out);
+}
+
+const sameLog = (a: Record<string, number> | undefined, b: Record<string, number> | undefined) =>
+  JSON.stringify(trimLog(a ?? {})) === JSON.stringify(trimLog(b ?? {}));
+
+/**
+ * A task is otherwise last-write-wins as a whole, so a newer edit made without knowing of a completion (on a
+ * device that hadn't synced yet: a tick elsewhere, a "missed" charge, a restored backup) would erase it.
+ * The winner keeps the loser's completion when that one is newer than any the winner knows of, and both
+ * copies' doneLogs merge per period (newest change wins), so a tick on one device never wipes out a period
+ * done, or taken back, on another. Null: nothing to add.
+ */
+export function keepCompletion(winner: Task, loser: Task): Task | null {
+  if (loser.deleted || winner.deleted) return null;
+  let out: Task = winner;
+  if (loser.doneFor && typeof loser.doneAt === 'number' && !(typeof winner.doneAt === 'number' && winner.doneAt >= loser.doneAt))
+    out = {
+      ...out,
+      doneFor: loser.doneFor,
+      doneAt: loser.doneAt,
+      doneBy: loser.doneBy,
+      rewardedFor: loser.rewardedFor,
+      timesDone: Math.max(winner.timesDone ?? 0, loser.timesDone ?? 0),
+    };
+  // a log kept under another schedule (the repeat was changed on one copy) means other periods: not merged
+  const sameRepeat = (a: Repeat, b: Repeat) => canon(a) === canon(b);
+  if ((winner.doneLog || loser.doneLog) && sameRepeat(winner.repeat, loser.repeat)) {
+    const log = mergeLogs(winner.doneLog, loser.doneLog);
+    // a completion only one side held in doneFor (a save from before doneLog), replaced on the other side
+    for (const side of [winner, loser])
+      if (side.doneFor && side.doneFor !== 'once' && log[side.doneFor] === undefined && typeof side.doneAt === 'number') log[side.doneFor] = side.doneAt;
+    const trimmed = trimLog(log);
+    // the current completion was taken back after it was made (on the other copy): it doesn't count
+    const v = out.doneFor ? trimmed[out.doneFor] : undefined;
+    if (v !== undefined && v < 0 && -v >= (out.doneAt ?? 0)) out = { ...out, doneFor: null };
+    if (!sameLog(trimmed, winner.doneLog)) out = { ...out, doneLog: trimmed };
+  }
+  return out === winner ? null : out;
+}
 
 /** What missing the quest costs: its own choice, else flexible for repeating quests; null when nothing. */
 export function stakesOf(task: Pick<Task, 'stakes' | 'repeat'>): Stakes | null {
@@ -63,7 +145,7 @@ export function deadlineOf(task: Task, cfg: TimeCfg): number | null {
   if (typeof task.deadline === 'number' && Number.isFinite(task.deadline)) return task.deadline;
   if (typeof task.due !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(task.due)) return null;
   const d = parseDateKey(task.due);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() + cfg.dayStartHour * 3600_000;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, cfg.dayStartHour).getTime();
 }
 
 /**
@@ -80,11 +162,11 @@ export function windowOf(task: Task, now: number, cfg: TimeCfg): { start: number
   }
   const by = byTimeOf(task);
   const day = logicalDate(now, cfg);
-  const midnight = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
   if (by !== null) {
-    // "every day by 10:00": the window is the logical day up to that time (it may already be over)
-    const start = midnight + cfg.dayStartHour * 3600_000;
-    const end = midnight + by + (by < cfg.dayStartHour * 3600_000 ? DAY : 0);
+    // "every day by 10:00": the window is the logical day up to that time (it may already be over); by the
+    // clock on the wall, also on the days summer time starts or ends
+    const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), cfg.dayStartHour).getTime();
+    const end = new Date(day.getFullYear(), day.getMonth(), day.getDate() + (by < cfg.dayStartHour * 3600_000 ? 1 : 0), 0, 0, 0, by).getTime();
     // the player asked for more time today
     const ext = task.extendFor;
     if (ext && ext.key === periodKey(task.repeat, now, cfg) && ext.until > end) return { start, end: ext.until };
@@ -96,7 +178,7 @@ export function windowOf(task: Task, now: number, cfg: TimeCfg): { start: number
 /** The end of the logical day `now` is in. */
 export function dayEnd(now: number, cfg: TimeCfg): number {
   const d = logicalDate(now, cfg);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() + cfg.dayStartHour * 3600_000;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, cfg.dayStartHour).getTime();
 }
 
 /** A time limit the player set on purpose (not just the end of a repeating quest's day or week). */
@@ -108,7 +190,6 @@ export function hasLimit(task: Task, cfg: TimeCfg): boolean {
 function periodWindow(task: Task, now: number, cfg: TimeCfg): { start: number; end: number } | null {
   const r = task.repeat;
   const d = logicalDate(now, cfg);
-  const shift = cfg.dayStartHour * 3600_000;
   let first: Date;
   let next: Date;
   switch (r.kind) {
@@ -138,7 +219,9 @@ function periodWindow(task: Task, now: number, cfg: TimeCfg): { start: number; e
     default:
       return null;
   }
-  return { start: first.getTime() + shift, end: next.getTime() + shift };
+  // at the day start by the clock on the wall (a day is not always 24 hours)
+  const at = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate(), cfg.dayStartHour).getTime();
+  return { start: at(first), end: at(next) };
 }
 
 /** How much of the window is left, 0..1 (for the bar), or null. */
@@ -162,42 +245,52 @@ export function leftLabel(task: Task, now: number, cfg: TimeCfg): string | null 
 }
 
 /**
- * A repeating quest with stakes whose last window ended without it being done, and which hasn't been
- * counted yet: that window's period key and end, or null. One-off quests are asked about (see askDue).
+ * The repeating quest's time window that ended most recently: a moment inside it, its period key and its
+ * end. For a "done by" quest that is today's (once its time has come) or yesterday's; otherwise the period
+ * before the current one. Null for one-off quests.
  */
-export function missedAt(task: Task, now: number, cfg: TimeCfg): { key: string; end: number } | null {
-  if (task.deleted || task.repeat.kind === 'none' || !stakesOf(task)) return null;
-  const from = task.createdAt;
-  // without stakes of its own, a period that began before the default came in doesn't count
-  const tooEarly = (at: number) => !stakesAt(task, at, cfg);
-  // windows up to the last counted one are settled (older saves only remember its key)
-  const counted = (key: string, end: number) => (task.missedEnd !== undefined ? end <= task.missedEnd : task.missedFor === key);
-  const by = byTimeOf(task);
-  if (by !== null) {
+export function lastWindow(task: Task, now: number, cfg: TimeCfg): { at: number; key: string; end: number } | null {
+  if (task.repeat.kind === 'none') return null;
+  if (byTimeOf(task) !== null) {
     const today = windowOf(task, now, cfg)!;
-    let at: number; // a moment inside the window that most recently ended
-    let end: number;
-    if (now >= today.end) {
-      at = now;
-      end = today.end;
-    } else {
-      // today's window is still open, so yesterday's was the last (more time only ever applies to today)
-      at = now - DAY;
-      end = windowOf({ ...task, extendFor: null }, now, cfg)!.end - DAY;
-    }
-    const key = periodKey(task.repeat, at, cfg);
-    if (from >= end || tooEarly(at) || counted(key, end)) return null;
-    const doneInTime = task.doneFor === key && (task.doneAt ?? 0) <= end;
-    return doneInTime || !activeOn(task, at, cfg) ? null : { key, end };
+    if (now >= today.end) return { at: now, key: periodKey(task.repeat, now, cfg), end: today.end };
+    // today's window is still open, so yesterday's was the last (with the more time asked for then, if any)
+    const at = today.start - 1;
+    return { at, key: periodKey(task.repeat, at, cfg), end: windowOf(task, at, cfg)!.end };
   }
   const w = periodWindow(task, now, cfg);
   if (!w) return null;
   const at = w.start - 1; // the previous period
-  const key = periodKey(task.repeat, at, cfg);
-  if (from >= w.start || tooEarly(at) || counted(key, w.start) || task.doneFor === key) return null;
-  // a weekly quest done last week has doneFor = last week's key until it is done again; the check above
-  // covers it. Days a 'some days' quest is off are not misses.
-  return activeOn(task, at, cfg) ? { key, end: w.start } : null;
+  return { at, key: periodKey(task.repeat, at, cfg), end: w.start };
+}
+
+/**
+ * The repeating quest's window that ended undone and has not been counted yet: its period key and end, or
+ * null. One-off quests are asked about (see askDue).
+ */
+export function missedAt(task: Task, now: number, cfg: TimeCfg): { key: string; end: number } | null {
+  if (task.deleted || task.repeat.kind === 'none' || !stakesOf(task)) return null;
+  const w = lastWindow(task, now, cfg);
+  if (!w) return null;
+  const { at, key, end } = w;
+  // a quest counts from when it was made; without stakes of its own, only from periods begun after the
+  // default came in
+  if (task.createdAt >= end || !stakesAt(task, at, cfg)) return null;
+  // windows up to the last counted one are settled (older saves only remember its key)
+  // (the same period counted under an end worked out another way, e.g. before windows went by the wall clock;
+  // not the more time asked for it)
+  if (task.missedEnd !== undefined ? end <= task.missedEnd || (task.missedFor === key && task.extendFor?.until !== end) : task.missedFor === key) return null;
+  // done in that period, even if done again since (doneFor then holds the newer one); a "done by" quest
+  // only counts when done in time. Taken back (a negative time) is not done.
+  const logged = task.doneLog?.[key];
+  const timed = byTimeOf(task) !== null;
+  if (logged !== undefined && logged > 0 && (!timed || logged <= end)) return null;
+  if (task.doneFor === key && (logged === undefined || logged > 0 || (task.doneAt ?? 0) > -logged) && (!timed || (task.doneAt ?? 0) <= end)) return null;
+  // saves from before doneLog kept only the latest completion: one made after this window may have replaced
+  // a completion in it, so there is no telling, and nobody is charged for it
+  if (task.doneLog === undefined && task.doneFor && task.doneFor !== key && (task.doneAt ?? 0) > end) return null;
+  // days a "some days" quest is off are not misses
+  return activeOn(task, at, cfg) ? { key, end } : null;
 }
 
 /** The period key of missedAt, or null. */

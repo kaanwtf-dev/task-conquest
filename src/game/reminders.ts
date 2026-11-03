@@ -18,10 +18,10 @@ export function reminderTimes(task: Pick<Task, 'remindAt'>): number[] {
 /** The reminder moments of the logical day `at` falls in (a time before the day start belongs to its end). */
 export function remindersOn(task: Pick<Task, 'remindAt'>, at: number, cfg: TimeCfg): number[] {
   const d = logicalDate(at, cfg);
-  const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const start = cfg.dayStartHour * 3600_000;
+  // by the clock on the wall, also on the days summer time starts or ends
   return reminderTimes(task)
-    .map((ms) => midnight + ms + (ms < start ? DAY : 0))
+    .map((ms) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + (ms < start ? 1 : 0), 0, 0, 0, ms).getTime())
     .sort((a, b) => a - b);
 }
 

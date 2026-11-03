@@ -149,6 +149,26 @@ describe('missed quests on two devices', () => {
     expect(P.gold()).toBeGreaterThanOrEqual(g0); // all of it back (plus the quest's own reward)
   });
 
+  it('done on one device, done again the next day on another that had not heard of it: neither day is charged', async () => {
+    M.sleep();
+    at(22, 21);
+    P.st().toggleTask(id); // the 22nd, on the phone
+    await P.sync();
+    at(23, 9);
+    M.st().toggleTask(id); // the 23rd, on the Mac, from its old copy (it never saw the 22nd)
+    await M.sync();
+    await P.sync();
+    await M.sync();
+    for (const d of [P, M]) {
+      d.st().checkDeadlines();
+      expect(Object.keys(d.st().tasks[id].doneLog ?? {})).toEqual(expect.arrayContaining(['2026-10-22', '2026-10-23']));
+    }
+    await P.sync();
+    await M.sync();
+    expect(P.st().hero!.penalties ?? {}).toEqual({});
+    expect(M.st().hero!.penalties ?? {}).toEqual({});
+  });
+
   it('a stale copy plans the same notifications once it has synced: none for a quest done elsewhere', async () => {
     M.sleep();
     at(22, 21);

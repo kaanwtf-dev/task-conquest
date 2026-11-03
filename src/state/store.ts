@@ -6,13 +6,14 @@ import type {
 import type { TimeCfg } from '../core/time';
 import type { Appearance } from '../pixel/sprites/hero';
 import type { ThemeId } from '../pixel/themes';
-import { dateKey, isActiveToday, isDone, parseDateKey, periodKey, streak, todayKey } from '../core/time';
+import { dateKey, doneIn, isActiveToday, isDone, parseDateKey, periodKey, streak, todayKey } from '../core/time';
 import { baseXp, heroGold, heroLevel, sum } from '../game/progression';
 import { guessAisle } from '../pixel/keywords';
 import { guessDifficulty } from '../game/difficulty';
 import { pickSynced, sanitizeSynced, touchesSynced } from './syncedSettings';
-import { AUTO_MISS_MS, answerCost, deadlineIsMine, deadlineOf, missPenalty, missedAt, refundFor, stakesOf, type MissAnswer } from '../game/deadlines';
+import { AUTO_MISS_MS, answerCost, deadlineIsMine, deadlineOf, keepCompletion, lastWindow, loggedDone, loggedUndone, missPenalty, missedAt, refundFor, stakesOf, trimLog, windowOf, type MissAnswer } from '../game/deadlines';
 import { hashStr } from '../core/rng';
+import { canon } from '../sync/merge';
 import { itemDisplayName, sellPrice, starterItems, upgradeCost } from '../game/loot';
 import { makeBuff, potionName, potionStackId } from '../game/potions';
 import { applyBuffs, computeStats } from '../game/stats';
@@ -70,12 +71,46 @@ export const LIST_TYPE_INFO: Record<ListType, { label: string; repeat: Repeat; h
 /**
  * When a task's period definition changes (its repeat, or the day/week start settings), carry its
  * completion into the new period instead of silently reopening it — reopening would let a task pay
- * out again (and would make honest users redo work).
+ * out again (and would make honest users redo work). The period that just ended is settled as it stands:
+ * judged by the new rules, a period done under the old ones could look missed.
  */
 export function remapPeriod(task: Task, oldRepeat: Repeat, oldCfg: TimeCfg, newRepeat: Repeat, newCfg: TimeCfg, now: number): Partial<Task> {
   const oldPk = periodKey(oldRepeat, now, oldCfg);
   const newPk = periodKey(newRepeat, now, newCfg);
   const patch: Partial<Task> = {};
+  const last = lastWindow({ ...task, repeat: newRepeat }, now, newCfg);
+  if (last && last.end <= now && last.end > (task.missedEnd ?? -Infinity)) {
+    patch.missedEnd = last.end;
+    patch.missedFor = last.key;
+  }
+  if (canon(oldRepeat) !== canon(newRepeat)) {
+    // new periods: the old ones mean nothing any more (an "every 3 days" key is another stretch of days than
+    // an "every 2 days" one, and would be taken for it). The period it is in now is done when this period
+    // was, or when a tick falls in it (done on Friday, weekly from Sunday on).
+    const logged = task.doneLog?.[oldPk];
+    let at: number | null = doneIn(task, oldPk) ? (logged !== undefined && logged > 0 ? logged : (task.doneAt ?? now)) : null;
+    const w = at === null && newRepeat.kind !== 'none' ? windowOf({ ...task, repeat: newRepeat, extendFor: null }, now, newCfg) : null;
+    if (w) {
+      const ticks = Object.values(task.doneLog ?? {}).filter((v) => v > 0);
+      if (task.doneFor && task.doneFor !== 'once' && typeof task.doneAt === 'number' && doneIn(task, task.doneFor)) ticks.push(task.doneAt);
+      const inside = ticks.filter((v) => v >= w.start && v <= now);
+      if (inside.length) at = Math.max(...inside);
+    }
+    if (task.doneLog !== undefined || at !== null) patch.doneLog = at !== null ? { [newPk]: at } : {};
+    const doneFor = at !== null ? newPk : null;
+    if ((task.doneFor ?? null) !== doneFor) patch.doneFor = doneFor;
+    // its reward goes with it (no second one for the same work); an older period's would block a later one
+    if (task.rewardedFor && !task.rewardedFor.startsWith('s')) {
+      const paid = at !== null || task.rewardedFor === oldPk ? newPk : null;
+      if (paid !== task.rewardedFor) patch.rewardedFor = paid;
+    }
+    return patch;
+  }
+  // the same schedule under another day or week start
+  if (oldPk !== newPk && task.doneLog?.[oldPk] !== undefined) {
+    const { [oldPk]: v, ...rest } = task.doneLog;
+    patch.doneLog = trimLog({ ...rest, [newPk]: v });
+  }
   if (oldPk === newPk) return patch;
   if (task.doneFor === oldPk) patch.doneFor = newPk;
   if (task.rewardedFor === oldPk) patch.rewardedFor = newPk;
@@ -382,7 +417,7 @@ export const useStore = create<State>()(
           const cur = get().tasks[id];
           if (!cur) return;
           let full = patch;
-          if (patch.repeat && JSON.stringify(patch.repeat) !== JSON.stringify(cur.repeat) && !('doneFor' in patch)) {
+          if (patch.repeat && canon(patch.repeat) !== canon(cur.repeat) && !('doneFor' in patch)) {
             const cfg = get().settings;
             full = { ...remapPeriod(cur, cur.repeat, cfg, patch.repeat, cfg, now()), ...patch };
           }
@@ -438,15 +473,18 @@ export const useStore = create<State>()(
           const t = now();
           const pk = periodKey(task.repeat, t, cfg);
           if (isDone(task, t, cfg)) {
-            s.updateTask(id, { doneFor: null });
+            // taken back: this period is not done after all
+            s.updateTask(id, { doneFor: null, ...(task.repeat.kind !== 'none' ? { doneLog: loggedUndone(task, pk, t) } : {}) });
             return;
           }
           const list = s.lists[task.listId];
+          // remember this period as done, and the one this tick replaces in doneFor (the miss check reads both)
+          const log = task.repeat.kind !== 'none' && list?.type !== 'supply' ? { doneLog: loggedDone(task, pk, t) } : {};
           // re-checking within the same period never pays out twice (no farming by toggling);
           // supply items can be bought again any time but pay out at most once per logical day
           const rewardKey = list?.type === 'supply' ? `s${todayKey(t, cfg)}` : pk;
           const alreadyRewarded = task.rewardedFor === rewardKey;
-          s.updateTask(id, { doneFor: pk, rewardedFor: rewardKey, doneAt: t, timesDone: task.timesDone + 1, doneBy: hero.name, ...(task.misses ? { misses: 0 } : {}),
+          s.updateTask(id, { doneFor: pk, ...log, rewardedFor: rewardKey, doneAt: t, timesDone: task.timesDone + 1, doneBy: hero.name, ...(task.misses ? { misses: 0 } : {}),
             ...(task.deadline && !task.deadlineOutcome ? { deadlineOutcome: t <= task.deadline ? 'done' as const : undefined } : {}) });
           if (alreadyRewarded || !list) return;
 
@@ -494,7 +532,7 @@ export const useStore = create<State>()(
             }
             // ticked for the very period it was charged for (here or on another device): the gold comes back
             const done0 = get().tasks[task.id];
-            if (done0.pendingMiss?.paid !== undefined && done0.doneFor === done0.pendingMiss.key) get().resolveMiss(task.id, 'done', { auto: true });
+            if (done0.pendingMiss?.paid !== undefined && doneIn(done0, done0.pendingMiss.key)) get().resolveMiss(task.id, 'done', { auto: true });
             const cur = get().tasks[task.id];
             const m = missedAt(cur, at, s.settings);
             if (!m) continue;
@@ -534,6 +572,10 @@ export const useStore = create<State>()(
           const once = task.repeat.kind === 'none';
           // answered already (on this device, or another one that synced first)
           if (once ? !!task.deadlineOutcome && answer !== 'done' : !task.pendingMiss) return 0;
+          // "I did it": done in that period (in time, for a "done by" quest); not logged once the schedule
+          // changed since (its key would stand for another period)
+          const didIt = (p: { key: string; end: number }) =>
+            periodKey(task.repeat, p.end - 1, s.settings) === p.key ? { doneLog: trimLog({ ...task.doneLog, [p.key]: p.end - 1 }) } : {};
           // the hero already took the hit for this one: an answer can only give gold back
           const refund = refundFor(task, answer);
           if (refund !== null) {
@@ -543,6 +585,7 @@ export const useStore = create<State>()(
             s.updateTask(id, {
               pendingMiss: null,
               askedAt: ms,
+              ...(answer === 'done' ? didIt(p) : {}),
               ...(keep ? {} : { misses: answer === 'done' ? 0 : (p.prevMisses ?? 0), missTotal: total }),
               ...(typeof answer === 'object' ? { extendFor: { key: p.key, until: ms + Math.max(60_000, answer.more) } } : {}),
             });
@@ -573,7 +616,12 @@ export const useStore = create<State>()(
             if (once) {
               s.updateTask(id, { deadlineOutcome: 'done', askedAt: ms });
               if (!task.doneFor) s.toggleTask(id);
-            } else s.updateTask(id, { ...settled, misses: 0 }); // done in time, just not ticked
+            } else
+              s.updateTask(id, {
+                ...settled,
+                misses: 0, // done in time, just not ticked
+                ...(task.pendingMiss ? didIt(task.pendingMiss) : {}),
+              });
             return 0;
           }
           if (answer === 'missed') {
@@ -692,9 +740,13 @@ export const useStore = create<State>()(
           }
           if (next.dayStartHour !== prev.dayStartHour || next.weekStart !== prev.weekStart) {
             const t = now();
+            const { lists, accountId } = get();
             const tasks = { ...get().tasks };
             for (const tk of Object.values(tasks)) {
               if (tk.deleted) continue;
+              // another player's quest on a party list runs on their day, not ours: left as it is
+              const list = lists[tk.listId];
+              if (list && !deadlineIsMine(tk, list, get().hero?.name, accountId)) continue;
               const p = remapPeriod(tk, tk.repeat, prev, tk.repeat, next, t);
               if (Object.keys(p).length) tasks[tk.id] = { ...tk, ...p, updatedAt: t };
             }
@@ -952,7 +1004,13 @@ export const useStore = create<State>()(
               accountId: acct,
               hero,
               lists,
-              tasks: restore(cur.tasks, d.tasks, (tk) => tk.listId),
+              tasks: Object.fromEntries(
+                Object.entries(restore(cur.tasks, d.tasks, (tk) => tk.listId)).map(([k, v]) => {
+                  // done since the backup was made: still done (the backup can't know, and would look missed)
+                  const live = cur.tasks[k];
+                  return [k, live && !live.deleted && !v.deleted ? (keepCompletion(v, live) ?? v) : v];
+                }),
+              ),
               items: restore(cur.items, d.items),
               potions: restore(cur.potions, d.potions),
               // reminders belong to this device and its account, not to the save being restored

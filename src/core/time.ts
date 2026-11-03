@@ -66,6 +66,14 @@ export function isDone(task: Task, now: number, cfg: TimeCfg): boolean {
   return !!task.doneFor && task.doneFor === periodKey(task.repeat, now, cfg);
 }
 
+/** Was the task done for this period: its latest completion, or one recorded before it (doneLog)? */
+export function doneIn(task: Pick<Task, 'doneFor' | 'doneLog' | 'doneAt'>, key: string): boolean {
+  const v = task.doneLog?.[key];
+  // the latest completion counts unless taken back after it (what keepCompletion keeps, too)
+  if (task.doneFor === key && (v === undefined || v > 0 || (task.doneAt ?? 0) > -v)) return true;
+  return v !== undefined && v > 0;
+}
+
 /** Is a repeating task scheduled for the current logical day? */
 export function isActiveToday(task: Task, now: number, cfg: TimeCfg): boolean {
   const r = task.repeat;
