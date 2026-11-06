@@ -757,6 +757,27 @@ canvas.px {
 .hero-bar canvas {
   display: block;
 }
+/* the stage and its active potions */
+.stage-box {
+  position: relative;
+  line-height: 0;
+}
+.stage-box canvas {
+  display: block;
+}
+.stage-buffs {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  gap: 2px;
+  pointer-events: none;
+}
+.stage-buffs img {
+  padding: 1px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.35);
+}
 /* landscape phones have little height to spare: the corner hero shrinks instead of covering the list */
 @media (max-height: 500px) and (max-width: 899px) {
   /* scaled about the corner it is docked to, so it stays against its edge */

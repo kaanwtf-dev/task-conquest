@@ -383,4 +383,7 @@ export const TR_COMPONENTS: Record<string, string> = {
   "Got a “What happened?” for something you did? Tap “I did it” and all the gold comes back.": "Yaptığın bir şey için “Ne oldu?” mu geldi? “Yaptım”a dokun, altının tamamı geri gelsin.",
   "Each quest now remembers the recent days it was done, and taken back, on all your devices, so doing it again never makes an earlier day look missed.": "Her görev artık yapıldığı (ve geri alındığı) son günleri tüm cihazlarında hatırlıyor; tekrar yapmak önceki bir günü asla kaçırılmış göstermez.",
   "Changing how often a quest repeats, or when your day or week starts, no longer charges the period that just ended, and what you already did in the new period still counts.": "Bir görevin tekrar sıklığını ya da günün veya haftanın başlangıcını değiştirmek artık az önce biten dönem için kesinti yapmaz; yeni dönemde zaten yaptıkların da sayılır.",
+  "Active potions, at a glance": "Aktif iksirler, bir bakışta",
+  "The potions working for you now show as tiny icons in the corner of your hero's scene.": "Şu an etkisi süren iksirler, kahramanının sahnesinin köşesinde minik simgeler olarak görünüyor.",
+  "Each one goes away when its potion runs out. The Hero tab still has how many quests each has left.": "İksirin etkisi bitince simgesi de kaybolur. Her birinin kaç görev daha süreceği hâlâ Kahraman sekmesinde.",
 };

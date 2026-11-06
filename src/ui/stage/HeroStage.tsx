@@ -4,7 +4,8 @@ import { useStore } from '../../state/store';
 import { fx } from '../../state/fx';
 import { useHeroLook } from '../../game/look';
 import type { ThemeId } from '../../pixel/themes';
-import { chestPix, itemIconPix, potionIconPix } from '../../pixel/sprites/items';
+import { chestPix, itemIconPix, potionIconPix, potionIconUrl } from '../../pixel/sprites/items';
+import { potionName } from '../../game/potions';
 import { materialOf } from '../../game/loot';
 import { sfx } from '../../audio/sfx';
 import { haptic } from '../components/Effects';
@@ -88,7 +89,26 @@ export default function HeroStage({ w, h, scale, heroX, monsterX, theme, classNa
     stage.current.sound = sfxVol > 0 && anim !== 'off';
   }, [anim, sfxVol]);
 
+  const buffs = hero?.buffs ?? [];
+  // active potions: tiny icons in the scene's top-right corner (taps go through to the hero)
+  const icon = Math.max(8, 8 * Math.min(scale, 2));
   return (
+    <div className="stage-box" style={{ width: w * scale, height: h * scale }}>
+      {buffs.length > 0 && (
+        <div className="stage-buffs" aria-label={t('Active potions')}>
+          {buffs.map((b) => (
+            <img
+              key={b.id}
+              className="px"
+              src={potionIconUrl(b.potion, b.tier)}
+              width={icon}
+              height={icon}
+              draggable={false}
+              alt={`${t(potionName(b.potion, b.tier))}: ${t('{n} quests left', { n: b.remaining })}`}
+            />
+          ))}
+        </div>
+      )}
     <canvas
       ref={ref}
       className={`px ${className ?? ''}`}
@@ -102,5 +122,6 @@ export default function HeroStage({ w, h, scale, heroX, monsterX, theme, classNa
         onTap?.();
       }}
     />
+    </div>
   );
 }

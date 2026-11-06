@@ -15,6 +15,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.4',
+    date: '2026-11-06',
+    title: tk('Active potions, at a glance'),
+    items: [
+      tk('The potions working for you now show as tiny icons in the corner of your hero\'s scene.'),
+      tk('Each one goes away when its potion runs out. The Hero tab still has how many quests each has left.'),
+    ],
+  },
+  {
     version: '2.3',
     date: '2026-11-03',
     title: tk('Fixed: “missed” for quests you did'),
