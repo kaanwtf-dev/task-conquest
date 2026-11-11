@@ -76,4 +76,4 @@ All art and sound is generated in code (`src/pixel`, `src/audio`). The project h
 
 ## License
 
-MIT © 2026 Kaan Sesen. See [LICENSE](LICENSE).
+© 2026 Kaan Sesen. All rights reserved. The code is public for viewing only; see [LICENSE](LICENSE).
