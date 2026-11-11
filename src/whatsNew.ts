@@ -15,6 +15,12 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.5',
+    date: '2026-11-11',
+    title: tk('Made by Kaan'),
+    items: [tk('Task Conquest now says who makes it: Kaan, one person. © 2026 Kaan Sesen, at the bottom of Options.')],
+  },
+  {
     version: '2.4',
     date: '2026-11-06',
     title: tk('Active potions, at a glance'),

@@ -22,7 +22,7 @@ export function SupportBox() {
       <div className="section-label">{t('Support & feedback')}</div>
       <div className="win support">
         <p>
-          {rich(t('Task Conquest is made by one person and is {free}. Found a bug or got an idea? Tell me! Tips pay for the servers and keep new bosses, gear and features coming. ⚔️💛'), {
+          {rich(t('Task Conquest is made by one person, Kaan, and is {free}. Found a bug or got an idea? Tell me! Tips pay for the servers and keep new bosses, gear and features coming. ⚔️💛'), {
             free: <b>{t('free, with no ads and no subscriptions')}</b>,
           })}
         </p>
@@ -65,7 +65,7 @@ export function TipNudge() {
       </div>
       <div className="push-invite-text">
         <b>{t('Enjoying Task Conquest?')}</b>
-        <span>{t("{n} quests slain! It's free and ad-free, made by one dev. A small tip keeps it that way.", { n: done })}</span>
+        <span>{t("{n} quests slain! It's free and ad-free, made by one dev, Kaan. A small tip keeps it that way.", { n: done })}</span>
       </div>
       <div className="push-invite-actions">
         <button

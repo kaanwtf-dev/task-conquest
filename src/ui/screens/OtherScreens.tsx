@@ -180,6 +180,7 @@ export function SettingsScreen() {
           {t('Start over')}
         </button>
       </div>
+      <p className="hint" style={{ textAlign: 'center', opacity: 0.7, margin: '14px 0 4px' }}>© 2026 Kaan Sesen</p>
     </div>
   );
 }

@@ -73,3 +73,7 @@ node scripts/flow.mjs http://localhost:5173/ shots   # screenshot walkthrough
 ```
 
 All art and sound is generated in code (`src/pixel`, `src/audio`). The project has no image or audio assets apart from the generated app icons.
+
+## License
+
+MIT © 2026 Kaan Sesen. See [LICENSE](LICENSE).

@@ -159,15 +159,15 @@ export const TR_COMPONENTS: Record<string, string> = {
 
   // --- support, backup, deadlines, updates ---
   'Support & feedback': 'Destek ve geri bildirim',
-  'Task Conquest is made by one person and is {free}. Found a bug or got an idea? Tell me! Tips pay for the servers and keep new bosses, gear and features coming. ⚔️💛':
-    "Task Conquest'i tek bir kişi yapıyor ve oyun {free}. Bir hata mı buldun, aklına bir fikir mi geldi? Bana yaz! Bahşişler sunucuları ödüyor; yeni boss'lar, teçhizat ve özellikler de böyle gelmeye devam ediyor. ⚔️💛",
+  'Task Conquest is made by one person, Kaan, and is {free}. Found a bug or got an idea? Tell me! Tips pay for the servers and keep new bosses, gear and features coming. ⚔️💛':
+    "Task Conquest'i tek bir kişi, Kaan, yapıyor ve oyun {free}. Bir hata mı buldun, aklına bir fikir mi geldi? Bana yaz! Bahşişler sunucuları ödüyor; yeni boss'lar, teçhizat ve özellikler de böyle gelmeye devam ediyor. ⚔️💛",
   'free, with no ads and no subscriptions': 'ücretsiz, reklamsız ve aboneliksiz',
   'Tip the developer': 'Geliştiriciye bahşiş ver',
   'Send feedback': 'Geri bildirim gönder',
   'Support the developer': 'Geliştiriciyi destekle',
   'Enjoying Task Conquest?': 'Task Conquest hoşuna gidiyor mu?',
-  "{n} quests slain! It's free and ad-free, made by one dev. A small tip keeps it that way.":
-    '{n} görev devirdin! Oyun ücretsiz ve reklamsız, tek bir geliştirici yapıyor. Küçük bir bahşiş böyle kalmasını sağlar.',
+  "{n} quests slain! It's free and ad-free, made by one dev, Kaan. A small tip keeps it that way.":
+    '{n} görev devirdin! Oyun ücretsiz ve reklamsız, tek bir geliştirici, Kaan, yapıyor. Küçük bir bahşiş böyle kalmasını sağlar.',
   Tip: 'Bahşiş',
   Later: 'Sonra',
   'No thanks': 'Hayır, sağ ol',
@@ -386,4 +386,6 @@ export const TR_COMPONENTS: Record<string, string> = {
   "Active potions, at a glance": "Aktif iksirler, bir bakışta",
   "The potions working for you now show as tiny icons in the corner of your hero's scene.": "Şu an etkisi süren iksirler, kahramanının sahnesinin köşesinde minik simgeler olarak görünüyor.",
   "Each one goes away when its potion runs out. The Hero tab still has how many quests each has left.": "İksirin etkisi bitince simgesi de kaybolur. Her birinin kaç görev daha süreceği hâlâ Kahraman sekmesinde.",
+  "Made by Kaan": "Kaan'ın eseri",
+  "Task Conquest now says who makes it: Kaan, one person. © 2026 Kaan Sesen, at the bottom of Options.": "Task Conquest artık kimin yaptığını söylüyor: tek bir kişi, Kaan. © 2026 Kaan Sesen, Seçenekler'in en altında.",
 };
