@@ -757,6 +757,19 @@ canvas.px {
 .hero-bar canvas {
   display: block;
 }
+/* a potion that is working right now, in the Hero tab's list */
+.potion-active {
+  display: inline-block;
+  margin: 2px 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #2f9e44;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
 /* the stage and its active potions */
 .stage-box {
   position: relative;

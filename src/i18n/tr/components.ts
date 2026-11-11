@@ -388,4 +388,7 @@ export const TR_COMPONENTS: Record<string, string> = {
   "Each one goes away when its potion runs out. The Hero tab still has how many quests each has left.": "İksirin etkisi bitince simgesi de kaybolur. Her birinin kaç görev daha süreceği hâlâ Kahraman sekmesinde.",
   "Made by Kaan": "Kaan'ın eseri",
   "Task Conquest now says who makes it: Kaan, one person. © 2026 Kaan Sesen, at the bottom of Options.": "Task Conquest artık kimin yaptığını söylüyor: tek bir kişi, Kaan. © 2026 Kaan Sesen, Seçenekler'in en altında.",
+  "ACTIVE · {n} quests left": "AKTİF · {n} görev kaldı",
+  "See which potions are working": "Hangi iksirlerin etkide olduğunu gör",
+  "In the Hero tab's potion list, a potion that is working right now has a green ACTIVE tag with how many quests it has left.": "Kahraman sekmesindeki iksir listesinde, şu an etkide olan iksirin yanında kaç görev kaldığını gösteren yeşil bir AKTİF etiketi var.",
 };

@@ -15,6 +15,12 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.6',
+    date: '2026-11-11',
+    title: tk('See which potions are working'),
+    items: [tk('In the Hero tab\'s potion list, a potion that is working right now has a green ACTIVE tag with how many quests it has left.')],
+  },
+  {
     version: '2.5',
     date: '2026-11-11',
     title: tk('Made by Kaan'),

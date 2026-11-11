@@ -210,6 +210,13 @@ function BagTab() {
               <div>
                 {t(potionName(p.potion, p.tier))} <span className="muted">×{p.count}</span>
               </div>
+              {(() => {
+                // already working: drinking another adds to it, so say so right here
+                const on = (hero.buffs ?? []).filter((b) => b.potion === p.potion);
+                if (!on.length) return null;
+                const left = Math.max(...on.map((b) => b.remaining));
+                return <div className="potion-active">{t('ACTIVE · {n} quests left', { n: left })}</div>;
+              })()}
               <div className="muted small">{t(describePotion(p.potion, p.tier, computeStats(hero, s.items).potion))}</div>
             </div>
             <button
