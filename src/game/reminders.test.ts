@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Task, TaskList } from '../core/types';
 import { dateKey } from '../core/time';
-import { reminderState, reminderTimes, remindersOn, upcomingReminders } from './reminders';
+import { datedReminders, reminderState, reminderTimes, remindersOn, upcomingReminders } from './reminders';
 import { todaySections } from '../state/today';
 import { alarmsFor } from '../push/alarms';
 import { DEFAULT_PUSH_PREFS } from '../push/nudges';
@@ -55,5 +55,37 @@ describe('remind me at', () => {
     const alarms = alarmsFor({ hero, lists: { D: list }, tasks: { mag: task() } }, at(27, 12), cfg, DEFAULT_PUSH_PREFS);
     expect(alarms.map((a) => a.key.split('@')[0])).toEqual(['remind:mag', 'remind:mag', 'remind:mag']);
     expect(alarms[0]).toMatchObject({ at: at(27, 21, 30), title: '🔔 Time for: Take magnesium', tag: 'remind-mag' });
+  });
+});
+
+describe('reminders before a deadline', () => {
+  // a one-off due Friday Nov 20 at 17:00
+  const fri = new Date(2026, 10, 20, 17).getTime();
+  const quest = (extra: Partial<Task> = {}) =>
+    task({ repeat: { kind: 'none' }, deadline: fri, remindAt: ['2026-11-19T20:00'], ...extra });
+  const when = (d: number, h: number, m = 0) => new Date(2026, 10, d, h, m).getTime();
+
+  it('waits until the date and time, then flashes on top until done', () => {
+    expect(reminderState(quest(), when(18, 12), cfg)).toBe('later');
+    expect(reminderState(quest(), when(19, 20), cfg)).toBe('due');
+    expect(reminderState(quest(), when(20, 9), cfg)).toBe('due');
+    expect(reminderState(quest({ doneFor: 'once' }), when(19, 21), cfg)).toBe('none');
+  });
+
+  it('gets a notification at that moment', () => {
+    expect(upcomingReminders(quest(), when(18, 12), when(21, 0), cfg)).toEqual([when(19, 20)]);
+  });
+
+  it('ignores a reminder at or after the deadline', () => {
+    expect(datedReminders(quest({ remindAt: ['2026-11-20T17:00', '2026-11-21T09:00'] }), cfg)).toEqual([]);
+  });
+
+  it('a missed deadline stays on top, flashing, until ticked', () => {
+    const plain = quest({ remindAt: undefined });
+    expect(reminderState(plain, when(20, 16), cfg)).toBe('none');
+    expect(reminderState(plain, when(20, 17), cfg)).toBe('due');
+    expect(reminderState(plain, when(22, 9), cfg)).toBe('due');
+    expect(reminderState({ ...plain, deadlineOutcome: 'missed' }, when(22, 9), cfg)).toBe('due');
+    expect(reminderState({ ...plain, doneFor: 'once' }, when(22, 9), cfg)).toBe('none');
   });
 });

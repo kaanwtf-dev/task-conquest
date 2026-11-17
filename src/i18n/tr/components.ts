@@ -391,4 +391,11 @@ export const TR_COMPONENTS: Record<string, string> = {
   "ACTIVE · {n} quests left": "AKTİF · {n} görev kaldı",
   "See which potions are working": "Hangi iksirlerin etkide olduğunu gör",
   "In the Hero tab's potion list, a potion that is working right now has a green ACTIVE tag with how many quests it has left.": "Kahraman sekmesindeki iksir listesinde, şu an etkide olan iksirin yanında kaç görev kaldığını gösteren yeşil bir AKTİF etiketi var.",
+  "Remind me before the deadline (a notification)": "Son tarihten önce hatırlat (bildirim)",
+  "Must be before the deadline": "Son tarihten önce olmalı",
+  "Needs a deadline": "Bir son tarih gerekiyor",
+  "Reminders before a deadline": "Son tarihten önce hatırlatıcılar",
+  "A quest with a deadline can remind you on any date and time before it, not just on the day it is due. Up to three reminders, each with a notification.": "Son tarihi olan bir görev, yalnızca o gün değil, ondan önceki herhangi bir gün ve saatte sana hatırlatabilir. En fazla üç hatırlatıcı, her biri bildirimle.",
+  "A reminder after the deadline is not allowed: the editor says so.": "Son tarihten sonraya hatırlatıcı kurulamaz; düzenleyici bunu söyler.",
+  "Missed a deadline? The quest stays on top, flashing, until you tick it off.": "Bir son tarihi mi kaçırdın? Görev, sen işaretleyene kadar en üstte yanıp sönerek kalır.",
 };

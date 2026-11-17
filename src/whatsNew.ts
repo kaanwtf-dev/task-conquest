@@ -15,6 +15,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.7',
+    date: '2026-11-17',
+    title: tk('Reminders before a deadline'),
+    items: [
+      tk('A quest with a deadline can remind you on any date and time before it, not just on the day it is due. Up to three reminders, each with a notification.'),
+      tk('A reminder after the deadline is not allowed: the editor says so.'),
+      tk('Missed a deadline? The quest stays on top, flashing, until you tick it off.'),
+    ],
+  },
+  {
     version: '2.6',
     date: '2026-11-11',
     title: tk('See which potions are working'),

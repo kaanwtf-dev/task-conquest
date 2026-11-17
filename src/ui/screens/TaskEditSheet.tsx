@@ -4,8 +4,8 @@ import { DIFFICULTY, taskXp, heroLevel } from '../../game/progression';
 import { iconFor, firstEmoji } from '../../pixel/iconGen';
 import { AISLES } from '../../pixel/keywords';
 import { todayKey } from '../../core/time';
-import { stakesOf } from '../../game/deadlines';
-import { MAX_REMINDERS } from '../../game/reminders';
+import { deadlineOf, stakesOf } from '../../game/deadlines';
+import { MAX_REMINDERS, parseDated } from '../../game/reminders';
 import type { Difficulty, Repeat, Task } from '../../core/types';
 import { PxImg, Sheet, themeStyle } from '../components/common';
 import { sfx } from '../../audio/sfx';
@@ -310,29 +310,53 @@ function DueField({ draft, patch }: { draft: Task; patch: (p: Partial<Task>) => 
 }
 
 /** A daily "done by" time (daily quests), and what missing the due time costs. */
-/** "Remind me at": up to three times of day, a notification then and no deadline. */
+/** A local date and time as the value of a datetime-local input ("2026-11-20T20:00"). */
+const localStamp = (ms: number) => {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+/**
+ * "Remind me at": up to three reminders, a notification each and no deadline of their own. Times of day on
+ * repeating quests; a date and time, before the deadline, on a one-off quest with a deadline.
+ */
 function RemindAt({ draft, patch }: { draft: Task; patch: (p: Partial<Task>) => void }) {
+  const cfg = useStore((s) => s.settings);
   const times = draft.remindAt ?? [];
   const set = (next: string[]) => patch({ remindAt: next.length ? next : undefined });
+  const end = draft.repeat.kind === 'none' ? deadlineOf(draft, cfg) : null;
+  const dated = end !== null;
+  // a first reminder a day before the deadline (or in an hour, when that is sooner)
+  const suggest = () => {
+    const hour = Math.ceil((Date.now() + 3600_000) / 900_000) * 900_000;
+    return localStamp(Math.max(hour, Math.min(end! - 86_400_000, end! - 3600_000)));
+  };
   return (
-    <Field label={t('Remind me at (a notification, no deadline)')}>
-      {times.map((v, i) => (
-        <span key={i} className="remind-time">
-          <input
-            className="text-in"
-            type="time"
-            aria-label={t('Reminder {n}', { n: i + 1 })}
-            style={{ maxWidth: 140 }}
-            value={v}
-            onChange={(e) => set(times.map((x, j) => (j === i ? e.target.value : x)).filter(Boolean))}
-          />
-          <button type="button" className="pill" aria-label={t('Remove reminder')} onClick={() => set(times.filter((_, j) => j !== i))}>
-            ✕
-          </button>
-        </span>
-      ))}
-      {times.length < MAX_REMINDERS && (
-        <button type="button" className="pill" onClick={() => set([...times, times.length ? '21:30' : '09:00'])}>
+    <Field label={dated ? t('Remind me before the deadline (a notification)') : t('Remind me at (a notification, no deadline)')}>
+      {times.map((v, i) => {
+        const at = parseDated(v);
+        const bad = at !== null && (end === null || at >= end);
+        return (
+          <span key={i} className="remind-time">
+            <input
+              className="text-in"
+              type={at !== null || (dated && !v) ? 'datetime-local' : 'time'}
+              aria-label={t('Reminder {n}', { n: i + 1 })}
+              style={{ maxWidth: at !== null ? 220 : 140 }}
+              {...(at !== null && end !== null ? { max: localStamp(end - 60_000) } : {})}
+              value={v}
+              onChange={(e) => set(times.map((x, j) => (j === i ? e.target.value : x)).filter(Boolean))}
+            />
+            <button type="button" className="pill" aria-label={t('Remove reminder')} onClick={() => set(times.filter((_, j) => j !== i))}>
+              ✕
+            </button>
+            {bad && <span className="overdue small">{end === null ? t('Needs a deadline') : t('Must be before the deadline')}</span>}
+          </span>
+        );
+      })}
+      {times.length < MAX_REMINDERS && (dated ? end! > Date.now() : true) && (
+        <button type="button" className="pill" onClick={() => set([...times, dated ? suggest() : times.length ? '21:30' : '09:00'])}>
           {times.length ? t('+ another time') : t('🔔 Add a reminder')}
         </button>
       )}

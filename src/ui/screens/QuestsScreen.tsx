@@ -28,7 +28,7 @@ import { InstallCard } from '../components/InstallGuide';
 import { TipNudge } from '../components/Support';
 import { WARN_MS, deadlineIsMine, hasLimit, leftLabel, stakesOf, timeLeft, windowOf } from '../../game/deadlines';
 import { todaySections } from '../../state/today';
-import { SNOOZE_REMINDER_MS, reminderState, reminderTimes } from '../../game/reminders';
+import { SNOOZE_REMINDER_MS, datedReminders, hasReminders, pastDeadline, reminderState, reminderTimes } from '../../game/reminders';
 import BossBar from '../components/BossBar';
 import PartyStrip from '../components/PartyStrip';
 import { PushInvite } from '../components/Reminders';
@@ -307,7 +307,7 @@ interface RowProps {
 /** Where the quest's reminder stands (re-checked every minute): 'due' flashes at the top. */
 function useReminder(task: Task): 'none' | 'later' | 'due' {
   const cfg = useStore((s) => s.settings);
-  const now = useNow(reminderTimes(task).length ? 30_000 : 3_600_000);
+  const now = useNow(hasReminders(task, cfg) || (task.repeat.kind === 'none' && (task.deadline || task.due)) ? 30_000 : 3_600_000);
   return reminderState(task, now, cfg);
 }
 
@@ -345,6 +345,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
   const sfxOn = useStore((s) => s.settings.sfx > 0);
   const listName = useStore((s) => (showList ? s.lists[task.listId]?.name : undefined));
   const shared = useStore((s) => !!s.lists[task.listId]?.shared);
+  const cfg = useStore((s) => s.settings);
   const stakes = useStakes(task);
   const d = DIFFICULTY[task.difficulty];
   const rl = repeatLabel(task.repeat);
@@ -384,7 +385,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
       <PxImg className="ticon" src={iconFor(task.title, task.icon)} size={32} />
       <div className="tmain">
         <div className="ttitle">{task.title}</div>
-        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy) || timed || !!task.misses || !!stakes || reminderTimes(task).length > 0) && (
+        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy) || timed || !!task.misses || !!stakes || reminderTimes(task).length > 0 || datedReminders(task, cfg).length > 0) && (
           <div className="tmeta">
             {listName && <span className="tlist">{listName}</span>}
             {shared && done && task.doneBy && <span className="tlist">✓ {task.doneBy}</span>}
@@ -401,7 +402,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
                 <span>{t('Due {date}', { date: task.due })}</span>
               ))}
             {stakes && !done && <StakesChip stakes={stakes} />}
-            {reminderTimes(task).length > 0 && !done && <ReminderChip task={task} />}
+            {(reminderTimes(task).length > 0 || datedReminders(task, cfg).length > 0 || pastDeadline(task, Date.now(), cfg)) && !done && <ReminderChip task={task} />}
             {timed && <TimeLeft task={task} />}
             {!done && !!task.misses && <span className="overdue">{t('missed {n}×', { n: task.misses })}</span>}
             {task.notes && <span>✎</span>}
@@ -420,12 +421,18 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
 function ReminderChip({ task }: { task: Task }) {
   const update = useStore((s) => s.updateTask);
   const reminder = useReminder(task);
-  const times = reminderTimes(task).map((ms) => new Date(2000, 0, 1, 0, 0, 0, ms).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' }));
+  const cfg = useStore((s) => s.settings);
+  const times = [
+    ...reminderTimes(task).map((ms) => new Date(2000, 0, 1, 0, 0, 0, ms).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })),
+    ...datedReminders(task, cfg).map((at) => new Date(at).toLocaleString(locale(), { weekday: 'short', hour: 'numeric', minute: '2-digit' })),
+  ];
   return (
     <>
-      <span className="reminder-chip" title={t('Reminder')}>
-        🔔 {times.join(' · ')}
-      </span>
+      {times.length > 0 && (
+        <span className="reminder-chip" title={t('Reminder')}>
+          🔔 {times.join(' · ')}
+        </span>
+      )}
       {reminder === 'due' && (
         <button
           className="pill reminder-snooze"
