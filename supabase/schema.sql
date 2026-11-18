@@ -325,6 +325,14 @@ grant execute on function public.is_member(text), public.list_taken(text), publi
   public.create_invite(text), public.join_list(text), public.leave_list(text), public.disband_list(text), public.list_party(text)
   to authenticated;
 
+-- shares_list only backs the profiles read policy, which is authenticated-only
+revoke execute on function public.shares_list(uuid) from public, anon;
+grant execute on function public.shares_list(uuid) to authenticated;
+
+-- trigger functions: EXECUTE is checked when the trigger is created, not when it fires,
+-- so nobody needs them callable through /rest/v1/rpc
+revoke execute on function public.docs_after_insert_list(), public.docs_before_write() from public, anon, authenticated;
+
 -- ---------------------------------------------------------------- realtime
 
 do $$
