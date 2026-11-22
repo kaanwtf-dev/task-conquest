@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Task Conquest has moved</title>
+<script>
+  // Task Conquest moved to GitHub Pages: go there, keeping the rest of the address (an invite's #join=CODE too)
+  var to = 'https://kaanwtf-dev.github.io/task-conquest' + location.pathname + location.search + location.hash;
+  // drop the old offline copy first, so a Home Screen app stops opening the old version
+  var go = function () { location.replace(to); };
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations()
+      .then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); })
+      .then(function () { return window.caches ? caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }) : null; })
+      .then(go, go);
+    setTimeout(go, 1500);
+  } else go();
+</script>
+<style>body{background:#1a1830;color:#fff;font:16px system-ui,sans-serif;text-align:center;padding:48px 16px}a{color:#ffd84a}</style>
+</head>
+<body>
+<h1>Task Conquest has moved</h1>
+<p>Taking you there… If nothing happens, <a href="https://kaanwtf-dev.github.io/task-conquest/">open the new address</a>.</p>
+<p>On your phone? Add the new address to your Home Screen and remove the old icon. Your save comes with you when you sign in.</p>
+</body>
+</html>

@@ -1,25 +1,6 @@
-# Netlify: build the app at the site root (BASE_PATH stays unset, so assets load from "/").
+# The app moved to GitHub Pages (https://kaanwtf-dev.github.io/task-conquest/). The Netlify site only serves
+# netlify-forward/: a page that sends every address there (keeping the rest of it, e.g. an invite's
+# #join=CODE) and a service worker that removes the old app's offline copy from phones that installed it.
 [build]
-  command = "npm run build"
-  publish = "dist"
-
-[build.environment]
-  NODE_VERSION = "20"
-
-# the service worker and the page must never be served stale, or players get stuck on an old version
-[[headers]]
-  for = "/sw.js"
-  [headers.values]
-    Cache-Control = "no-cache"
-[[headers]]
-  for = "/index.html"
-  [headers.values]
-    Cache-Control = "no-cache"
-
-# The app moved to GitHub Pages (Netlify deploys were paused). Everything here forwards there, keeping the
-# rest of the address (e.g. an invite link's #join=CODE stays in the browser and survives the redirect).
-[[redirects]]
-  from = "/*"
-  to = "https://kaanwtf-dev.github.io/task-conquest/:splat"
-  status = 301
-  force = true
+  command = ""
+  publish = "netlify-forward"
