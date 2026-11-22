@@ -398,4 +398,10 @@ export const TR_COMPONENTS: Record<string, string> = {
   "A quest with a deadline can remind you on any date and time before it, not just on the day it is due. Up to three reminders, each with a notification.": "Son tarihi olan bir görev, yalnızca o gün değil, ondan önceki herhangi bir gün ve saatte sana hatırlatabilir. En fazla üç hatırlatıcı, her biri bildirimle.",
   "A reminder after the deadline is not allowed: the editor says so.": "Son tarihten sonraya hatırlatıcı kurulamaz; düzenleyici bunu söyler.",
   "Missed a deadline? The quest stays on top, flashing, until you tick it off.": "Bir son tarihi mi kaçırdın? Görev, sen işaretleyene kadar en üstte yanıp sönerek kalır.",
+  "✓ Last done {when}": "✓ Son yapılış {when}",
+  "Last done": "Son yapılış",
+  "{n}× in total": "toplam {n} kez",
+  "When did I last do it?": "En son ne zaman yaptım?",
+  "Every quest now shows when you last did it: “✓ Last done Nov 22, 9:41 PM”. It updates each time you tick it and stays after the day or week resets.": "Her görev artık en son ne zaman yaptığını gösteriyor: “✓ Son yapılış 22 Kas, 21:41”. Her işaretlediğinde güncellenir, gün ya da hafta sıfırlansa da kalır.",
+  "Ticked by mistake and took it back? It goes back to the time before.": "Yanlışlıkla işaretleyip geri mi aldın? Bir önceki zamana geri döner.",
 };

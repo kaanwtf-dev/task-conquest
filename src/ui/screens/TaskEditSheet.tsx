@@ -3,7 +3,7 @@ import { useStore, visibleLists } from '../../state/store';
 import { DIFFICULTY, taskXp, heroLevel } from '../../game/progression';
 import { iconFor, firstEmoji } from '../../pixel/iconGen';
 import { AISLES } from '../../pixel/keywords';
-import { todayKey } from '../../core/time';
+import { lastDoneAt, todayKey } from '../../core/time';
 import { deadlineOf, stakesOf } from '../../game/deadlines';
 import { MAX_REMINDERS, parseDated } from '../../game/reminders';
 import type { Difficulty, Repeat, Task } from '../../core/types';
@@ -201,6 +201,14 @@ export default function TaskEditSheet({ taskId, onClose }: { taskId: string; onC
             <DueField draft={draft} patch={patch} />
             <RemindAt draft={draft} patch={patch} />
             <TimeLimit draft={draft} patch={patch} />
+            {lastDoneAt(draft) !== null && (
+              <Field label={t('Last done')}>
+                <span>
+                  ✓ {lastDoneLabel(lastDoneAt(draft)!)}
+                  {draft.timesDone > 0 && <span className="muted"> · {t('{n}× in total', { n: draft.timesDone })}</span>}
+                </span>
+              </Field>
+            )}
             <Field label={t('Notes')}>
               <textarea className="text-in" rows={3} aria-label={t('Notes')} value={draft.notes ?? ''} onChange={(e) => patch({ notes: e.target.value || undefined })} style={{ width: '100%', resize: 'vertical' }} />
             </Field>
@@ -310,6 +318,12 @@ function DueField({ draft, patch }: { draft: Task; patch: (p: Partial<Task>) => 
 }
 
 /** A daily "done by" time (daily quests), and what missing the due time costs. */
+/** "Nov 22, 9:41 PM": when a quest was last done. */
+export function lastDoneLabel(at: number): string {
+  const d = new Date(at);
+  return `${d.toLocaleDateString(locale(), { month: 'short', day: 'numeric' })}, ${d.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })}`;
+}
+
 /** A local date and time as the value of a datetime-local input ("2026-11-20T20:00"). */
 const localStamp = (ms: number) => {
   const d = new Date(ms);

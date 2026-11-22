@@ -13,7 +13,7 @@ import {
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useStore, listTasks, visibleLists, LIST_TYPE_INFO, TODAY_ID, ALL_ID } from '../../state/store';
-import { isActiveToday, isDone, msUntilReset, fmtDuration, repeatLabel, todayKey } from '../../core/time';
+import { isActiveToday, isDone, msUntilReset, fmtDuration, repeatLabel, todayKey, lastDoneAt } from '../../core/time';
 import { DIFFICULTY } from '../../game/progression';
 import { iconFor } from '../../pixel/iconGen';
 import { AISLES } from '../../pixel/keywords';
@@ -22,7 +22,7 @@ import { markTap, haptic } from '../components/Effects';
 import { fx } from '../../state/fx';
 import { sfx, unlockAudio } from '../../audio/sfx';
 import type { Task, TaskList } from '../../core/types';
-import TaskEditSheet from './TaskEditSheet';
+import TaskEditSheet, { lastDoneLabel } from './TaskEditSheet';
 import BackupWarning, { useBackupDue } from '../components/BackupWarning';
 import { InstallCard } from '../components/InstallGuide';
 import { TipNudge } from '../components/Support';
@@ -346,6 +346,9 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
   const listName = useStore((s) => (showList ? s.lists[task.listId]?.name : undefined));
   const shared = useStore((s) => !!s.lists[task.listId]?.shared);
   const cfg = useStore((s) => s.settings);
+  const supply = useStore((s) => s.lists[task.listId]?.type === 'supply');
+  // when it was last done (stays after the period resets); not for groceries
+  const last = supply ? null : lastDoneAt(task);
   const stakes = useStakes(task);
   const d = DIFFICULTY[task.difficulty];
   const rl = repeatLabel(task.repeat);
@@ -385,7 +388,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
       <PxImg className="ticon" src={iconFor(task.title, task.icon)} size={32} />
       <div className="tmain">
         <div className="ttitle">{task.title}</div>
-        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy) || timed || !!task.misses || !!stakes || reminderTimes(task).length > 0 || datedReminders(task, cfg).length > 0) && (
+        {(rl || task.due || inactive || task.qty || listName || task.notes || (shared && task.doneBy) || timed || !!task.misses || !!stakes || reminderTimes(task).length > 0 || datedReminders(task, cfg).length > 0 || last !== null) && (
           <div className="tmeta">
             {listName && <span className="tlist">{listName}</span>}
             {shared && done && task.doneBy && <span className="tlist">✓ {task.doneBy}</span>}
@@ -407,6 +410,7 @@ const TaskRowBody = memo(function TaskRowBody({ task, done, inactive, showList }
             {!done && !!task.misses && <span className="overdue">{t('missed {n}×', { n: task.misses })}</span>}
             {task.notes && <span>✎</span>}
             {inactive && <span>{t('Not today')}</span>}
+            {last !== null && <span className="last-done">{t('✓ Last done {when}', { when: lastDoneLabel(last) })}</span>}
           </div>
         )}
       </div>

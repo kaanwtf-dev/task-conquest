@@ -757,6 +757,10 @@ canvas.px {
 .hero-bar canvas {
   display: block;
 }
+/* when a quest was last done, under its title */
+.last-done {
+  opacity: 0.75;
+}
 /* a potion that is working right now, in the Hero tab's list */
 .potion-active {
   display: inline-block;

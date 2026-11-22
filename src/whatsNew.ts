@@ -15,6 +15,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.8',
+    date: '2026-11-22',
+    title: tk('When did I last do it?'),
+    items: [
+      tk('Every quest now shows when you last did it: “✓ Last done Nov 22, 9:41 PM”. It updates each time you tick it and stays after the day or week resets.'),
+      tk('Ticked by mistake and took it back? It goes back to the time before.'),
+    ],
+  },
+  {
     version: '2.7',
     date: '2026-11-17',
     title: tk('Reminders before a deadline'),

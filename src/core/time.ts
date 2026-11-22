@@ -150,3 +150,13 @@ export function streak(activeDays: string[], now: number, cfg: TimeCfg): number 
   }
   return n;
 }
+
+/**
+ * When the quest was last done, for real: the latest tick (or "Do again") that was not taken back, also after
+ * its period ended. Null if it never was.
+ */
+export function lastDoneAt(task: Pick<Task, 'doneFor' | 'doneAt' | 'doneLog'>): number | null {
+  let best = task.doneFor && typeof task.doneAt === 'number' ? task.doneAt : -Infinity;
+  for (const v of Object.values(task.doneLog ?? {})) if (typeof v === 'number' && v > best) best = v;
+  return Number.isFinite(best) && best > 0 ? best : null;
+}
